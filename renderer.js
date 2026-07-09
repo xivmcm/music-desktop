@@ -43,6 +43,51 @@ let currentSeekOffset = 0;
 let currentTrackDuration = 0;
 let activeGenreChip = null;
 let originalHomeData = null;
+
+// Web Audio API context for Audio Effects
+let audioCtx = null;
+let bassFilter = null;
+
+function initAudioEffects() {
+  if (audioCtx) return;
+  
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const source = audioCtx.createMediaElementSource(audioPlayer);
+    
+    // Create lowshelf filter for Bass Boost
+    bassFilter = audioCtx.createBiquadFilter();
+    bassFilter.type = 'lowshelf';
+    bassFilter.frequency.value = 100;
+    
+    const savedBassBoost = localStorage.getItem('gp_effect_bassboost') === 'true';
+    bassFilter.gain.value = savedBassBoost ? 10 : 0;
+    
+    // Chain: Source -> Filter -> Destination
+    source.connect(bassFilter);
+    bassFilter.connect(audioCtx.destination);
+    
+    console.log('[Web Audio API] AudioContext and Bass Boost filter initialized successfully');
+  } catch (err) {
+    console.error('[Web Audio API] Initialization failed:', err);
+  }
+}
+
+function applyAudioEffectsState() {
+  const speed = parseFloat(localStorage.getItem('gp_effect_speed') || '1.0');
+  const pitchLinked = localStorage.getItem('gp_effect_pitch_linked') === 'true';
+  const bassBoost = localStorage.getItem('gp_effect_bassboost') === 'true';
+  
+  if (audioPlayer) {
+    audioPlayer.playbackRate = speed;
+    audioPlayer.defaultPlaybackRate = speed;
+    audioPlayer.preservesPitch = !pitchLinked;
+  }
+  
+  if (bassFilter) {
+    bassFilter.gain.value = bassBoost ? 10 : 0;
+  }
+}
 let cachedForYouData = null;
 
 // Base Server API URL Configuration
@@ -302,6 +347,13 @@ function playTrack(index) {
   // Load stream
   audioPlayer.src = `${BACKEND_URL}/stream?id=${encodeURIComponent(track.id)}&source=${track.source}`;
   
+  // Initialize and apply Audio Effects
+  initAudioEffects();
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+  applyAudioEffectsState();
+  
   const playPromise = audioPlayer.play();
   currentPlayPromise = playPromise;
 
@@ -434,6 +486,7 @@ prevButton.addEventListener('click', playPrev);
 // Audio Player Events
 audioPlayer.addEventListener('loadedmetadata', () => {
   progressSlider.max = 100;
+  applyAudioEffectsState();
 });
 
 audioPlayer.addEventListener('timeupdate', () => {
@@ -1929,6 +1982,42 @@ function renderSettings() {
     </div>
 
     <div class="settings-section">
+      <h3>Аудиоэффекты</h3>
+      
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+        <span style="font-size: 13px; color: rgba(255,255,255,0.7);">Bass Boost (+10dB 100Hz)</span>
+        <label class="switch">
+          <input type="checkbox" id="effect-bassboost-checkbox" ${localStorage.getItem('gp_effect_bassboost') === 'true' ? 'checked' : ''}>
+          <span class="slider round"></span>
+        </label>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px;">
+        <div style="display: flex; justify-content: space-between; font-size: 12px;">
+          <span style="color: rgba(255,255,255,0.5);">Скорость воспроизведения:</span>
+          <span id="speed-val-text" style="color: #fff;">${localStorage.getItem('gp_effect_speed') || '1.0'}x</span>
+        </div>
+        <input type="range" id="effect-speed-slider" min="0.5" max="2.0" step="0.05" value="${localStorage.getItem('gp_effect_speed') || '1.0'}" style="width: 100%; accent-color: var(--accent-color, #30d158); cursor: pointer;">
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px;">
+        <div style="display: flex; justify-content: space-between; font-size: 12px;">
+          <span style="color: rgba(255,255,255,0.5);">Тональность (Pitch Shift):</span>
+          <span id="pitch-val-text" style="color: #fff;">${localStorage.getItem('gp_effect_pitch_linked') === 'true' ? (localStorage.getItem('gp_effect_speed') || '1.0') : '1.0'}x</span>
+        </div>
+        <input type="range" id="effect-pitch-slider" min="0.5" max="2.0" step="0.05" value="${localStorage.getItem('gp_effect_pitch_linked') === 'true' ? (localStorage.getItem('gp_effect_speed') || '1.0') : '1.0'}" style="width: 100%; accent-color: var(--accent-color, #30d158); cursor: pointer; ${localStorage.getItem('gp_effect_pitch_linked') === 'true' ? '' : 'opacity: 0.5; pointer-events: none;'}">
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;">
+        <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Связать тональность со скоростью (Nightcore)</span>
+        <label class="switch">
+          <input type="checkbox" id="effect-pitch-linked-checkbox" ${localStorage.getItem('gp_effect_pitch_linked') === 'true' ? 'checked' : ''}>
+          <span class="slider round"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="settings-section">
       <h3>Статистика прослушивания</h3>
       <div class="settings-info-row">
         <span class="settings-info-label">Общее время прослушивания:</span>
@@ -2064,6 +2153,71 @@ function renderSettings() {
       console.error(err);
       alert('Не удалось расшифровать код темы');
     }
+  });
+
+  // Audio Effects bindings
+  const bassboostCheckbox = panel.querySelector('#effect-bassboost-checkbox');
+  const speedSlider = panel.querySelector('#effect-speed-slider');
+  const pitchSlider = panel.querySelector('#effect-pitch-slider');
+  const pitchLinkedCheckbox = panel.querySelector('#effect-pitch-linked-checkbox');
+
+  bassboostCheckbox.addEventListener('change', (e) => {
+    localStorage.setItem('gp_effect_bassboost', e.target.checked);
+    initAudioEffects();
+    if (bassFilter) {
+      bassFilter.gain.value = e.target.checked ? 10 : 0;
+    }
+  });
+
+  speedSlider.addEventListener('input', (e) => {
+    const val = parseFloat(e.target.value);
+    localStorage.setItem('gp_effect_speed', val);
+    panel.querySelector('#speed-val-text').textContent = `${val.toFixed(2)}x`;
+    
+    audioPlayer.playbackRate = val;
+    audioPlayer.defaultPlaybackRate = val;
+    
+    if (pitchLinkedCheckbox.checked) {
+      pitchSlider.value = val;
+      panel.querySelector('#pitch-val-text').textContent = `${val.toFixed(2)}x`;
+    }
+  });
+
+  pitchLinkedCheckbox.addEventListener('change', (e) => {
+    const checked = e.target.checked;
+    localStorage.setItem('gp_effect_pitch_linked', checked);
+    audioPlayer.preservesPitch = !checked;
+    
+    if (checked) {
+      const speedVal = parseFloat(speedSlider.value);
+      pitchSlider.value = speedVal;
+      panel.querySelector('#pitch-val-text').textContent = `${speedVal.toFixed(2)}x`;
+      pitchSlider.style.opacity = '';
+      pitchSlider.style.pointerEvents = '';
+    } else {
+      pitchSlider.value = 1.0;
+      panel.querySelector('#pitch-val-text').textContent = '1.00x';
+      pitchSlider.style.opacity = '0.5';
+      pitchSlider.style.pointerEvents = 'none';
+    }
+  });
+
+  pitchSlider.addEventListener('input', (e) => {
+    const val = parseFloat(e.target.value);
+    pitchLinkedCheckbox.checked = true;
+    localStorage.setItem('gp_effect_pitch_linked', true);
+    audioPlayer.preservesPitch = false;
+    
+    pitchSlider.style.opacity = '';
+    pitchSlider.style.pointerEvents = '';
+    
+    speedSlider.value = val;
+    panel.querySelector('#speed-val-text').textContent = `${val.toFixed(2)}x`;
+    panel.querySelector('#pitch-val-text').textContent = `${val.toFixed(2)}x`;
+    
+    audioPlayer.playbackRate = val;
+    audioPlayer.defaultPlaybackRate = val;
+    localStorage.setItem('gp_effect_speed', val);
   });
 
   tracksContainer.classList.remove('hidden');

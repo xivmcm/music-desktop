@@ -1457,3 +1457,60 @@ input[type="range"]:hover::-webkit-slider-thumb {
   border: 1px solid rgba(255, 255, 255, 0.3);
   color: #ffffff;
 }
+
+/* Switch Toggle Container */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+}
+
+/* Hide default HTML checkbox */
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+/* The slider */
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  transition: .3s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: var(--text-color, #ffffff);
+  transition: .3s;
+}
+
+input:checked + .slider {
+  background-color: var(--accent-color, #30d158);
+  border-color: var(--accent-color, #30d158);
+}
+
+input:checked + .slider:before {
+  transform: translateX(18px);
+}
+
+/* Rounded sliders */
+.slider.round {
+  border-radius: 34px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
+}

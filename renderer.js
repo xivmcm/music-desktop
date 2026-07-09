@@ -41,6 +41,9 @@ let isShuffle = false;
 let currentPlayPromise = null;
 let currentSeekOffset = 0;
 let currentTrackDuration = 0;
+let activeGenreChip = null;
+let originalHomeData = null;
+let cachedForYouData = null;
 
 // Base Server API URL Configuration
 const API_URL = 'https://music-backend-iyni.onrender.com';
@@ -537,6 +540,70 @@ playerLikeBtn.addEventListener('click', (e) => {
 // Local Storage Manager Helper functions
 function getStorageKey(key) {
   return `gp_${key}_${currentProfile}`;
+}
+
+// Subscriptions & Recommendations Helpers
+function getFollowedArtists() {
+  const data = localStorage.getItem('gp_followed_artists');
+  return data ? JSON.parse(data) : [];
+}
+
+function isArtistFollowed(artistId) {
+  const list = getFollowedArtists();
+  return list.some(a => String(a.id) === String(artistId));
+}
+
+function toggleFollowArtist(artistData) {
+  let list = getFollowedArtists();
+  const followed = isArtistFollowed(artistData.id);
+  if (followed) {
+    list = list.filter(a => String(a.id) !== String(artistData.id));
+  } else {
+    list.push({
+      id: String(artistData.id),
+      name: artistData.name,
+      avatar: artistData.avatar
+    });
+  }
+  localStorage.setItem('gp_followed_artists', JSON.stringify(list));
+  return !followed;
+}
+
+async function loadForYouTracks() {
+  const followed = getFollowedArtists();
+  let queryParams = '';
+  let recommendationSource = '';
+  
+  if (followed.length > 0) {
+    const randomArtist = followed[Math.floor(Math.random() * followed.length)];
+    queryParams = `artistId=${encodeURIComponent(randomArtist.id)}`;
+    recommendationSource = `на основе подписки на ${randomArtist.name}`;
+  } else {
+    const history = getSearchHistory();
+    if (history.length > 0) {
+      const lastQuery = history[0];
+      queryParams = `q=${encodeURIComponent(lastQuery)}`;
+      recommendationSource = `на основе поиска «${lastQuery}»`;
+    }
+  }
+  
+  if (!queryParams) {
+    return null;
+  }
+  
+  try {
+    const response = await fetch(`${BACKEND_URL}/search/related?${queryParams}`);
+    const data = await response.json();
+    if (data.status === 'success' && data.results && data.results.length > 0) {
+      return {
+        source: recommendationSource,
+        tracks: data.results
+      };
+    }
+  } catch (err) {
+    console.error('[Renderer] Failed to load For You recommendations:', err);
+  }
+  return null;
 }
 
 function getLikedTracks() {
@@ -1179,12 +1246,16 @@ async function loadHomeView() {
   loadingIndicator.classList.remove('hidden');
 
   try {
-    const response = await fetch(`${BACKEND_URL}/search/home`);
-    const data = await response.json();
+    const [homeRes, forYouData] = await Promise.all([
+      fetch(`${BACKEND_URL}/search/home`).then(r => r.json()),
+      loadForYouTracks()
+    ]);
     loadingIndicator.classList.add('hidden');
 
-    if (data.status === 'success' && data.results) {
-      renderHome(data.results);
+    if (homeRes.status === 'success' && homeRes.results) {
+      originalHomeData = homeRes.results;
+      cachedForYouData = forYouData;
+      renderHome(homeRes.results, forYouData);
       tracksContainer.classList.remove('hidden');
     } else {
       tracksContainer.innerHTML = '<div class="welcome-state"><h2>Не удалось загрузить рекомендации</h2><p>Пожалуйста, проверьте соединение с бэкендом</p></div>';
@@ -1198,9 +1269,134 @@ async function loadHomeView() {
   }
 }
 
-function renderHome(sectionsData) {
+function renderHome(sectionsData, forYouData) {
   tracksContainer.innerHTML = '';
 
+  // 1. Render Genre Chips Scroll-bar
+  const chipsContainer = document.createElement('div');
+  chipsContainer.className = 'genre-chips-bar';
+  chipsContainer.style.cssText = 'display: flex; gap: 8px; overflow-x: auto; padding: 10px 5px; margin-bottom: 15px; scrollbar-width: none; -webkit-overflow-scrolling: touch;';
+  
+  if (!document.getElementById('genre-chips-style')) {
+    const style = document.createElement('style');
+    style.id = 'genre-chips-style';
+    style.textContent = '.genre-chips-bar::-webkit-scrollbar { display: none; }';
+    document.head.appendChild(style);
+  }
+
+  const tags = ['Underground', 'Archive', 'Plugg', 'Jerk', 'Electronic', 'Rock', 'Rap'];
+  tags.forEach(tag => {
+    const chip = document.createElement('button');
+    const isActive = activeGenreChip === tag;
+    chip.className = `genre-chip-btn ${isActive ? 'active' : ''}`;
+    chip.style.cssText = `padding: 8px 16px; border-radius: 20px; background: ${isActive ? '#30d158' : 'rgba(255,255,255,0.06)'}; border: 1px solid ${isActive ? '#30d158' : 'rgba(255,255,255,0.05)'}; color: ${isActive ? '#000' : '#fff'}; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: all 0.2s ease;`;
+    chip.textContent = tag;
+
+    // Hover effect
+    chip.addEventListener('mouseenter', () => {
+      if (activeGenreChip !== tag) {
+        chip.style.background = 'rgba(255,255,255,0.12)';
+      }
+    });
+    chip.addEventListener('mouseleave', () => {
+      if (activeGenreChip !== tag) {
+        chip.style.background = 'rgba(255,255,255,0.06)';
+      }
+    });
+
+    chip.addEventListener('click', async () => {
+      if (activeGenreChip === tag) {
+        activeGenreChip = null;
+        renderHome(originalHomeData, cachedForYouData);
+      } else {
+        activeGenreChip = tag;
+        renderHome(originalHomeData, cachedForYouData);
+
+        const contentArea = document.getElementById('home-content-area');
+        if (contentArea) {
+          contentArea.innerHTML = '<div style="display: flex; justify-content: center; padding: 50px;"><div style="color: rgba(255,255,255,0.6); font-size: 14px;">Загрузка жанра...</div></div>';
+        }
+
+        try {
+          const response = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(tag)}`);
+          const result = await response.json();
+          if (result.status === 'success' && result.results) {
+            const scTracks = result.results.filter(t => t.source === 'soundcloud');
+            renderGenreTracks(scTracks, tag);
+          } else {
+            if (contentArea) {
+              contentArea.innerHTML = '<div style="text-align: center; padding: 30px; color: rgba(255,255,255,0.4);">Не удалось загрузить треки</div>';
+            }
+          }
+        } catch (err) {
+          console.error(err);
+          if (contentArea) {
+            contentArea.innerHTML = '<div style="text-align: center; padding: 30px; color: rgba(255,255,255,0.4);">Ошибка загрузки</div>';
+          }
+        }
+      }
+    });
+
+    chipsContainer.appendChild(chip);
+  });
+
+  tracksContainer.appendChild(chipsContainer);
+
+  const contentArea = document.createElement('div');
+  contentArea.id = 'home-content-area';
+  tracksContainer.appendChild(contentArea);
+
+  if (activeGenreChip) {
+    const tag = activeGenreChip;
+    setTimeout(async () => {
+      const contentArea = document.getElementById('home-content-area');
+      if (contentArea) {
+        contentArea.innerHTML = '<div style="display: flex; justify-content: center; padding: 50px;"><div style="color: rgba(255,255,255,0.6); font-size: 14px;">Загрузка жанра...</div></div>';
+      }
+      try {
+        const response = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(tag)}`);
+        const result = await response.json();
+        if (result.status === 'success' && result.results) {
+          const scTracks = result.results.filter(t => t.source === 'soundcloud');
+          renderGenreTracks(scTracks, tag);
+        } else {
+          if (contentArea) {
+            contentArea.innerHTML = '<div style="text-align: center; padding: 30px; color: rgba(255,255,255,0.4);">Не удалось загрузить треки</div>';
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }, 50);
+  } else {
+    renderHomeContent(sectionsData, forYouData);
+  }
+}
+
+function renderHomeContent(sectionsData, forYouData) {
+  const contentArea = document.getElementById('home-content-area');
+  if (!contentArea) return;
+  contentArea.innerHTML = '';
+
+  // 1. Render "Для вас" (For You) Section
+  if (forYouData && forYouData.tracks && forYouData.tracks.length > 0) {
+    const sectionEl = document.createElement('div');
+    sectionEl.className = 'home-section';
+    
+    const titleEl = document.createElement('div');
+    titleEl.className = 'home-section-title';
+    titleEl.innerHTML = `Для вас <span style="font-size: 12px; font-weight: normal; color: rgba(255,255,255,0.4); margin-left: 8px;">${forYouData.source}</span>`;
+    sectionEl.appendChild(titleEl);
+    
+    const scroller = document.createElement('div');
+    scroller.className = 'scroller-container';
+    sectionEl.appendChild(scroller);
+    
+    renderTracksForSection(forYouData.tracks, scroller);
+    contentArea.appendChild(sectionEl);
+  }
+
+  // 2. Render normal sections
   const sections = [
     { title: 'Тренды недели', tracks: sectionsData.trending },
     { title: 'Популярное', tracks: sectionsData.top },
@@ -1226,8 +1422,34 @@ function renderHome(sectionsData) {
     sectionEl.appendChild(scroller);
 
     renderTracksForSection(sec.tracks, scroller);
-    tracksContainer.appendChild(sectionEl);
+    contentArea.appendChild(sectionEl);
   });
+}
+
+function renderGenreTracks(tracks, tagName) {
+  const contentArea = document.getElementById('home-content-area');
+  if (!contentArea) return;
+  contentArea.innerHTML = '';
+
+  const sectionEl = document.createElement('div');
+  sectionEl.className = 'home-section';
+  
+  const titleEl = document.createElement('div');
+  titleEl.className = 'home-section-title';
+  titleEl.textContent = `Жанр: ${tagName}`;
+  sectionEl.appendChild(titleEl);
+
+  const grid = document.createElement('div');
+  grid.className = 'tracks-grid';
+  sectionEl.appendChild(grid);
+  
+  if (tracks && tracks.length > 0) {
+    renderTracks(tracks, grid);
+  } else {
+    grid.innerHTML = '<div style="color: rgba(255,255,255,0.4); padding: 20px;">Нет треков в этом жанре</div>';
+  }
+  
+  contentArea.appendChild(sectionEl);
 }
 
 function renderTracksForSection(sectionTracks, container) {
@@ -1326,21 +1548,49 @@ async function loadArtistView(artistId) {
 function renderArtistProfile(artistData) {
   tracksContainer.innerHTML = '';
   
+  const followed = isArtistFollowed(artistData.id);
+  const followBtnHTML = followed
+    ? `<button id="follow-artist-btn" class="view-btn active" style="align-self: flex-start; background: #30d158; color: #000; border-color: #30d158; margin-top: 8px;">
+         <span>Отписаться</span>
+       </button>`
+    : `<button id="follow-artist-btn" class="view-btn" style="align-self: flex-start; margin-top: 8px;">
+         <span>Подписаться</span>
+       </button>`;
+
   const header = document.createElement('div');
   header.className = 'artist-header';
   header.innerHTML = `
     <img class="artist-avatar" src="${artistData.avatar || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'><circle cx=\'50\' cy=\'50\' r=\'40\' fill=\'%23333\'/></svg>'}" alt="${artistData.name}">
-    <div class="artist-info">
+    <div class="artist-info" style="display: flex; flex-direction: column;">
       <button id="back-to-previous" class="view-btn" style="align-self: flex-start; margin-bottom: 8px;">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
         <span>Назад</span>
       </button>
       <h2>${artistData.name}</h2>
       <span class="artist-meta">${artistData.followers.toLocaleString()} подписчиков</span>
-      <p class="artist-desc">${artistData.description || 'Описание отсутствует.'}</p>
+      ${followBtnHTML}
+      <p class="artist-desc" style="margin-top: 10px;">${artistData.description || 'Описание отсутствует.'}</p>
     </div>
   `;
   tracksContainer.appendChild(header);
+  
+  const followBtn = header.querySelector('#follow-artist-btn');
+  followBtn.addEventListener('click', () => {
+    const nowFollowed = toggleFollowArtist(artistData);
+    if (nowFollowed) {
+      followBtn.classList.add('active');
+      followBtn.style.background = '#30d158';
+      followBtn.style.color = '#000';
+      followBtn.style.borderColor = '#30d158';
+      followBtn.querySelector('span').textContent = 'Отписаться';
+    } else {
+      followBtn.classList.remove('active');
+      followBtn.style.background = '';
+      followBtn.style.color = '';
+      followBtn.style.borderColor = '';
+      followBtn.querySelector('span').textContent = 'Подписаться';
+    }
+  });
   
   document.getElementById('back-to-previous').addEventListener('click', () => {
     loadHomeView();
@@ -1574,6 +1824,14 @@ function renderSettings() {
     .sort((a, b) => b.count - a.count)
     .slice(0, 3);
 
+  const savedCustom = localStorage.getItem('gp_custom_theme');
+  const customTheme = savedCustom ? JSON.parse(savedCustom) : {
+    bgColor: '#1e1e24',
+    textColor: '#f5f5f7',
+    blur: 28,
+    opacity: 0.45
+  };
+
   const viewHeader = document.createElement('div');
   viewHeader.className = 'view-header';
   viewHeader.innerHTML = `
@@ -1605,6 +1863,55 @@ function renderSettings() {
           <span>Silver Matrix</span>
           <div class="theme-preview silver"></div>
         </button>
+      </div>
+    </div>
+
+    <div class="settings-section" style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 20px;">
+      <h3>Конструктор темы</h3>
+      
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 15px;">
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Цвет фона:</span>
+          <input type="color" id="theme-bg-color" value="${customTheme.bgColor}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Цвет текста:</span>
+          <input type="color" id="theme-text-color" value="${customTheme.textColor}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 15px;">
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="display: flex; justify-content: space-between; font-size: 12px;">
+            <span style="color: rgba(255,255,255,0.5);">Размытие стекла (blur):</span>
+            <span id="blur-val-text" style="color: #fff;">${customTheme.blur}px</span>
+          </div>
+          <input type="range" id="theme-blur-slider" min="0" max="80" value="${customTheme.blur}" style="width: 100%; accent-color: #30d158; cursor: pointer;">
+        </div>
+        
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="display: flex; justify-content: space-between; font-size: 12px;">
+            <span style="color: rgba(255,255,255,0.5);">Прозрачность панелей:</span>
+            <span id="opacity-val-text" style="color: #fff;">${Math.round(customTheme.opacity * 100)}%</span>
+          </div>
+          <input type="range" id="theme-opacity-slider" min="0" max="100" value="${Math.round(customTheme.opacity * 100)}" style="width: 100%; accent-color: #30d158; cursor: pointer;">
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 10px; margin-top: 15px;">
+        <button id="theme-export-btn" class="view-btn" style="flex: 1; justify-content: center;">
+          <span>Скопировать код темы</span>
+        </button>
+      </div>
+
+      <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 15px; margin-top: 15px; display: flex; flex-direction: column; gap: 8px;">
+        <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Импорт темы по коду:</span>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="theme-import-input" placeholder="Вставьте код темы (Base64)..." style="flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: #fff; font-size: 12px;">
+          <button id="theme-import-btn" class="view-btn">
+            <span>Применить</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -1662,13 +1969,174 @@ function renderSettings() {
     });
   });
 
+  // Custom Theme Constructor bindings
+  const themeBgInput = panel.querySelector('#theme-bg-color');
+  const themeTextInput = panel.querySelector('#theme-text-color');
+  const themeBlurSlider = panel.querySelector('#theme-blur-slider');
+  const themeOpacitySlider = panel.querySelector('#theme-opacity-slider');
+  
+  function updateCustomThemeFromUI() {
+    const customThemeVal = {
+      bgColor: themeBgInput.value,
+      textColor: themeTextInput.value,
+      blur: parseInt(themeBlurSlider.value, 10),
+      opacity: parseFloat(themeOpacitySlider.value) / 100
+    };
+    
+    panel.querySelector('#blur-val-text').textContent = `${customThemeVal.blur}px`;
+    panel.querySelector('#opacity-val-text').textContent = `${Math.round(customThemeVal.opacity * 100)}%`;
+    
+    applyCustomTheme(customThemeVal);
+    localStorage.setItem('gp_custom_theme', JSON.stringify(customThemeVal));
+    localStorage.setItem('gp_theme', 'custom');
+    
+    btns.forEach(b => b.classList.remove('active'));
+  }
+  
+  themeBgInput.addEventListener('input', updateCustomThemeFromUI);
+  themeTextInput.addEventListener('input', updateCustomThemeFromUI);
+  themeBlurSlider.addEventListener('input', updateCustomThemeFromUI);
+  themeOpacitySlider.addEventListener('input', updateCustomThemeFromUI);
+
+  panel.querySelector('#theme-export-btn').addEventListener('click', () => {
+    const customThemeVal = {
+      bgColor: themeBgInput.value,
+      textColor: themeTextInput.value,
+      blur: parseInt(themeBlurSlider.value, 10),
+      opacity: parseFloat(themeOpacitySlider.value) / 100
+    };
+    try {
+      const code = btoa(JSON.stringify(customThemeVal));
+      navigator.clipboard.writeText(code);
+      alert('Код темы скопирован в буфер обмена!');
+    } catch (err) {
+      console.error(err);
+      alert('Не удалось экспортировать тему');
+    }
+  });
+
+  panel.querySelector('#theme-import-btn').addEventListener('click', () => {
+    const input = panel.querySelector('#theme-import-input');
+    const code = input.value.trim();
+    if (!code) return;
+    try {
+      const decoded = JSON.parse(atob(code));
+      if (decoded.bgColor && decoded.textColor && decoded.blur !== undefined && decoded.opacity !== undefined) {
+        applyCustomTheme(decoded);
+        localStorage.setItem('gp_custom_theme', JSON.stringify(decoded));
+        localStorage.setItem('gp_theme', 'custom');
+        input.value = '';
+        alert('Тема успешно импортирована!');
+        renderSettings();
+      } else {
+        alert('Некорректный код темы');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Не удалось расшифровать код темы');
+    }
+  });
+
   tracksContainer.classList.remove('hidden');
 }
 
 function applyTheme(themeName) {
   document.body.classList.remove('theme-dark-glass', 'theme-pink-white', 'theme-silver-matrix');
-  document.body.classList.add(themeName);
+  if (themeName === 'custom') {
+    const savedCustom = localStorage.getItem('gp_custom_theme');
+    if (savedCustom) {
+      applyCustomTheme(JSON.parse(savedCustom));
+    } else {
+      const defaultCustomTheme = {
+        bgColor: '#1e1e24',
+        textColor: '#f5f5f7',
+        blur: 28,
+        opacity: 0.45
+      };
+      applyCustomTheme(defaultCustomTheme);
+    }
+  } else {
+    clearCustomThemeProperties();
+    document.body.classList.add(themeName);
+  }
   localStorage.setItem('gp_theme', themeName);
+}
+
+function hexToRgba(hex, alpha) {
+  let c;
+  if (/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)) {
+    c = hex.substring(1).split('');
+    if (c.length === 3) {
+      c = [c[0], c[0], c[1], c[1], c[2], c[2]];
+    }
+    c = '0x' + c.join('');
+    return `rgba(${(c >> 16) & 255}, ${(c >> 8) & 255}, ${c & 255}, ${alpha})`;
+  }
+  return `rgba(255, 255, 255, ${alpha})`;
+}
+
+function isColorDark(hex) {
+  let c;
+  if (/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)) {
+    c = hex.substring(1).split('');
+    if (c.length === 3) {
+      c = [c[0], c[0], c[1], c[1], c[2], c[2]];
+    }
+    c = '0x' + c.join('');
+    const r = (c >> 16) & 255;
+    const g = (c >> 8) & 255;
+    const b = c & 255;
+    const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+    return yiq < 128;
+  }
+  return true;
+}
+
+function applyCustomTheme(theme) {
+  const root = document.documentElement;
+  root.style.setProperty('--text-color', theme.textColor);
+  root.style.setProperty('--blur-value', `blur(${theme.blur}px)`);
+  
+  const textDim = hexToRgba(theme.textColor, 0.55);
+  root.style.setProperty('--text-dim', textDim);
+  root.style.setProperty('--bg-gradient', theme.bgColor);
+  
+  const isDarkBg = isColorDark(theme.bgColor);
+  if (isDarkBg) {
+    root.style.setProperty('--card-bg', `rgba(255, 255, 255, ${theme.opacity * 0.15})`);
+    root.style.setProperty('--card-border', `rgba(255, 255, 255, ${theme.opacity * 0.2})`);
+    root.style.setProperty('--card-hover-bg', `rgba(255, 255, 255, ${theme.opacity * 0.3})`);
+    root.style.setProperty('--card-hover-border', `rgba(255, 255, 255, ${theme.opacity * 0.5})`);
+    root.style.setProperty('--player-bg', `rgba(5, 5, 5, ${theme.opacity})`);
+    root.style.setProperty('--player-border', `rgba(255, 255, 255, ${theme.opacity * 0.15})`);
+    root.style.setProperty('--panel-bg', `rgba(0, 0, 0, ${theme.opacity * 0.4})`);
+    root.style.setProperty('--accent-color', theme.textColor);
+  } else {
+    root.style.setProperty('--card-bg', `rgba(0, 0, 0, ${theme.opacity * 0.15})`);
+    root.style.setProperty('--card-border', `rgba(0, 0, 0, ${theme.opacity * 0.2})`);
+    root.style.setProperty('--card-hover-bg', `rgba(0, 0, 0, ${theme.opacity * 0.3})`);
+    root.style.setProperty('--card-hover-border', `rgba(0, 0, 0, ${theme.opacity * 0.5})`);
+    root.style.setProperty('--player-bg', `rgba(255, 255, 255, ${theme.opacity})`);
+    root.style.setProperty('--player-border', `rgba(0, 0, 0, ${theme.opacity * 0.15})`);
+    root.style.setProperty('--panel-bg', `rgba(255, 255, 255, ${theme.opacity * 0.4})`);
+    root.style.setProperty('--accent-color', theme.textColor);
+  }
+}
+
+function clearCustomThemeProperties() {
+  const root = document.documentElement;
+  root.style.removeProperty('--bg-gradient');
+  root.style.removeProperty('--blur-value');
+  root.style.removeProperty('--text-color');
+  root.style.removeProperty('--text-dim');
+  root.style.removeProperty('--card-bg');
+  root.style.removeProperty('--card-border');
+  root.style.removeProperty('--card-hover-bg');
+  root.style.removeProperty('--card-hover-border');
+  root.style.removeProperty('--player-bg');
+  root.style.removeProperty('--player-border');
+  root.style.removeProperty('--panel-bg');
+  root.style.removeProperty('--accent-color');
 }
 
 // Startup Initialization

@@ -1514,3 +1514,160 @@ input:checked + .slider:before {
 .slider.round:before {
   border-radius: 50%;
 }
+
+/* Release 1.1.0 Updates */
+
+.search-header, .content-area {
+  transition: opacity 0.3s ease, height 0.3s ease, padding 0.3s ease, border-color 0.3s ease, border-bottom-color 0.3s ease;
+}
+
+/* Audio Visualizer Canvas */
+#visualizer-canvas {
+  width: 100%;
+  height: 20px;
+  background: transparent;
+  display: block;
+  z-index: 45;
+  pointer-events: none;
+  transform: translateZ(0); /* Hardware acceleration */
+  transition: height 0.3s ease, opacity 0.3s ease;
+}
+
+/* Mini Player Mode Styles */
+body.mini-player-active {
+  min-height: 100px !important;
+  height: 100px !important;
+}
+
+body.mini-player-active .search-header {
+  opacity: 0;
+  height: 0 !important;
+  padding: 0 !important;
+  border-bottom: none;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+body.mini-player-active .content-area {
+  opacity: 0;
+  height: 0 !important;
+  padding: 0 !important;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+body.mini-player-active .player-bar {
+  height: calc(100% - 38px); /* Take remaining space under titlebar */
+  border-top: none;
+  padding: 0 12px;
+  background: var(--player-bg);
+  /* Make the main player area draggable, except for buttons/sliders! */
+  -webkit-app-region: drag;
+}
+
+body.mini-player-active .player-bar * {
+  -webkit-app-region: no-drag;
+}
+
+body.mini-player-active .player-track-info {
+  width: auto;
+  min-width: 0;
+  flex: 1.2;
+  gap: 8px;
+}
+
+body.mini-player-active .track-cover-container img {
+  width: 36px;
+  height: 36px;
+}
+
+body.mini-player-active .track-details {
+  max-width: 100px;
+}
+
+body.mini-player-active .track-title {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+body.mini-player-active .track-artist {
+  font-size: 9px;
+}
+
+body.mini-player-active .like-btn {
+  display: none !important;
+}
+
+body.mini-player-active .player-controls-container {
+  width: auto;
+  flex: 1.5;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+body.mini-player-active .player-buttons {
+  gap: 12px;
+}
+
+body.mini-player-active #shuffle-button,
+body.mini-player-active #repeat-button {
+  display: none !important;
+}
+
+body.mini-player-active .play-main {
+  width: 30px;
+  height: 30px;
+}
+
+body.mini-player-active .play-main svg {
+  width: 14px;
+  height: 14px;
+}
+
+body.mini-player-active .player-volume-container {
+  display: none !important;
+}
+
+/* Compact Progress line for mini player */
+body.mini-player-active .progress-bar-container {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  gap: 0;
+  padding: 0;
+  margin: 0;
+}
+
+body.mini-player-active .progress-bar-container span {
+  display: none !important;
+}
+
+body.mini-player-active .progress-bar-container input[type="range"] {
+  height: 3px;
+  border-radius: 0;
+  margin: 0;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+body.mini-player-active .progress-bar-container input[type="range"]::-webkit-slider-thumb {
+  width: 0;
+  height: 0;
+  -webkit-appearance: none;
+}
+
+/* Titlebar Mini Player Button adjustment */
+.control-btn.mini-player-btn svg {
+  color: rgba(255, 255, 255, 0.4);
+  transition: color 0.2s ease;
+}
+
+.control-btn.mini-player-btn:hover svg {
+  color: #ffffff;
+}
+
+body.mini-player-active .max-btn {
+  display: none !important; /* Hide maximize button in mini player mode */
+}

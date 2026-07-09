@@ -47,6 +47,9 @@ let originalHomeData = null;
 // Web Audio API context for Audio Effects
 let audioCtx = null;
 let bassFilter = null;
+let analyser = null;
+let bufferLength = 0;
+let dataArray = null;
 
 function initAudioEffects() {
   if (audioCtx) return;
@@ -63,11 +66,18 @@ function initAudioEffects() {
     const savedBassBoost = localStorage.getItem('gp_effect_bassboost') === 'true';
     bassFilter.gain.value = savedBassBoost ? 10 : 0;
     
-    // Chain: Source -> Filter -> Destination
-    source.connect(bassFilter);
-    bassFilter.connect(audioCtx.destination);
+    // Create Analyser
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    bufferLength = analyser.frequencyBinCount;
+    dataArray = new Uint8Array(bufferLength);
     
-    console.log('[Web Audio API] AudioContext and Bass Boost filter initialized successfully');
+    // Chain: Source -> Filter -> Analyser -> Destination
+    source.connect(bassFilter);
+    bassFilter.connect(analyser);
+    analyser.connect(audioCtx.destination);
+    
+    console.log('[Web Audio API] AudioContext, Bass Boost filter, and Analyser initialized successfully');
   } catch (err) {
     console.error('[Web Audio API] Initialization failed:', err);
   }
@@ -323,6 +333,7 @@ function playTrack(index) {
     currentArtist.textContent = track.artist;
   }
   
+  currentCover.crossOrigin = 'anonymous';
   currentCover.src = track.thumbnail
     ? `${BACKEND_URL}/cover?url=${encodeURIComponent(track.thumbnail)}`
     : 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23222"/><path d="M30 30 L70 50 L30 70 Z" fill="%23444"/></svg>';
@@ -1982,6 +1993,26 @@ function renderSettings() {
     </div>
 
     <div class="settings-section">
+      <h3>Эффекты интерфейса</h3>
+      
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+        <span style="font-size: 13px; color: rgba(255,255,255,0.7);">Динамический цвет обложки</span>
+        <label class="switch">
+          <input type="checkbox" id="dynamic-cover-checkbox" ${localStorage.getItem('gp_dynamic_cover') === 'true' ? 'checked' : ''}>
+          <span class="slider round"></span>
+        </label>
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;">
+        <span style="font-size: 13px; color: rgba(255,255,255,0.7);">Аудио-визуализатор</span>
+        <label class="switch">
+          <input type="checkbox" id="visualizer-checkbox" ${localStorage.getItem('gp_visualizer') === 'true' ? 'checked' : ''}>
+          <span class="slider round"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="settings-section">
       <h3>Аудиоэффекты</h3>
       
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
@@ -2152,6 +2183,29 @@ function renderSettings() {
     } catch (err) {
       console.error(err);
       alert('Не удалось расшифровать код темы');
+    }
+  });
+
+  // Interface Effects bindings
+  const dynamicCoverCheckbox = panel.querySelector('#dynamic-cover-checkbox');
+  const visualizerCheckbox = panel.querySelector('#visualizer-checkbox');
+
+  dynamicCoverCheckbox.addEventListener('change', (e) => {
+    localStorage.setItem('gp_dynamic_cover', e.target.checked);
+    if (e.target.checked) {
+      applyDynamicCoverColor();
+    } else {
+      resetAccentColor();
+    }
+  });
+
+  visualizerCheckbox.addEventListener('change', (e) => {
+    localStorage.setItem('gp_visualizer', e.target.checked);
+    if (e.target.checked) {
+      initAudioEffects();
+      startVisualizer();
+    } else {
+      stopVisualizer();
     }
   });
 
@@ -2393,3 +2447,277 @@ if (window.electronAPI && window.electronAPI.onUpdateStatus) {
     updateBanner.classList.add('hidden');
   });
 }
+
+// === RELEASE 1.1.0 GLOBAL UPDATES ===
+
+// --- Discord RPC Client ---
+let rpcInterval = null;
+
+function sendDiscordPresence() {
+  if (!window.electronAPI || !window.electronAPI.updatePresence) return;
+
+  if (currentTrackIndex === -1) {
+    window.electronAPI.updatePresence({
+      title: 'Not Playing',
+      artist: 'Выберите трек для воспроизведения',
+      isPaused: true
+    });
+    return;
+  }
+
+  const track = playlist[currentTrackIndex];
+  const isPaused = audioPlayer.paused;
+  const position = audioPlayer.currentTime;
+  const duration = currentTrackDuration || audioPlayer.duration || 0;
+
+  window.electronAPI.updatePresence({
+    title: track.title,
+    artist: track.artist,
+    isPaused: isPaused,
+    position: position,
+    duration: duration
+  });
+}
+
+function startPresenceInterval() {
+  if (rpcInterval) clearInterval(rpcInterval);
+  rpcInterval = setInterval(() => {
+    if (!audioPlayer.paused) {
+      sendDiscordPresence();
+    }
+  }, 3000);
+}
+
+audioPlayer.addEventListener('play', () => {
+  sendDiscordPresence();
+  startPresenceInterval();
+});
+
+audioPlayer.addEventListener('pause', () => {
+  sendDiscordPresence();
+});
+
+// --- Mini-Player Window Mode listener ---
+if (window.electronAPI && window.electronAPI.onMiniPlayerToggled) {
+  window.electronAPI.onMiniPlayerToggled((active) => {
+    if (active) {
+      document.body.classList.add('mini-player-active');
+    } else {
+      document.body.classList.remove('mini-player-active');
+    }
+    resizeCanvas();
+  });
+}
+
+// --- Dynamic Cover Vibrant Glass Color Extractor ---
+function extractDominantColor(imgElement) {
+  try {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 30;
+    canvas.height = 30;
+    
+    ctx.drawImage(imgElement, 0, 0, 30, 30);
+    const imgData = ctx.getImageData(0, 0, 30, 30).data;
+    
+    let colorCounts = {};
+    let maxCount = 0;
+    let dominantColor = '#ffffff';
+    let highestSaturation = 0;
+    
+    for (let i = 0; i < imgData.length; i += 4) {
+      const r = imgData[i];
+      const g = imgData[i+1];
+      const b = imgData[i+2];
+      const a = imgData[i+3];
+      
+      if (a < 200) continue;
+      
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      const delta = max - min;
+      
+      const s = max === 0 ? 0 : delta / max;
+      const l = (max + min) / 2 / 255;
+      
+      if (s > 0.25 && l > 0.25 && l < 0.75) {
+        const qr = Math.round(r / 16) * 16;
+        const qg = Math.round(g / 16) * 16;
+        const qb = Math.round(b / 16) * 16;
+        const key = `${qr},${qg},${qb}`;
+        
+        colorCounts[key] = (colorCounts[key] || 0) + 1;
+        
+        if (colorCounts[key] > maxCount) {
+          maxCount = colorCounts[key];
+          dominantColor = `rgb(${qr}, ${qg}, ${qb})`;
+        }
+      }
+    }
+    
+    if (maxCount === 0) {
+      let sumR = 0, sumG = 0, sumB = 0, count = 0;
+      for (let i = 0; i < imgData.length; i += 4) {
+        sumR += imgData[i];
+        sumG += imgData[i+1];
+        sumB += imgData[i+2];
+        count++;
+      }
+      if (count > 0) {
+        return `rgb(${Math.round(sumR/count)}, ${Math.round(sumG/count)}, ${Math.round(sumB/count)})`;
+      }
+      return '#ffffff';
+    }
+    
+    return dominantColor;
+  } catch (err) {
+    console.error('Error extracting cover color:', err);
+    return '#ffffff';
+  }
+}
+
+function applyDynamicCoverColor() {
+  if (currentCover.src && !currentCover.src.startsWith('data:image/svg')) {
+    if (currentCover.complete) {
+      const color = extractDominantColor(currentCover);
+      document.documentElement.style.setProperty('--accent-color', color);
+    } else {
+      currentCover.onload = function() {
+        const color = extractDominantColor(currentCover);
+        document.documentElement.style.setProperty('--accent-color', color);
+        currentCover.onload = null;
+      };
+    }
+  }
+}
+
+function resetAccentColor() {
+  const currentTheme = localStorage.getItem('gp_theme') || 'theme-dark-glass';
+  applyTheme(currentTheme);
+}
+
+currentCover.addEventListener('load', () => {
+  if (localStorage.getItem('gp_dynamic_cover') === 'true') {
+    applyDynamicCoverColor();
+  }
+});
+
+// --- Audio Visualizer Loop ---
+let visualizerAnimationId = null;
+const visualizerCanvas = document.getElementById('visualizer-canvas');
+
+function resizeCanvas() {
+  if (!visualizerCanvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const rect = visualizerCanvas.getBoundingClientRect();
+  visualizerCanvas.width = rect.width * dpr;
+  visualizerCanvas.height = rect.height * dpr;
+}
+
+window.addEventListener('resize', resizeCanvas);
+
+function startVisualizer() {
+  if (!visualizerCanvas) return;
+  if (visualizerAnimationId) return;
+
+  visualizerCanvas.classList.remove('hidden');
+  resizeCanvas();
+
+  const ctx = visualizerCanvas.getContext('2d');
+
+  function draw() {
+    if (localStorage.getItem('gp_visualizer') !== 'true') {
+      stopVisualizer();
+      return;
+    }
+
+    visualizerAnimationId = requestAnimationFrame(draw);
+
+    const width = visualizerCanvas.width;
+    const height = visualizerCanvas.height;
+
+    ctx.clearRect(0, 0, width, height);
+
+    if (!analyser || audioPlayer.paused) {
+      const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent-color').trim() || '#ffffff';
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = accentColor;
+      ctx.globalAlpha = 0.15;
+      
+      const numBars = 30;
+      const barSpacing = width / numBars;
+      const barWidth = barSpacing * 0.4;
+      
+      for (let i = 0; i < numBars; i++) {
+        const x = i * barSpacing + (barSpacing - barWidth) / 2;
+        drawRoundedRect(ctx, x, height - 2, barWidth, 2, 1);
+      }
+      return;
+    }
+
+    analyser.getByteFrequencyData(dataArray);
+
+    const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent-color').trim() || '#ffffff';
+
+    const numBars = 30;
+    const barSpacing = width / numBars;
+    const barWidth = barSpacing * 0.4;
+
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = accentColor;
+    ctx.fillStyle = accentColor;
+
+    for (let i = 0; i < numBars; i++) {
+      const dataIndex = Math.floor((i / numBars) * (bufferLength * 0.6));
+      const value = dataArray[dataIndex] || 0;
+
+      const percent = value / 255;
+      const barHeight = Math.max(2, percent * height * 0.95);
+
+      const x = i * barSpacing + (barSpacing - barWidth) / 2;
+      const y = height - barHeight;
+
+      ctx.globalAlpha = 0.25 + percent * 0.55;
+
+      drawRoundedRect(ctx, x, y, barWidth, barHeight, barWidth / 2);
+    }
+  }
+
+  visualizerAnimationId = requestAnimationFrame(draw);
+}
+
+function drawRoundedRect(ctx, x, y, width, height, radius) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height);
+  ctx.lineTo(x, y + height);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function stopVisualizer() {
+  if (visualizerAnimationId) {
+    cancelAnimationFrame(visualizerAnimationId);
+    visualizerAnimationId = null;
+  }
+  if (visualizerCanvas) {
+    visualizerCanvas.classList.add('hidden');
+    const ctx = visualizerCanvas.getContext('2d');
+    ctx.clearRect(0, 0, visualizerCanvas.width, visualizerCanvas.height);
+  }
+}
+
+// --- Startup Initializations ---
+if (localStorage.getItem('gp_visualizer') === 'true') {
+  initAudioEffects();
+  startVisualizer();
+}
+
+if (localStorage.getItem('gp_dynamic_cover') === 'true') {
+  applyDynamicCoverColor();
+}
+

@@ -9,5 +9,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateProgress: (callback) => ipcRenderer.on('update-progress', (event, percent) => callback(percent)),
   onUpdateReady: (callback) => ipcRenderer.on('update-ready', () => callback()),
   downloadUpdate: () => ipcRenderer.send('download-update'),
-  installUpdate: () => ipcRenderer.send('install-update')
+  installUpdate: () => ipcRenderer.send('install-update'),
+  updatePresence: (trackData) => ipcRenderer.send('update-presence', trackData),
+  toggleMiniPlayer: () => ipcRenderer.send('toggle-mini-player'),
+  onMiniPlayerToggled: (callback) => ipcRenderer.on('mini-player-toggled', (event, active) => callback(active))
 });

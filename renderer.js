@@ -1554,7 +1554,7 @@ function renderArtistProfile(artistData) {
   
   const followed = isArtistFollowed(artistData.id);
   const followBtnHTML = followed
-    ? `<button id="follow-artist-btn" class="view-btn active" style="align-self: flex-start; background: #30d158; color: #000; border-color: #30d158; margin-top: 8px;">
+    ? `<button id="follow-artist-btn" class="view-btn active" style="align-self: flex-start; margin-top: 8px;">
          <span>Отписаться</span>
        </button>`
     : `<button id="follow-artist-btn" class="view-btn" style="align-self: flex-start; margin-top: 8px;">
@@ -1583,15 +1583,9 @@ function renderArtistProfile(artistData) {
     const nowFollowed = toggleFollowArtist(artistData);
     if (nowFollowed) {
       followBtn.classList.add('active');
-      followBtn.style.background = '#30d158';
-      followBtn.style.color = '#000';
-      followBtn.style.borderColor = '#30d158';
       followBtn.querySelector('span').textContent = 'Отписаться';
     } else {
       followBtn.classList.remove('active');
-      followBtn.style.background = '';
-      followBtn.style.color = '';
-      followBtn.style.borderColor = '';
       followBtn.querySelector('span').textContent = 'Подписаться';
     }
   });
@@ -1832,6 +1826,9 @@ function renderSettings() {
   const customTheme = savedCustom ? JSON.parse(savedCustom) : {
     bgColor: '#1e1e24',
     textColor: '#f5f5f7',
+    playerBg: '#050505',
+    cardBg: '#ffffff',
+    accentColor: '#ffffff',
     blur: 28,
     opacity: 0.45
   };
@@ -1881,6 +1878,18 @@ function renderSettings() {
         <div style="display: flex; flex-direction: column; gap: 6px;">
           <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Цвет текста:</span>
           <input type="color" id="theme-text-color" value="${customTheme.textColor}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Нижняя панель:</span>
+          <input type="color" id="theme-player-color" value="${customTheme.playerBg || '#050505'}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Фон карточек:</span>
+          <input type="color" id="theme-card-color" value="${customTheme.cardBg || '#ffffff'}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px; grid-column: span 2;">
+          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Акцентный цвет:</span>
+          <input type="color" id="theme-accent-color" value="${customTheme.accentColor || '#ffffff'}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
         </div>
       </div>
 
@@ -1976,6 +1985,9 @@ function renderSettings() {
   // Custom Theme Constructor bindings
   const themeBgInput = panel.querySelector('#theme-bg-color');
   const themeTextInput = panel.querySelector('#theme-text-color');
+  const themePlayerInput = panel.querySelector('#theme-player-color');
+  const themeCardInput = panel.querySelector('#theme-card-color');
+  const themeAccentInput = panel.querySelector('#theme-accent-color');
   const themeBlurSlider = panel.querySelector('#theme-blur-slider');
   const themeOpacitySlider = panel.querySelector('#theme-opacity-slider');
   
@@ -1983,6 +1995,9 @@ function renderSettings() {
     const customThemeVal = {
       bgColor: themeBgInput.value,
       textColor: themeTextInput.value,
+      playerBg: themePlayerInput.value,
+      cardBg: themeCardInput.value,
+      accentColor: themeAccentInput.value,
       blur: parseInt(themeBlurSlider.value, 10),
       opacity: parseFloat(themeOpacitySlider.value) / 100
     };
@@ -1999,6 +2014,9 @@ function renderSettings() {
   
   themeBgInput.addEventListener('input', updateCustomThemeFromUI);
   themeTextInput.addEventListener('input', updateCustomThemeFromUI);
+  themePlayerInput.addEventListener('input', updateCustomThemeFromUI);
+  themeCardInput.addEventListener('input', updateCustomThemeFromUI);
+  themeAccentInput.addEventListener('input', updateCustomThemeFromUI);
   themeBlurSlider.addEventListener('input', updateCustomThemeFromUI);
   themeOpacitySlider.addEventListener('input', updateCustomThemeFromUI);
 
@@ -2006,6 +2024,9 @@ function renderSettings() {
     const customThemeVal = {
       bgColor: themeBgInput.value,
       textColor: themeTextInput.value,
+      playerBg: themePlayerInput.value,
+      cardBg: themeCardInput.value,
+      accentColor: themeAccentInput.value,
       blur: parseInt(themeBlurSlider.value, 10),
       opacity: parseFloat(themeOpacitySlider.value) / 100
     };
@@ -2026,6 +2047,10 @@ function renderSettings() {
     try {
       const decoded = JSON.parse(atob(code));
       if (decoded.bgColor && decoded.textColor && decoded.blur !== undefined && decoded.opacity !== undefined) {
+        if (!decoded.playerBg) decoded.playerBg = '#050505';
+        if (!decoded.cardBg) decoded.cardBg = '#ffffff';
+        if (!decoded.accentColor) decoded.accentColor = decoded.textColor || '#ffffff';
+
         applyCustomTheme(decoded);
         localStorage.setItem('gp_custom_theme', JSON.stringify(decoded));
         localStorage.setItem('gp_theme', 'custom');
@@ -2105,26 +2130,25 @@ function applyCustomTheme(theme) {
   root.style.setProperty('--text-dim', textDim);
   root.style.setProperty('--bg-gradient', theme.bgColor);
   
+  // Resolve theme custom colors
+  const playerBgHex = theme.playerBg || '#050505';
+  const cardBgHex = theme.cardBg || '#ffffff';
+  const accentColorHex = theme.accentColor || theme.textColor || '#ffffff';
+  
+  root.style.setProperty('--player-bg', hexToRgba(playerBgHex, theme.opacity));
+  root.style.setProperty('--player-border', hexToRgba(playerBgHex, theme.opacity * 0.15));
+  root.style.setProperty('--card-bg', hexToRgba(cardBgHex, theme.opacity * 0.15));
+  root.style.setProperty('--card-border', hexToRgba(cardBgHex, theme.opacity * 0.2));
+  root.style.setProperty('--card-hover-bg', hexToRgba(cardBgHex, theme.opacity * 0.3));
+  root.style.setProperty('--card-hover-border', hexToRgba(cardBgHex, theme.opacity * 0.5));
+  
   const isDarkBg = isColorDark(theme.bgColor);
   if (isDarkBg) {
-    root.style.setProperty('--card-bg', `rgba(255, 255, 255, ${theme.opacity * 0.15})`);
-    root.style.setProperty('--card-border', `rgba(255, 255, 255, ${theme.opacity * 0.2})`);
-    root.style.setProperty('--card-hover-bg', `rgba(255, 255, 255, ${theme.opacity * 0.3})`);
-    root.style.setProperty('--card-hover-border', `rgba(255, 255, 255, ${theme.opacity * 0.5})`);
-    root.style.setProperty('--player-bg', `rgba(5, 5, 5, ${theme.opacity})`);
-    root.style.setProperty('--player-border', `rgba(255, 255, 255, ${theme.opacity * 0.15})`);
     root.style.setProperty('--panel-bg', `rgba(0, 0, 0, ${theme.opacity * 0.4})`);
-    root.style.setProperty('--accent-color', theme.textColor);
   } else {
-    root.style.setProperty('--card-bg', `rgba(0, 0, 0, ${theme.opacity * 0.15})`);
-    root.style.setProperty('--card-border', `rgba(0, 0, 0, ${theme.opacity * 0.2})`);
-    root.style.setProperty('--card-hover-bg', `rgba(0, 0, 0, ${theme.opacity * 0.3})`);
-    root.style.setProperty('--card-hover-border', `rgba(0, 0, 0, ${theme.opacity * 0.5})`);
-    root.style.setProperty('--player-bg', `rgba(255, 255, 255, ${theme.opacity})`);
-    root.style.setProperty('--player-border', `rgba(0, 0, 0, ${theme.opacity * 0.15})`);
     root.style.setProperty('--panel-bg', `rgba(255, 255, 255, ${theme.opacity * 0.4})`);
-    root.style.setProperty('--accent-color', theme.textColor);
   }
+  root.style.setProperty('--accent-color', accentColorHex);
 }
 
 function clearCustomThemeProperties() {

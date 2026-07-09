@@ -36,6 +36,9 @@ let profiles = ['Default'];
 let activeView = 'home'; // 'home', 'search', 'library', 'history', 'playlists', 'playlist-tracks', 'settings', 'artist'
 let activePlaylistId = null;
 let selectedTrackForPlaylist = null;
+let isRepeat = false;
+let isShuffle = false;
+let currentPlayPromise = null;
 
 // Base Server API URL Configuration
 const API_URL = 'https://music-backend-iyni.onrender.com';
@@ -51,6 +54,9 @@ const profileDropdown = document.getElementById('profile-dropdown');
 const profilesList = document.getElementById('profiles-list');
 const createProfileBtn = document.getElementById('create-profile-btn');
 const activeProfileName = document.getElementById('active-profile-name');
+const shuffleButton = document.getElementById('shuffle-button');
+const repeatButton = document.getElementById('repeat-button');
+const playerLikeBtn = document.getElementById('player-like-btn');
 
 const profileModal = document.getElementById('profile-modal');
 const newProfileInput = document.getElementById('new-profile-input');
@@ -101,7 +107,7 @@ async function performSearch() {
   } catch (error) {
     console.error('Search error:', error);
     loadingIndicator.classList.add('hidden');
-    tracksContainer.innerHTML = '<div class="welcome-state"><h2>Connection failed</h2><p>Make sure the backend server is running on port 5000</p></div>';
+    tracksContainer.innerHTML = '<div class="welcome-state"><h2>Не удалось подключиться к серверу</h2><p>Проверьте соединение с интернетом</p></div>';
     tracksContainer.classList.remove('hidden');
   }
 }
@@ -113,8 +119,11 @@ function renderTracks(tracks, container = null) {
   
   tracks.forEach((track, index) => {
     const card = document.createElement('div');
-    card.className = `track-card ${index === currentTrackIndex ? 'active' : ''}`;
+    const currentTrack = playlist[currentTrackIndex];
+    const isActive = currentTrack && track.id === currentTrack.id;
+    card.className = `track-card ${isActive ? 'active' : ''}`;
     card.dataset.index = index;
+    card.dataset.trackId = track.id;
 
     const coverUrl = track.thumbnail || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23222"/><path d="M30 30 L70 50 L30 70 Z" fill="%23444"/></svg>';
 
@@ -194,6 +203,7 @@ function renderTracks(tracks, container = null) {
 }
 
 // 3. Play Track
+// 3. Play Track
 function playTrack(index) {
   if (index < 0 || index >= playlist.length) return;
 
@@ -206,8 +216,8 @@ function playTrack(index) {
   // Update Active UI State
   const cards = document.querySelectorAll('.track-card');
   cards.forEach(card => card.classList.remove('active'));
-  const activeCard = document.querySelector(`.track-card[data-index="${index}"]`);
-  if (activeCard) activeCard.classList.add('active');
+  const activeCards = document.querySelectorAll(`.track-card[data-track-id="${track.id}"]`);
+  activeCards.forEach(card => card.classList.add('active'));
 
   // Update Player Meta Info
   currentTitle.textContent = track.title;
@@ -227,16 +237,41 @@ function playTrack(index) {
   
   currentCover.src = track.thumbnail || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23222"/><path d="M30 30 L70 50 L30 70 Z" fill="%23444"/></svg>';
 
+  // Update player like button state
+  if (playerLikeBtn) {
+    const isLiked = likedTrackIds.has(track.id);
+    const heartIcon = isLiked 
+      ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`
+      : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`;
+    if (isLiked) {
+      playerLikeBtn.classList.add('liked');
+    } else {
+      playerLikeBtn.classList.remove('liked');
+    }
+    playerLikeBtn.innerHTML = heartIcon;
+  }
+
   // Load stream
   audioPlayer.src = `${BACKEND_URL}/stream?id=${encodeURIComponent(track.id)}&source=${track.source}`;
-  audioPlayer.play()
+  
+  const playPromise = audioPlayer.play();
+  currentPlayPromise = playPromise;
+
+  playPromise
     .then(() => {
-      setPlayState(true);
+      if (currentPlayPromise === playPromise) {
+        setPlayState(true);
+      }
     })
     .catch(err => {
+      if (err.name === 'AbortError') {
+        return; // Ignore abort exceptions from consecutive clicks
+      }
       console.error('Playback failed:', err);
-      // Try next track on failure
-      playNext();
+      // Only call playNext if this is still the active track's promise
+      if (currentPlayPromise === playPromise) {
+        playNext();
+      }
     });
 }
 
@@ -257,7 +292,19 @@ function togglePlay() {
   }
 
   if (audioPlayer.paused) {
-    audioPlayer.play().then(() => setPlayState(true));
+    const playPromise = audioPlayer.play();
+    currentPlayPromise = playPromise;
+    playPromise
+      .then(() => {
+        if (currentPlayPromise === playPromise) {
+          setPlayState(true);
+        }
+      })
+      .catch(err => {
+        if (err.name !== 'AbortError') {
+          console.error('Play failed:', err);
+        }
+      });
   } else {
     audioPlayer.pause();
     setPlayState(false);
@@ -266,18 +313,42 @@ function togglePlay() {
 
 function playNext() {
   if (playlist.length === 0) return;
-  let nextIndex = currentTrackIndex + 1;
-  if (nextIndex >= playlist.length) {
-    nextIndex = 0; // Loop back
+  
+  let nextIndex;
+  if (isShuffle) {
+    if (playlist.length === 1) {
+      nextIndex = 0;
+    } else {
+      do {
+        nextIndex = Math.floor(Math.random() * playlist.length);
+      } while (nextIndex === currentTrackIndex);
+    }
+  } else {
+    nextIndex = currentTrackIndex + 1;
+    if (nextIndex >= playlist.length) {
+      nextIndex = 0; // Loop back
+    }
   }
   playTrack(nextIndex);
 }
 
 function playPrev() {
   if (playlist.length === 0) return;
-  let prevIndex = currentTrackIndex - 1;
-  if (prevIndex < 0) {
-    prevIndex = playlist.length - 1; // Go to last
+  
+  let prevIndex;
+  if (isShuffle) {
+    if (playlist.length === 1) {
+      prevIndex = 0;
+    } else {
+      do {
+        prevIndex = Math.floor(Math.random() * playlist.length);
+      } while (prevIndex === currentTrackIndex);
+    }
+  } else {
+    prevIndex = currentTrackIndex - 1;
+    if (prevIndex < 0) {
+      prevIndex = playlist.length - 1; // Go to last
+    }
   }
   playTrack(prevIndex);
 }
@@ -309,24 +380,42 @@ audioPlayer.addEventListener('timeupdate', () => {
   currentTimeText.textContent = formatTime(current);
   if (duration > 0) {
     totalTimeText.textContent = formatTime(duration);
-    progressSlider.value = (current / duration) * 100;
+    progressSlider.max = duration;
+    progressSlider.value = current;
   } else {
     progressSlider.value = 0;
   }
 });
 
-audioPlayer.addEventListener('ended', playNext);
+audioPlayer.addEventListener('ended', () => {
+  if (isRepeat) {
+    audioPlayer.currentTime = 0;
+    const playPromise = audioPlayer.play();
+    currentPlayPromise = playPromise;
+    playPromise
+      .then(() => {
+        if (currentPlayPromise === playPromise) {
+          setPlayState(true);
+        }
+      })
+      .catch(err => {
+        if (err.name !== 'AbortError') {
+          console.error('Repeat playback failed:', err);
+        }
+      });
+  } else {
+    playNext();
+  }
+});
 
 // Seek Slider Actions
 progressSlider.addEventListener('input', () => {
   isSeeking = true;
+  currentTimeText.textContent = formatTime(progressSlider.value);
 });
 
 progressSlider.addEventListener('change', () => {
-  const duration = audioPlayer.duration || 0;
-  if (duration > 0) {
-    audioPlayer.currentTime = (progressSlider.value / 100) * duration;
-  }
+  audioPlayer.currentTime = parseFloat(progressSlider.value);
   isSeeking = false;
 });
 
@@ -335,6 +424,25 @@ volumeSlider.addEventListener('input', () => {
   const vol = volumeSlider.value / 100;
   audioPlayer.volume = vol;
   localStorage.setItem('gp_volume', vol);
+});
+
+// Shuffle / Repeat UI Actions
+shuffleButton.addEventListener('click', () => {
+  isShuffle = !isShuffle;
+  shuffleButton.classList.toggle('active', isShuffle);
+});
+
+repeatButton.addEventListener('click', () => {
+  isRepeat = !isRepeat;
+  repeatButton.classList.toggle('active', isRepeat);
+});
+
+// Player Like Button Action
+playerLikeBtn.addEventListener('click', (e) => {
+  const playingTrack = playlist[currentTrackIndex];
+  if (playingTrack) {
+    toggleLike(e, playingTrack);
+  }
 });
 
 // Local Storage Manager Helper functions
@@ -421,6 +529,18 @@ function switchUserProfile(profileName) {
   
   // Reload liked ids
   loadLikedTracks();
+  
+  // Update player like button UI if a track is playing
+  if (currentTrackIndex !== -1 && playlist[currentTrackIndex]) {
+    updateLikeUI(playlist[currentTrackIndex].id);
+  } else {
+    const playerLikeBtn = document.getElementById('player-like-btn');
+    if (playerLikeBtn) {
+      playerLikeBtn.classList.remove('liked');
+      playerLikeBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`;
+    }
+  }
+  
   renderProfilesDropdown();
   
   // Switch view or refresh search results
@@ -478,17 +598,50 @@ async function loadLikedTracks() {
   likedTrackIds = new Set(likes.map(t => t.id));
 }
 
+function updateLikeUI(trackId) {
+  const isLiked = likedTrackIds.has(trackId);
+  const heartSvgEmpty = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`;
+  const heartSvgFilled = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
+
+  // 1. Update all track card like buttons
+  const cards = document.querySelectorAll(`.track-card[data-track-id="${trackId}"]`);
+  cards.forEach(card => {
+    const cardLikeBtn = card.querySelector('.like-btn');
+    if (cardLikeBtn) {
+      if (isLiked) {
+        cardLikeBtn.classList.add('liked');
+        cardLikeBtn.innerHTML = heartSvgFilled;
+      } else {
+        cardLikeBtn.classList.remove('liked');
+        cardLikeBtn.innerHTML = heartSvgEmpty;
+      }
+    }
+  });
+
+  // 2. Update player bar like button
+  const playerLikeBtn = document.getElementById('player-like-btn');
+  if (playerLikeBtn) {
+    const playingTrack = playlist[currentTrackIndex];
+    if (playingTrack && playingTrack.id === trackId) {
+      if (isLiked) {
+        playerLikeBtn.classList.add('liked');
+        playerLikeBtn.innerHTML = heartSvgFilled;
+      } else {
+        playerLikeBtn.classList.remove('liked');
+        playerLikeBtn.innerHTML = heartSvgEmpty;
+      }
+    }
+  }
+}
+
 function toggleLike(e, track) {
-  e.stopPropagation();
+  if (e) e.stopPropagation();
   const isLiked = likedTrackIds.has(track.id);
-  const likeBtn = e.currentTarget;
 
   let likes = getLikedTracks();
   if (isLiked) {
     likes = likes.filter(t => t.id !== track.id);
     likedTrackIds.delete(track.id);
-    likeBtn.classList.remove('liked');
-    likeBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`;
   } else {
     likes.unshift({
       id: track.id,
@@ -499,10 +652,11 @@ function toggleLike(e, track) {
       duration: track.duration
     });
     likedTrackIds.add(track.id);
-    likeBtn.classList.add('liked');
-    likeBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
   }
   saveLikedTracks(likes);
+
+  // Sync like UI everywhere
+  updateLikeUI(track.id);
 
   // If we are currently viewing the Library, re-render
   if (activeView === 'library') {
@@ -950,7 +1104,7 @@ async function loadHomeView() {
   } catch (error) {
     console.error('[Renderer] Failed to load home screen recommendations:', error);
     loadingIndicator.classList.add('hidden');
-    tracksContainer.innerHTML = '<div class="welcome-state"><h2>Соединение разорвано</h2><p>Убедитесь, что сервер бэкенда запущен на порту 5000</p></div>';
+    tracksContainer.innerHTML = '<div class="welcome-state"><h2>Не удалось подключиться к серверу</h2><p>Проверьте соединение с интернетом</p></div>';
     tracksContainer.classList.remove('hidden');
   }
 }
@@ -991,8 +1145,11 @@ function renderTracksForSection(sectionTracks, container) {
   container.innerHTML = '';
   sectionTracks.forEach((track, index) => {
     const card = document.createElement('div');
-    card.className = `track-card ${index === currentTrackIndex && playlist === sectionTracks ? 'active' : ''}`;
+    const currentTrack = playlist[currentTrackIndex];
+    const isActive = currentTrack && track.id === currentTrack.id;
+    card.className = `track-card ${isActive ? 'active' : ''}`;
     card.dataset.index = index;
+    card.dataset.trackId = track.id;
 
     const coverUrl = track.thumbnail || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23222"/><path d="M30 30 L70 50 L30 70 Z" fill="%23444"/></svg>';
     const isLiked = likedTrackIds.has(track.id);

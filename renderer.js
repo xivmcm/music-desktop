@@ -372,6 +372,10 @@ nextButton.addEventListener('click', playNext);
 prevButton.addEventListener('click', playPrev);
 
 // Audio Player Events
+audioPlayer.addEventListener('loadedmetadata', () => {
+  progressSlider.max = 100;
+});
+
 audioPlayer.addEventListener('timeupdate', () => {
   if (isSeeking) return;
   const current = audioPlayer.currentTime;
@@ -380,8 +384,8 @@ audioPlayer.addEventListener('timeupdate', () => {
   currentTimeText.textContent = formatTime(current);
   if (duration > 0) {
     totalTimeText.textContent = formatTime(duration);
-    progressSlider.max = duration;
-    progressSlider.value = current;
+    progressSlider.max = 100;
+    progressSlider.value = (current / duration) * 100;
   } else {
     progressSlider.value = 0;
   }
@@ -411,11 +415,15 @@ audioPlayer.addEventListener('ended', () => {
 // Seek Slider Actions
 progressSlider.addEventListener('input', () => {
   isSeeking = true;
-  currentTimeText.textContent = formatTime(progressSlider.value);
+  const duration = audioPlayer.duration || 0;
+  currentTimeText.textContent = formatTime((parseFloat(progressSlider.value) / 100) * duration);
 });
 
 progressSlider.addEventListener('change', () => {
-  audioPlayer.currentTime = parseFloat(progressSlider.value);
+  const duration = audioPlayer.duration || 0;
+  if (duration > 0) {
+    audioPlayer.currentTime = (parseFloat(progressSlider.value) / 100) * duration;
+  }
   isSeeking = false;
 });
 

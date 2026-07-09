@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GlassPlayer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Custom Drag Titlebar -->
+  <div class="titlebar">
+    <div class="title">GlassPlayer</div>
+    <div class="window-controls">
+      <button onclick="window.electronAPI.minimize()" class="control-btn min-btn">―</button>
+      <button onclick="window.electronAPI.maximize()" class="control-btn max-btn">❑</button>
+      <button onclick="window.electronAPI.close()" class="control-btn close-btn">✕</button>
+    </div>
+  </div>
+
+  <!-- Main Grid Container -->
+  <div class="container">
+    <!-- Top Search Bar -->
+    <header class="search-header">
+      <div class="search-box">
+        <input type="text" id="search-input" placeholder="Search track, artist or channel..." autocomplete="off">
+        <button id="search-button">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        </button>
+        <div id="search-history-dropdown" class="search-history-dropdown hidden"></div>
+      </div>
+      
+      <div class="header-buttons">
+        <button id="home-button" class="home-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+          <span>Home</span>
+        </button>
+
+        <button id="favorites-button" class="favorites-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+          <span>Library</span>
+        </button>
+        
+        <button id="history-button" class="history-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          <span>History</span>
+        </button>
+
+        <button id="playlists-button" class="playlists-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+          <span>Playlists</span>
+        </button>
+
+        <div class="profile-container">
+          <button id="profile-button" class="profile-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            <span id="active-profile-name">Default</span>
+          </button>
+          <div id="profile-dropdown" class="profile-dropdown hidden">
+            <div id="profiles-list"></div>
+            <div class="dropdown-divider"></div>
+            <button id="create-profile-btn" class="dropdown-action-btn">+ New Profile</button>
+          </div>
+        </div>
+
+        <button id="settings-button" class="settings-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <span>Settings</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Area for Tracks -->
+    <main class="content-area">
+      <!-- Loading State (hidden by default) -->
+      <div class="loading-state hidden" id="loading-indicator">
+        <div class="spinner"></div>
+        <p>Searching tracks...</p>
+      </div>
+      
+      <!-- Welcome Screen (visible by default) -->
+      <div class="welcome-state" id="welcome-screen">
+        <h2>Your music, unfiltered</h2>
+        <p>Search any track to begin streaming from SoundCloud & YouTube</p>
+      </div>
+
+      <!-- Tracks Grid List -->
+      <div class="tracks-grid" id="tracks-container"></div>
+    </main>
+
+    <!-- Bottom Player Control Bar -->
+    <footer class="player-bar">
+      <!-- Track Meta Info -->
+      <div class="player-track-info">
+        <div class="track-cover-container">
+          <img id="current-cover" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23222'/><path d='M30 30 L70 50 L30 70 Z' fill='%23444'/></svg>" alt="Cover">
+        </div>
+        <div class="track-details">
+          <div class="track-title" id="current-title">Not Playing</div>
+          <div class="track-artist" id="current-artist">Choose a track to play</div>
+        </div>
+      </div>
+
+      <!-- Player Controls -->
+      <div class="player-controls-container">
+        <div class="player-buttons">
+          <button id="prev-button" class="player-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
+          </button>
+          <button id="play-button" class="player-btn play-main">
+            <svg id="play-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            <svg id="pause-icon" class="hidden" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+          </button>
+          <button id="next-button" class="player-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
+          </button>
+        </div>
+
+        <!-- Slider Progress Bar -->
+        <div class="progress-bar-container">
+          <span id="current-time">0:00</span>
+          <input type="range" id="progress-slider" min="0" max="100" value="0">
+          <span id="total-time">0:00</span>
+        </div>
+      </div>
+
+      <!-- Volume Bar -->
+      <div class="player-volume-container">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d='M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07'></path></svg>
+        <input type="range" id="volume-slider" min="0" max="100" value="80">
+      </div>
+    </footer>
+  </div>
+
+  <!-- Audio Player Core Element -->
+  <audio id="audio-player"></audio>
+
+  <!-- Modals and Popups -->
+  <div id="profile-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Create New Profile</h3>
+      <input type="text" id="new-profile-input" placeholder="Profile name..." autocomplete="off">
+      <div class="modal-actions">
+        <button id="cancel-profile-btn" class="modal-btn secondary">Cancel</button>
+        <button id="save-profile-btn" class="modal-btn primary">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="playlist-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Create New Playlist</h3>
+      <input type="text" id="new-playlist-input" placeholder="Playlist name..." autocomplete="off">
+      <div class="modal-actions">
+        <button id="cancel-playlist-btn" class="modal-btn secondary">Cancel</button>
+        <button id="save-playlist-btn" class="modal-btn primary">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Playlist Context Selector Menu -->
+  <div id="playlist-menu" class="playlist-menu hidden">
+    <div id="playlist-menu-list"></div>
+  </div>
+
+  <!-- Auto-Update Banner Notification -->
+  <div id="update-banner" class="update-banner hidden">
+    <div class="update-banner-content">
+      <div class="spinner banner-spinner hidden" id="banner-loader"></div>
+      <span id="update-banner-text">Доступна новая версия!</span>
+      <div class="update-actions">
+        <button id="update-download-btn" class="modal-btn primary">Скачать</button>
+        <button id="update-install-btn" class="modal-btn primary hidden">Установить</button>
+        <button id="update-close-btn" class="close-btn" style="background:transparent; border:none; color:rgba(255,255,255,0.4); cursor:pointer; font-size:12px; margin-left:10px; width:20px; height:20px; display:flex; align-items:center; justify-content:center;">✕</button>
+      </div>
+    </div>
+    <div class="update-progress-bar-container">
+      <div class="update-progress-bar" id="update-progress-bar" style="width: 0%;"></div>
+    </div>
+  </div>
+
+  <!-- Connect logic -->
+  <script src="renderer.js"></script>
+</body>
+</html>

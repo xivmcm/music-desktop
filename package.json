@@ -1,0 +1,41 @@
+{
+  "name": "music-desktop",
+  "version": "1.0.0",
+  "description": "Cross-platform music player aggregator desktop application",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "build": "electron-builder --win",
+    "publish": "electron-builder --win --publish always"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.glassplayer.app",
+    "productName": "GlassPlayer",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "xivmcm",
+        "repo": "music-desktop"
+      }
+    ],
+    "files": [
+      "**/*",
+      "!dist/**/*"
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
+}

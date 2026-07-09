@@ -39,6 +39,8 @@ let selectedTrackForPlaylist = null;
 let isRepeat = false;
 let isShuffle = false;
 let currentPlayPromise = null;
+let currentSeekOffset = 0;
+let currentTrackDuration = 0;
 
 // Base Server API URL Configuration
 const API_URL = 'https://music-backend-iyni.onrender.com';
@@ -251,6 +253,9 @@ function playTrack(index) {
     playerLikeBtn.innerHTML = heartIcon;
   }
 
+  currentTrackDuration = parseDurationToSeconds(track.duration);
+  currentSeekOffset = 0;
+
   // Load stream
   audioPlayer.src = `${BACKEND_URL}/stream?id=${encodeURIComponent(track.id)}&source=${track.source}`;
   
@@ -361,6 +366,18 @@ function formatTime(seconds) {
   return `${mins}:${String(secs).padStart(2, '0')}`;
 }
 
+// Helper to convert MM:SS or HH:MM:SS format to seconds
+function parseDurationToSeconds(durationStr) {
+  if (!durationStr) return 0;
+  const parts = durationStr.split(':').map(Number);
+  if (parts.length === 2) {
+    return parts[0] * 60 + parts[1];
+  } else if (parts.length === 3) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+  return parseFloat(durationStr) || 0;
+}
+
 // 4. Listeners
 searchButton.addEventListener('click', performSearch);
 searchInput.addEventListener('keydown', (e) => {
@@ -378,8 +395,8 @@ audioPlayer.addEventListener('loadedmetadata', () => {
 
 audioPlayer.addEventListener('timeupdate', () => {
   if (isSeeking) return;
-  const current = audioPlayer.currentTime;
-  const duration = audioPlayer.duration || 0;
+  const current = currentSeekOffset + audioPlayer.currentTime;
+  const duration = currentTrackDuration || audioPlayer.duration || 0;
   
   currentTimeText.textContent = formatTime(current);
   if (duration > 0) {
@@ -393,7 +410,9 @@ audioPlayer.addEventListener('timeupdate', () => {
 
 audioPlayer.addEventListener('ended', () => {
   if (isRepeat) {
-    audioPlayer.currentTime = 0;
+    currentSeekOffset = 0;
+    const track = playlist[currentTrackIndex];
+    audioPlayer.src = `${BACKEND_URL}/stream?id=${encodeURIComponent(track.id)}&source=${track.source}`;
     const playPromise = audioPlayer.play();
     currentPlayPromise = playPromise;
     playPromise
@@ -415,14 +434,32 @@ audioPlayer.addEventListener('ended', () => {
 // Seek Slider Actions
 progressSlider.addEventListener('input', () => {
   isSeeking = true;
-  const duration = audioPlayer.duration || 0;
+  const duration = currentTrackDuration || audioPlayer.duration || 0;
   currentTimeText.textContent = formatTime((parseFloat(progressSlider.value) / 100) * duration);
 });
 
 progressSlider.addEventListener('change', () => {
-  const duration = audioPlayer.duration || 0;
-  if (duration > 0) {
-    audioPlayer.currentTime = (parseFloat(progressSlider.value) / 100) * duration;
+  const duration = currentTrackDuration || audioPlayer.duration || 0;
+  const track = playlist[currentTrackIndex];
+  if (duration > 0 && track) {
+    const seekTime = (parseFloat(progressSlider.value) / 100) * duration;
+    currentSeekOffset = seekTime;
+    
+    // Set src with seek parameter to play from the new position
+    audioPlayer.src = `${BACKEND_URL}/stream?id=${encodeURIComponent(track.id)}&source=${track.source}&seek=${seekTime}`;
+    const playPromise = audioPlayer.play();
+    currentPlayPromise = playPromise;
+    playPromise
+      .then(() => {
+        if (currentPlayPromise === playPromise) {
+          setPlayState(true);
+        }
+      })
+      .catch(err => {
+        if (err.name !== 'AbortError') {
+          console.error('Playback failed after seek:', err);
+        }
+      });
   }
   isSeeking = false;
 });

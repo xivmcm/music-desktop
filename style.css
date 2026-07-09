@@ -282,6 +282,7 @@ body {
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
   width: 100%;
+  align-items: start;
 }
 
 /* Glassmorphic Track Card */
@@ -1424,4 +1425,29 @@ input[type="range"]:hover::-webkit-slider-thumb {
 
 .settings-btn:hover svg {
   color: #007aff !important; /* Blue */
+}
+
+/* Genre Chips */
+.genre-chip-btn {
+  padding: 8px 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--text-dim, rgba(255, 255, 255, 0.55));
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.genre-chip-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-color, #fff);
+}
+
+.genre-chip-btn.active {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #ffffff;
 }

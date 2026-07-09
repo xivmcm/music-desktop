@@ -127,7 +127,9 @@ function renderTracks(tracks, container = null) {
     card.dataset.index = index;
     card.dataset.trackId = track.id;
 
-    const coverUrl = track.thumbnail || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23222"/><path d="M30 30 L70 50 L30 70 Z" fill="%23444"/></svg>';
+    const coverUrl = track.thumbnail
+      ? `${BACKEND_URL}/cover?url=${encodeURIComponent(track.thumbnail)}`
+      : 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23222"/><path d="M30 30 L70 50 L30 70 Z" fill="%23444"/></svg>';
 
     const isLiked = likedTrackIds.has(track.id);
     const heartIcon = isLiked 
@@ -135,7 +137,7 @@ function renderTracks(tracks, container = null) {
       : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`;
 
     let actionsHTML = '';
-    if (activeView === 'playlist-tracks') {
+    if (activeView === 'playlist-tracks' && activePlaylistId) {
       actionsHTML = `
         <button class="playlist-remove-track-btn" title="Remove from Playlist" style="background:transparent; border:none; color:rgba(255,255,255,0.25); cursor:pointer; padding:8px; border-radius:50%; display:flex; align-items:center; justify-content:center; transition:all 0.2s ease; z-index:20;">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -186,7 +188,7 @@ function renderTracks(tracks, container = null) {
       });
     }
 
-    if (activeView === 'playlist-tracks') {
+    if (activeView === 'playlist-tracks' && activePlaylistId) {
       const removeBtn = card.querySelector('.playlist-remove-track-btn');
       removeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -204,6 +206,27 @@ function renderTracks(tracks, container = null) {
   });
 }
 
+function incrementPlayCount(track) {
+  try {
+    const statsStr = localStorage.getItem('gp_stats_counts');
+    const stats = statsStr ? JSON.parse(statsStr) : {};
+    if (!stats[track.id]) {
+      stats[track.id] = {
+        id: track.id,
+        title: track.title,
+        artist: track.artist,
+        thumbnail: track.thumbnail,
+        source: track.source,
+        count: 0
+      };
+    }
+    stats[track.id].count += 1;
+    localStorage.setItem('gp_stats_counts', JSON.stringify(stats));
+  } catch (err) {
+    console.error('Failed to update play count statistics:', err);
+  }
+}
+
 // 3. Play Track
 // 3. Play Track
 function playTrack(index) {
@@ -214,6 +237,10 @@ function playTrack(index) {
 
   // Add to playback history
   addToHistory(track);
+
+  // Increment local stats play count
+  incrementPlayCount(track);
+  audioPlayer.lastStatsTime = null;
 
   // Update Active UI State
   const cards = document.querySelectorAll('.track-card');
@@ -237,7 +264,9 @@ function playTrack(index) {
     currentArtist.textContent = track.artist;
   }
   
-  currentCover.src = track.thumbnail || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23222"/><path d="M30 30 L70 50 L30 70 Z" fill="%23444"/></svg>';
+  currentCover.src = track.thumbnail
+    ? `${BACKEND_URL}/cover?url=${encodeURIComponent(track.thumbnail)}`
+    : 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23222"/><path d="M30 30 L70 50 L30 70 Z" fill="%23444"/></svg>';
 
   // Update player like button state
   if (playerLikeBtn) {
@@ -394,6 +423,21 @@ audioPlayer.addEventListener('loadedmetadata', () => {
 });
 
 audioPlayer.addEventListener('timeupdate', () => {
+  // Accumulate stats total seconds
+  if (!audioPlayer.paused && !isSeeking) {
+    if (audioPlayer.lastStatsTime !== undefined && audioPlayer.lastStatsTime !== null) {
+      const diff = audioPlayer.currentTime - audioPlayer.lastStatsTime;
+      if (diff > 0 && diff < 2) {
+        let totalSeconds = parseFloat(localStorage.getItem('gp_stats_total_seconds')) || 0;
+        totalSeconds += diff;
+        localStorage.setItem('gp_stats_total_seconds', totalSeconds);
+      }
+    }
+    audioPlayer.lastStatsTime = audioPlayer.currentTime;
+  } else {
+    audioPlayer.lastStatsTime = audioPlayer.currentTime;
+  }
+
   if (isSeeking) return;
   const current = currentSeekOffset + audioPlayer.currentTime;
   const duration = currentTrackDuration || audioPlayer.duration || 0;
@@ -1196,7 +1240,9 @@ function renderTracksForSection(sectionTracks, container) {
     card.dataset.index = index;
     card.dataset.trackId = track.id;
 
-    const coverUrl = track.thumbnail || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23222"/><path d="M30 30 L70 50 L30 70 Z" fill="%23444"/></svg>';
+    const coverUrl = track.thumbnail
+      ? `${BACKEND_URL}/cover?url=${encodeURIComponent(track.thumbnail)}`
+      : 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23222"/><path d="M30 30 L70 50 L30 70 Z" fill="%23444"/></svg>';
     const isLiked = likedTrackIds.has(track.id);
     const heartIcon = isLiked 
       ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`
@@ -1332,11 +1378,22 @@ function renderArtistProfile(artistData) {
       const card = document.createElement('div');
       card.className = 'playlist-card';
       card.style.flex = '0 0 220px';
+      card.style.cursor = 'pointer';
+      
+      const plThumbnail = pl.thumbnail
+        ? `${BACKEND_URL}/cover?url=${encodeURIComponent(pl.thumbnail)}`
+        : 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'><rect width=\'100\' height=\'100\' fill=\'%23222\'/></svg>';
+
       card.innerHTML = `
-        <img src="${pl.thumbnail || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'><rect width=\'100\' height=\'100\' fill=\'%23222\'/></svg>'}" style="width:100%; height:120px; object-fit:cover; border-radius:8px;">
+        <img src="${plThumbnail}" style="width:100%; height:120px; object-fit:cover; border-radius:8px;">
         <div class="playlist-card-title" style="margin-top:8px;">${pl.name}</div>
         <div class="playlist-card-count">${pl.tracksCount} треков</div>
       `;
+      
+      card.addEventListener('click', () => {
+        loadArtistPlaylist(pl.id, pl.name);
+      });
+
       scroller.appendChild(card);
     });
     
@@ -1345,6 +1402,69 @@ function renderArtistProfile(artistData) {
 
   tracksContainer.appendChild(sections);
   tracksContainer.classList.remove('hidden');
+}
+
+async function loadArtistPlaylist(playlistId, playlistName) {
+  activeView = 'playlist-tracks';
+  activePlaylistId = null; // remote SoundCloud playlist
+  welcomeScreen.classList.add('hidden');
+  tracksContainer.classList.add('hidden');
+  loadingIndicator.classList.remove('hidden');
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/search/playlist/${playlistId}`);
+    const data = await response.json();
+    loadingIndicator.classList.add('hidden');
+
+    if (data.status === 'success' && data.results) {
+      playlist = data.results;
+      
+      tracksContainer.innerHTML = '';
+      const viewHeader = document.createElement('div');
+      viewHeader.className = 'view-header';
+      viewHeader.innerHTML = `
+        <div class="view-header-title">
+          <button id="back-to-artist" class="view-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+            <span>Назад</span>
+          </button>
+          <span>${playlistName}</span>
+          <span class="view-header-subtitle">(${playlist.length} треков)</span>
+        </div>
+      `;
+      tracksContainer.appendChild(viewHeader);
+
+      document.getElementById('back-to-artist').addEventListener('click', () => {
+        const artistId = playlist[0]?.artistId || artistData?.id || '';
+        if (artistId) {
+          loadArtistView(artistId);
+        } else {
+          loadHomeView();
+        }
+      });
+
+      if (playlist.length > 0) {
+        const listGrid = document.createElement('div');
+        listGrid.className = 'tracks-grid';
+        tracksContainer.appendChild(listGrid);
+        renderTracks(playlist, listGrid);
+      } else {
+        const emptyState = document.createElement('div');
+        emptyState.className = 'welcome-state';
+        emptyState.innerHTML = '<h2>Плейлист пуст</h2>';
+        tracksContainer.appendChild(emptyState);
+      }
+      tracksContainer.classList.remove('hidden');
+    } else {
+      tracksContainer.innerHTML = '<div class="welcome-state"><h2>Плейлист не найден</h2></div>';
+      tracksContainer.classList.remove('hidden');
+    }
+  } catch (error) {
+    console.error('Failed to load artist playlist:', error);
+    loadingIndicator.classList.add('hidden');
+    tracksContainer.innerHTML = '<div class="welcome-state"><h2>Ошибка сети</h2></div>';
+    tracksContainer.classList.remove('hidden');
+  }
 }
 
 // --- Step 3 Search History Autocomplete Dropdown Logic ---
@@ -1445,6 +1565,15 @@ function renderSettings() {
   loadingIndicator.classList.add('hidden');
   tracksContainer.innerHTML = '';
 
+  const totalSeconds = parseFloat(localStorage.getItem('gp_stats_total_seconds')) || 0;
+  const totalHours = (totalSeconds / 3600).toFixed(1);
+
+  const statsStr = localStorage.getItem('gp_stats_counts');
+  const stats = statsStr ? JSON.parse(statsStr) : {};
+  const topTracks = Object.values(stats)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 3);
+
   const viewHeader = document.createElement('div');
   viewHeader.className = 'view-header';
   viewHeader.innerHTML = `
@@ -1476,6 +1605,35 @@ function renderSettings() {
           <span>Silver Matrix</span>
           <div class="theme-preview silver"></div>
         </button>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>Статистика прослушивания</h3>
+      <div class="settings-info-row">
+        <span class="settings-info-label">Общее время прослушивания:</span>
+        <span class="settings-info-value">${totalHours} ч</span>
+      </div>
+      <div style="margin-top: 12px; margin-bottom: 8px; font-weight: 500; font-size: 14px; color: rgba(255,255,255,0.7);">
+        Топ-3 трека:
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        ${topTracks.length > 0 ? topTracks.map((track, i) => {
+          const trackCover = track.thumbnail
+            ? `${BACKEND_URL}/cover?url=${encodeURIComponent(track.thumbnail)}`
+            : 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'50\' height=\'50\' viewBox=\'0 0 100 100\'><rect width=\'100\' height=\'100\' fill=\'%23222\'/></svg>';
+          return `
+            <div style="display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.03); padding: 6px 10px; border-radius: 6px;">
+              <div style="font-weight: bold; color: #30d158; width: 15px;">${i + 1}</div>
+              <img src="${trackCover}" style="width: 32px; height: 32px; border-radius: 4px; object-fit: cover;">
+              <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                <div style="font-weight: 500; font-size: 13px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${track.title}</div>
+                <div style="font-size: 11px; color: rgba(255,255,255,0.5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${track.artist}</div>
+              </div>
+              <div style="font-size: 12px; color: rgba(255,255,255,0.4);">${track.count} воспр.</div>
+            </div>
+          `;
+        }).join('') : '<div style="color: rgba(255,255,255,0.4); font-size: 12px; padding: 4px 0;">Нет данных о прослушиваниях</div>'}
       </div>
     </div>
 

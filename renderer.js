@@ -38,7 +38,7 @@ let activePlaylistId = null;
 let selectedTrackForPlaylist = null;
 
 // Base Server API URL Configuration
-const API_URL = 'http://localhost:5000'; // Target local backend for Step 3
+const API_URL = 'https://music-backend-iyni.onrender.com';
 const BACKEND_URL = `${API_URL}/api`;
 
 // DOM Elements

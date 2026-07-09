@@ -74,8 +74,6 @@
 
 body {
   background: var(--bg-gradient);
-  backdrop-filter: var(--blur-value);
-  -webkit-backdrop-filter: var(--blur-value);
   color: var(--text-color);
   height: 100vh;
   display: flex;
@@ -156,6 +154,8 @@ body {
   align-items: center;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   background: rgba(0, 0, 0, 0.15);
+  backdrop-filter: var(--blur-value);
+  -webkit-backdrop-filter: var(--blur-value);
   z-index: 10;
 }
 
@@ -270,18 +270,25 @@ body {
   display: none !important;
 }
 
-/* Tracks Grid */
-.tracks-grid {
+/* Tracks Container Block */
+#tracks-container {
+  display: block;
+  width: 100%;
+}
+
+/* Tracks Layout Grid */
+.tracks-layout-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
+  width: 100%;
 }
 
 /* Glassmorphic Track Card */
 .track-card {
   background: rgba(255, 255, 255, 0.02);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: var(--blur-value);
+  -webkit-backdrop-filter: var(--blur-value);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 12px;
   padding: 12px;
@@ -378,8 +385,8 @@ body {
 .player-bar {
   height: 84px;
   background: rgba(5, 5, 5, 0.45);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: var(--blur-value);
+  -webkit-backdrop-filter: var(--blur-value);
   border-top: 1px solid rgba(255, 255, 255, 0.05);
   padding: 0 24px;
   display: flex;
@@ -1182,6 +1189,7 @@ input[type="range"]:hover::-webkit-slider-thumb {
   padding: 24px;
   margin-bottom: 24px;
   backdrop-filter: var(--blur-value);
+  -webkit-backdrop-filter: var(--blur-value);
   width: 100%;
 }
 
@@ -1329,6 +1337,8 @@ input[type="range"]:hover::-webkit-slider-thumb {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  backdrop-filter: var(--blur-value);
+  -webkit-backdrop-filter: var(--blur-value);
 }
 
 .settings-section h3 {

@@ -122,6 +122,13 @@ function renderTracks(tracks, container = null) {
   const targetContainer = container || tracksContainer;
   targetContainer.innerHTML = '';
   
+  let gridContainer = targetContainer;
+  if (targetContainer === tracksContainer) {
+    gridContainer = document.createElement('div');
+    gridContainer.className = 'tracks-layout-grid';
+    targetContainer.appendChild(gridContainer);
+  }
+  
   tracks.forEach((track, index) => {
     const card = document.createElement('div');
     const currentTrack = playlist[currentTrackIndex];
@@ -205,7 +212,7 @@ function renderTracks(tracks, container = null) {
       });
     }
 
-    targetContainer.appendChild(card);
+    gridContainer.appendChild(card);
   });
 }
 
@@ -939,7 +946,7 @@ function renderPlaylists() {
 
   if (playlists && playlists.length > 0) {
     const grid = document.createElement('div');
-    grid.className = 'tracks-grid';
+    grid.className = 'tracks-layout-grid';
     
     playlists.forEach(pl => {
       const card = document.createElement('div');
@@ -1011,7 +1018,7 @@ function openPlaylist(playlistId) {
     playlist = pl.tracks;
     
     const listGrid = document.createElement('div');
-    listGrid.className = 'tracks-grid';
+    listGrid.className = 'tracks-layout-grid';
     tracksContainer.appendChild(listGrid);
     
     renderTracks(playlist, listGrid);
@@ -1440,7 +1447,7 @@ function renderGenreTracks(tracks, tagName) {
   sectionEl.appendChild(titleEl);
 
   const grid = document.createElement('div');
-  grid.className = 'tracks-grid';
+  grid.className = 'tracks-layout-grid';
   sectionEl.appendChild(grid);
   
   if (tracks && tracks.length > 0) {
@@ -1606,7 +1613,7 @@ function renderArtistProfile(artistData) {
     tracksSection.innerHTML = '<div class="home-section-title">Популярные треки</div>';
     
     const tracksGrid = document.createElement('div');
-    tracksGrid.className = 'tracks-grid';
+    tracksGrid.className = 'tracks-layout-grid';
     tracksSection.appendChild(tracksGrid);
     
     sections.appendChild(tracksSection);
@@ -1695,7 +1702,7 @@ async function loadArtistPlaylist(playlistId, playlistName) {
 
       if (playlist.length > 0) {
         const listGrid = document.createElement('div');
-        listGrid.className = 'tracks-grid';
+        listGrid.className = 'tracks-layout-grid';
         tracksContainer.appendChild(listGrid);
         renderTracks(playlist, listGrid);
       } else {
@@ -1907,7 +1914,7 @@ function renderSettings() {
       <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 15px; margin-top: 15px; display: flex; flex-direction: column; gap: 8px;">
         <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Импорт темы по коду:</span>
         <div style="display: flex; gap: 8px;">
-          <input type="text" id="theme-import-input" placeholder="Вставьте код темы (Base64)..." style="flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: #fff; font-size: 12px;">
+          <input type="text" id="theme-import-input" placeholder="Вставьте код темы (Base64)..." style="flex: 1; min-width: 0; max-width: calc(100% - 110px); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: #fff; font-size: 12px;">
           <button id="theme-import-btn" class="view-btn">
             <span>Применить</span>
           </button>

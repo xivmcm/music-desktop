@@ -193,6 +193,49 @@
     </div>
   </div>
 
+  <!-- New Dedicated Compact Mini-Player Block -->
+  <div id="mini-player-block" class="mini-player-block">
+    <div class="mini-player-titlebar">
+      <div class="mini-title">GLASSPLAYER</div>
+      <div class="mini-window-controls">
+        <button onclick="window.electronAPI.toggleMiniPlayer()" class="mini-control-btn mini-player-btn" title="Выйти из мини-плеера">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="17" x2="15" y2="17"></line><line x1="9" y1="13" x2="15" y2="13"></line></svg>
+        </button>
+        <button onclick="window.electronAPI.minimize()" class="mini-control-btn min-btn">―</button>
+        <button onclick="window.electronAPI.close()" class="mini-control-btn close-btn">✕</button>
+      </div>
+    </div>
+    
+    <div class="mini-player-progress-container">
+      <div class="mini-player-progress-bar" id="mini-progress-bar"></div>
+    </div>
+    
+    <div class="mini-player-content">
+      <div class="mini-player-track-info">
+        <div class="mini-cover-container">
+          <img id="mini-current-cover" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23222'/><path d='M30 30 L70 50 L30 70 Z' fill='%23444'/></svg>" alt="Cover">
+        </div>
+        <div class="mini-track-details">
+          <div class="mini-track-title" id="mini-current-title">Not Playing</div>
+          <div class="mini-track-artist" id="mini-current-artist">Choose a track</div>
+        </div>
+      </div>
+      
+      <div class="mini-player-controls">
+        <button id="mini-prev-button" class="mini-player-btn" title="Предыдущий">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
+        </button>
+        <button id="mini-play-button" class="mini-player-btn mini-play-main" title="Воспроизведение/Пауза">
+          <svg id="mini-play-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          <svg id="mini-pause-icon" class="hidden" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+        </button>
+        <button id="mini-next-button" class="mini-player-btn" title="Следующий">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Connect logic -->
   <script src="renderer.js"></script>
 </body>

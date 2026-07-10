@@ -79,6 +79,7 @@ function createWindow() {
     frame: false,            // Hides default OS frames for custom window layout
     transparent: true,      // Allows the desktop to show through for glassmorphism
     hasShadow: true,
+    backgroundColor: '#00000000',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

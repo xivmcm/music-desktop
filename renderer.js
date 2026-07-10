@@ -26,6 +26,17 @@ const volumeSlider = document.getElementById('volume-slider');
 const currentTimeText = document.getElementById('current-time');
 const totalTimeText = document.getElementById('total-time');
 
+// Mini Player DOM Elements
+const miniCurrentCover = document.getElementById('mini-current-cover');
+const miniCurrentTitle = document.getElementById('mini-current-title');
+const miniCurrentArtist = document.getElementById('mini-current-artist');
+const miniPlayButton = document.getElementById('mini-play-button');
+const miniPlayIcon = document.getElementById('mini-play-icon');
+const miniPauseIcon = document.getElementById('mini-pause-icon');
+const miniPrevButton = document.getElementById('mini-prev-button');
+const miniNextButton = document.getElementById('mini-next-button');
+const miniProgressBar = document.getElementById('mini-progress-bar');
+
 // App state variables
 let playlist = [];
 let currentTrackIndex = -1;
@@ -319,6 +330,7 @@ function playTrack(index) {
 
   // Update Player Meta Info
   currentTitle.textContent = track.title;
+  if (miniCurrentTitle) miniCurrentTitle.textContent = track.title;
   
   if (track.artistId && track.source === 'soundcloud') {
     currentArtist.innerHTML = `<span class="artist-link" data-artist-id="${track.artistId}">${track.artist}</span>`;
@@ -332,11 +344,19 @@ function playTrack(index) {
   } else {
     currentArtist.textContent = track.artist;
   }
+  if (miniCurrentArtist) miniCurrentArtist.textContent = track.artist;
   
-  currentCover.crossOrigin = 'anonymous';
-  currentCover.src = track.thumbnail
+  const coverUrl = track.thumbnail
     ? `${BACKEND_URL}/cover?url=${encodeURIComponent(track.thumbnail)}`
     : 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23222"/><path d="M30 30 L70 50 L30 70 Z" fill="%23444"/></svg>';
+
+  currentCover.crossOrigin = 'anonymous';
+  currentCover.src = coverUrl;
+
+  if (miniCurrentCover) {
+    miniCurrentCover.crossOrigin = 'anonymous';
+    miniCurrentCover.src = coverUrl;
+  }
 
   // Update player like button state
   if (playerLikeBtn) {
@@ -390,9 +410,13 @@ function setPlayState(isPlaying) {
   if (isPlaying) {
     playIcon.classList.add('hidden');
     pauseIcon.classList.remove('hidden');
+    if (miniPlayIcon) miniPlayIcon.classList.add('hidden');
+    if (miniPauseIcon) miniPauseIcon.classList.remove('hidden');
   } else {
     playIcon.classList.remove('hidden');
     pauseIcon.classList.add('hidden');
+    if (miniPlayIcon) miniPlayIcon.classList.remove('hidden');
+    if (miniPauseIcon) miniPauseIcon.classList.add('hidden');
   }
 }
 
@@ -494,6 +518,10 @@ playButton.addEventListener('click', togglePlay);
 nextButton.addEventListener('click', playNext);
 prevButton.addEventListener('click', playPrev);
 
+if (miniPlayButton) miniPlayButton.addEventListener('click', togglePlay);
+if (miniNextButton) miniNextButton.addEventListener('click', playNext);
+if (miniPrevButton) miniPrevButton.addEventListener('click', playPrev);
+
 // Audio Player Events
 audioPlayer.addEventListener('loadedmetadata', () => {
   progressSlider.max = 100;
@@ -525,8 +553,14 @@ audioPlayer.addEventListener('timeupdate', () => {
     totalTimeText.textContent = formatTime(duration);
     progressSlider.max = 100;
     progressSlider.value = (current / duration) * 100;
+    if (miniProgressBar) {
+      miniProgressBar.style.width = `${(current / duration) * 100}%`;
+    }
   } else {
     progressSlider.value = 0;
+    if (miniProgressBar) {
+      miniProgressBar.style.width = '0%';
+    }
   }
 });
 

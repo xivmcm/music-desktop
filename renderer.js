@@ -193,6 +193,19 @@ async function performSearch() {
   }
 }
 
+function formatPlaybackCount(count) {
+  if (count === undefined || count === null || isNaN(count)) return '';
+  const num = Number(count);
+  if (num >= 1000000) {
+    const formatted = (num / 1000000).toFixed(1);
+    return formatted.endsWith('.0') ? formatted.slice(0, -2) + 'M' : formatted + 'M';
+  }
+  if (num >= 1000) {
+    return Math.floor(num / 1000) + 'K';
+  }
+  return num.toString();
+}
+
 // 2. Render Results
 function renderTracks(tracks, container = null) {
   const targetContainer = container || tracksContainer;
@@ -245,14 +258,33 @@ function renderTracks(tracks, container = null) {
       ? `<span class="artist-link" data-artist-id="${track.artistId}">${trackArtist}</span>`
       : `<span>${trackArtist}</span>`;
 
+    const isCurrentPlaying = isActive && !audioPlayer.paused;
+    const coverPlayIcon = isCurrentPlaying
+      ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`
+      : `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="margin-left: 2px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+
+    const playsHTML = track.source === 'soundcloud' && (track.playbackCount !== undefined || track.playback_count !== undefined)
+      ? `<span class="card-plays" title="Прослушивания">👁 ${formatPlaybackCount(track.playbackCount || track.playback_count)}</span>`
+      : '';
+
     card.innerHTML = `
-      <img src="${coverUrl}" class="card-cover" alt="${trackTitle}">
+      <div class="track-cover-container">
+        <img src="${coverUrl}" class="card-cover" alt="${trackTitle}">
+        <div class="cover-overlay">
+          <button class="cover-play-btn" title="Play/Pause">
+            ${coverPlayIcon}
+          </button>
+        </div>
+      </div>
       <div class="card-details">
         <div class="card-title">${trackTitle}</div>
         <div class="card-artist">${artistHTML}</div>
         <div class="card-meta">
           <span class="badge ${track.source}">${track.source}</span>
-          <span class="card-duration">${track.duration}</span>
+          <span class="card-meta-right" style="display: flex; align-items: center; gap: 8px;">
+            ${playsHTML}
+            <span class="card-duration">${track.duration}</span>
+          </span>
         </div>
       </div>
       ${actionsHTML}
@@ -262,7 +294,14 @@ function renderTracks(tracks, container = null) {
     card.addEventListener('click', (e) => {
       // Don't play if clicking the like, playlist or artist link button itself
       if (e.target.closest('.like-btn') || e.target.closest('.playlist-add-btn') || e.target.closest('.playlist-remove-track-btn') || e.target.closest('.artist-link')) return;
-      playTrack(index);
+      
+      const currentTrack = playlist[currentTrackIndex];
+      const isCurrent = currentTrack && track.id === currentTrack.id;
+      if (isCurrent) {
+        togglePlay();
+      } else {
+        playTrack(index);
+      }
     });
 
     const likeBtn = card.querySelector('.like-btn');
@@ -517,6 +556,25 @@ function setPlayState(isPlaying) {
     if (currentCover) currentCover.classList.remove('playing');
     if (miniCurrentCover) miniCurrentCover.classList.remove('playing');
   }
+  updateCoverPlayButtons();
+}
+
+function updateCoverPlayButtons() {
+  const isPlaying = !audioPlayer.paused;
+  const currentTrack = playlist[currentTrackIndex];
+  
+  document.querySelectorAll('.track-card').forEach(card => {
+    const trackId = card.dataset.trackId;
+    const playBtn = card.querySelector('.cover-play-btn');
+    if (!playBtn) return;
+    
+    const isCurrent = currentTrack && trackId === currentTrack.id;
+    if (isCurrent && isPlaying) {
+      playBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
+    } else {
+      playBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="margin-left: 2px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+    }
+  });
 }
 
 function togglePlay() {
@@ -1689,14 +1747,33 @@ function renderTracksForSection(sectionTracks, container) {
       ? `<span class="artist-link" data-artist-id="${track.artistId}">${trackArtist}</span>`
       : `<span>${trackArtist}</span>`;
 
+    const isCurrentPlaying = isActive && !audioPlayer.paused;
+    const coverPlayIcon = isCurrentPlaying
+      ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`
+      : `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="margin-left: 2px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+
+    const playsHTML = track.source === 'soundcloud' && (track.playbackCount !== undefined || track.playback_count !== undefined)
+      ? `<span class="card-plays" title="Прослушивания">👁 ${formatPlaybackCount(track.playbackCount || track.playback_count)}</span>`
+      : '';
+
     card.innerHTML = `
-      <img src="${coverUrl}" class="card-cover" alt="${trackTitle}">
+      <div class="track-cover-container">
+        <img src="${coverUrl}" class="card-cover" alt="${trackTitle}">
+        <div class="cover-overlay">
+          <button class="cover-play-btn" title="Play/Pause">
+            ${coverPlayIcon}
+          </button>
+        </div>
+      </div>
       <div class="card-details">
         <div class="card-title">${trackTitle}</div>
         <div class="card-artist">${artistHTML}</div>
         <div class="card-meta">
           <span class="badge ${track.source}">${track.source}</span>
-          <span class="card-duration">${track.duration}</span>
+          <span class="card-meta-right" style="display: flex; align-items: center; gap: 8px;">
+            ${playsHTML}
+            <span class="card-duration">${track.duration}</span>
+          </span>
         </div>
       </div>
       <button class="playlist-add-btn" title="Add to Playlist">
@@ -1707,8 +1784,15 @@ function renderTracksForSection(sectionTracks, container) {
 
     card.addEventListener('click', (e) => {
       if (e.target.closest('.like-btn') || e.target.closest('.playlist-add-btn') || e.target.closest('.artist-link')) return;
-      playlist = sectionTracks;
-      playTrack(index);
+      
+      const currentTrack = playlist[currentTrackIndex];
+      const isCurrent = currentTrack && track.id === currentTrack.id;
+      if (isCurrent) {
+        togglePlay();
+      } else {
+        playlist = sectionTracks;
+        playTrack(index);
+      }
     });
 
     card.querySelector('.like-btn').addEventListener('click', (e) => {

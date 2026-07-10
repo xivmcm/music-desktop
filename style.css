@@ -1996,3 +1996,343 @@ body.mini-player-active .mini-player-block {
   color: var(--text-dim, rgba(255, 255, 255, 0.45));
   font-weight: 400;
 }
+
+/* ==========================================================================
+   RELEASE 1.3.0: Core Social Update Styles (Auth, Profile, Users Search Row)
+   ========================================================================== */
+
+/* Users Search Results Horizontal Scroll Row */
+#users-search-results {
+  margin: 0 0 24px 0;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 12px;
+  backdrop-filter: var(--blur-value, blur(28px));
+  -webkit-backdrop-filter: var(--blur-value, blur(28px));
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+#users-search-results h3 {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.5));
+}
+
+.users-search-row {
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scroll-behavior: smooth;
+}
+
+.users-search-row::-webkit-scrollbar {
+  height: 4px;
+}
+
+.users-search-row::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.users-search-row::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.users-search-row::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.user-search-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 80px;
+  max-width: 80px;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+  text-align: center;
+}
+
+.user-search-card:hover {
+  transform: scale(1.08);
+}
+
+.user-search-avatar {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.3);
+  margin-bottom: 8px;
+  transition: border-color 0.2s ease;
+}
+
+.user-search-card:hover .user-search-avatar {
+  border-color: var(--accent-color, #ffffff);
+}
+
+.user-search-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-color, #ffffff);
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-search-username {
+  font-size: 10px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.45));
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Glassmorphic Auth Form (Login / Register) */
+.glass-auth-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  max-width: 380px;
+  margin: 40px auto;
+  padding: 32px 24px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 16px;
+  backdrop-filter: var(--blur-value, blur(28px));
+  -webkit-backdrop-filter: var(--blur-value, blur(28px));
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+}
+
+.glass-auth-container h2 {
+  font-size: 22px;
+  font-weight: 400;
+  margin-bottom: 24px;
+  letter-spacing: 0.5px;
+  text-align: center;
+  color: var(--text-color, #ffffff);
+}
+
+.auth-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.auth-form-group input {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: var(--text-color, #ffffff);
+  outline: none;
+  font-size: 14px;
+  width: 100%;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.auth-form-group input:focus {
+  border-color: var(--accent-color, #ffffff);
+  background: rgba(0, 0, 0, 0.3);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.05);
+}
+
+.auth-action-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  border: none;
+  background: var(--text-color, #ffffff);
+  color: var(--player-bg, #050505);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 16px;
+}
+
+.auth-action-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.auth-switch-prompt {
+  font-size: 12px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.5));
+  text-align: center;
+}
+
+.auth-switch-link {
+  color: var(--accent-color, #ffffff);
+  cursor: pointer;
+  font-weight: 500;
+  text-decoration: underline;
+  margin-left: 4px;
+}
+
+.auth-error-msg {
+  color: #ff453a;
+  font-size: 12px;
+  margin-bottom: 12px;
+  width: 100%;
+  text-align: center;
+}
+
+/* User Profile Dashboard */
+.profile-dashboard-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 24px;
+  position: relative;
+}
+
+.profile-dashboard-avatar {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0,0,0,0.3);
+}
+
+.profile-dashboard-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-dashboard-displayname {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-color, #ffffff);
+}
+
+.profile-dashboard-username {
+  font-size: 13px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.5));
+  font-family: monospace;
+}
+
+.profile-dashboard-bio {
+  font-size: 13px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.7));
+  margin-top: 8px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.profile-dashboard-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-self: flex-start;
+}
+
+.profile-action-btn {
+  padding: 8px 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-color, #ffffff);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.profile-action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.profile-action-btn.logout {
+  border-color: rgba(255, 69, 58, 0.3);
+  color: #ff453a;
+}
+
+.profile-action-btn.logout:hover {
+  background: rgba(255, 69, 58, 0.1);
+  border-color: rgba(255, 69, 58, 0.5);
+}
+
+/* Friend Profile View Banner */
+.friend-profile-banner {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  position: relative;
+}
+
+.friend-profile-avatar {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0,0,0,0.3);
+}
+
+.friend-profile-name {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-color, #ffffff);
+  margin: 0;
+}
+
+.friend-profile-username {
+  font-size: 14px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.5));
+  margin: -10px 0 0 0;
+  font-family: monospace;
+}
+
+.friend-profile-bio {
+  font-size: 14px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.75));
+  max-width: 480px;
+  line-height: 1.5;
+  margin: 8px 0 0 0;
+  white-space: pre-wrap;
+}
+
+.friend-profile-stats {
+  display: flex;
+  gap: 24px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.6));
+}
+
+.friend-profile-stats strong {
+  color: var(--text-color, #ffffff);
+  margin-right: 4px;
+}

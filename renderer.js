@@ -59,6 +59,12 @@ let trackLoadTimeout = null;
 let currentSearchPage = 1;
 const maxTracksLimit = 80;
 
+// RELEASE 1.3.0 Auth state
+let currentUser = null;
+let token = null;
+let tempAvatarBase64 = '';
+let isRegistering = false;
+
 let audioCtx = null;
 let bassFilter = null;
 let analyser = null;
@@ -115,7 +121,7 @@ function applyAudioEffectsState() {
 let cachedForYouData = null;
 
 // Base Server API URL Configuration
-const API_URL = 'https://music-backend-iyni.onrender.com';
+const API_URL = 'http://localhost:5000';
 const BACKEND_URL = `${API_URL}/api`;
 
 // DOM Elements
@@ -181,6 +187,40 @@ async function performSearch() {
     const data = await response.json();
 
     loadingIndicator.classList.add('hidden');
+
+    // Handle user search results (only page 1)
+    const usersContainer = document.getElementById('users-search-results');
+    const usersRow = usersContainer ? usersContainer.querySelector('.users-search-row') : null;
+    
+    if (usersContainer && usersRow) {
+      if (data.users && data.users.length > 0) {
+        usersRow.innerHTML = '';
+        data.users.forEach(user => {
+          const userCard = document.createElement('div');
+          userCard.className = 'user-search-card';
+          userCard.dataset.userId = user._id || user.id;
+          
+          const avatarSrc = user.avatarBase64 || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54"><circle cx="27" cy="27" r="25" fill="%23333"/><path d="M27 24a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 4c-8 0-11 5-11 9v2h22v-2c0-4-3-9-11-9z" fill="%23666"/></svg>';
+          
+          userCard.innerHTML = `
+            <img class="user-search-avatar" src="${avatarSrc}" alt="Avatar">
+            <div class="user-search-name">${escapeHTML(user.displayName)}</div>
+            <div class="user-search-username">@${escapeHTML(user.username)}</div>
+          `;
+          
+          userCard.addEventListener('click', () => {
+            loadFriendProfile(user._id || user.id);
+          });
+          
+          usersRow.appendChild(userCard);
+        });
+        usersContainer.classList.remove('hidden');
+      } else {
+        usersContainer.classList.add('hidden');
+      }
+    } else if (usersContainer) {
+      usersContainer.classList.add('hidden');
+    }
 
     if (data.status === 'success' && data.results && data.results.length > 0) {
       playlist = data.results;
@@ -1109,10 +1149,29 @@ function deleteUserProfile(profileName) {
   }
 }
 
-// Liked tracks services logic (using client-side localStorage)
+// Escape HTML string helper to prevent XSS
+function escapeHTML(str) {
+  if (!str) return '';
+  return str.replace(/[&<>'"]/g, 
+    tag => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      "'": '&#39;',
+      '"': '&quot;'
+    }[tag] || tag)
+  );
+}
+
+// Liked tracks services logic (using client-side localStorage and backend synchronization)
 async function loadLikedTracks() {
-  const likes = getLikedTracks();
-  likedTrackIds = new Set(likes.map(t => t.id));
+  if (currentUser && currentUser.likedTracks) {
+    saveLikedTracks(currentUser.likedTracks);
+    likedTrackIds = new Set(currentUser.likedTracks.map(t => t.id));
+  } else {
+    const likes = getLikedTracks();
+    likedTrackIds = new Set(likes.map(t => t.id));
+  }
 }
 
 function updateLikeUI(trackId) {
@@ -1171,6 +1230,11 @@ function toggleLike(e, track) {
     likedTrackIds.add(track.id);
   }
   saveLikedTracks(likes);
+
+  // Sync with cloud backend database if user is logged in
+  if (currentUser && token) {
+    syncLikesWithBackend(likes);
+  }
 
   // Sync like UI everywhere
   updateLikeUI(track.id);
@@ -2247,6 +2311,65 @@ function loadSettingsView() {
   }, 100);
 }
 
+// Render Profile & Auth Card
+function renderProfileContainer() {
+  const container = document.getElementById('profile-section-container');
+  if (!container) return;
+
+  if (!currentUser) {
+    // Guest form
+    container.innerHTML = `
+      <div class="glass-auth-container">
+        <h2>${isRegistering ? 'Регистрация' : 'Вход в аккаунт'}</h2>
+        <div id="auth-error" class="auth-error-msg hidden"></div>
+        <div class="auth-form-group">
+          <input type="text" id="auth-username" placeholder="Имя пользователя (@username)" autocomplete="off">
+          ${isRegistering ? '<input type="text" id="auth-displayname" placeholder="Имя профиля" autocomplete="off">' : ''}
+          <input type="password" id="auth-password" placeholder="Пароль">
+        </div>
+        <button id="auth-submit-btn" class="auth-action-btn">${isRegistering ? 'Создать аккаунт' : 'Войти'}</button>
+        <div class="auth-switch-prompt">
+          ${isRegistering ? 'Уже есть аккаунт?' : 'Нет аккаунта?'}
+          <span id="auth-switch-btn" class="auth-switch-link">${isRegistering ? 'Войти' : 'Зарегистрироваться'}</span>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('auth-switch-btn').addEventListener('click', () => {
+      isRegistering = !isRegistering;
+      renderProfileContainer();
+    });
+
+    document.getElementById('auth-submit-btn').addEventListener('click', handleAuthSubmit);
+  } else {
+    // Logged in profile panel
+    const avatarSrc = currentUser.avatarBase64 || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="90" height="90" viewBox="0 0 90 90"><circle cx="45" cy="45" r="43" fill="%23333"/><path d="M45 40a10 10 0 1 0 0-20 10 10 0 0 0 0 20zm0 8c-14 0-20 8-20 16v3h40v-3c0-8-6-16-20-16z" fill="%23666"/></svg>';
+    
+    container.innerHTML = `
+      <div class="profile-dashboard-card">
+        <img class="profile-dashboard-avatar" src="${avatarSrc}" alt="Avatar">
+        <div class="profile-dashboard-details">
+          <div class="profile-dashboard-displayname">${escapeHTML(currentUser.displayName)}</div>
+          <div class="profile-dashboard-username">@${escapeHTML(currentUser.username)}</div>
+          <div class="profile-dashboard-bio">${escapeHTML(currentUser.bio || 'Нет описания')}</div>
+        </div>
+        <div class="profile-dashboard-actions">
+          <button id="profile-edit-btn" class="profile-action-btn">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+            Редактировать
+          </button>
+          <button id="profile-logout-btn" class="profile-action-btn logout">
+            Выйти
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('profile-edit-btn').addEventListener('click', openEditProfileModal);
+    document.getElementById('profile-logout-btn').addEventListener('click', handleLogout);
+  }
+}
+
 function renderSettings() {
   loadingIndicator.classList.add('hidden');
   tracksContainer.innerHTML = '';
@@ -2275,11 +2398,18 @@ function renderSettings() {
   viewHeader.className = 'view-header';
   viewHeader.innerHTML = `
     <div class="view-header-title">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-      <span>Настройки</span>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+      <span>Профиль и Настройки</span>
     </div>
   `;
   tracksContainer.appendChild(viewHeader);
+
+  // Profile Section container
+  const profileSection = document.createElement('div');
+  profileSection.id = 'profile-section-container';
+  tracksContainer.appendChild(profileSection);
+
+  renderProfileContainer();
 
   const panel = document.createElement('div');
   panel.className = 'settings-panel';
@@ -2752,6 +2882,8 @@ function clearCustomThemeProperties() {
 
 // Startup Initialization
 loadProfiles();
+initAuth();
+initEditProfileEventListeners();
 loadHomeView();
 
 // Apply Saved Theme on Startup
@@ -3109,6 +3241,12 @@ if (localStorage.getItem('gp_dynamic_cover') === 'true') {
 }
 
 function updateActiveTab(viewName) {
+  // Hide user search results if we switch away from search view
+  const usersContainer = document.getElementById('users-search-results');
+  if (usersContainer && viewName !== 'search') {
+    usersContainer.classList.add('hidden');
+  }
+
   const tabButtons = {
     'home': homeButton,
     'library': favoritesButton,
@@ -3138,5 +3276,367 @@ function updateActiveTab(viewName) {
   tracksContainer.classList.remove('fade-in');
   void tracksContainer.offsetWidth; // Force reflow
   tracksContainer.classList.add('fade-in');
+}
+
+// ==========================================================================
+// RELEASE 1.3.0: Core Social Update Logic (Auth API, Canvas Comp., Friends Profile)
+// ==========================================================================
+
+// Auth Initialization
+async function initAuth() {
+  token = localStorage.getItem('auth_token');
+  currentUser = localStorage.getItem('auth_user') ? JSON.parse(localStorage.getItem('auth_user')) : null;
+  
+  if (token) {
+    try {
+      const res = await fetch(`${BACKEND_URL}/auth/me`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        currentUser = data.user;
+        localStorage.setItem('auth_user', JSON.stringify(currentUser));
+        updateHeaderProfileUI();
+        await loadLikedTracks();
+      } else {
+        handleLogout();
+      }
+    } catch (err) {
+      console.warn('[Auth Auto-login Error] Backend offline, using offline auth state:', err);
+      updateHeaderProfileUI();
+      loadLikedTracks();
+    }
+  } else {
+    updateHeaderProfileUI();
+    loadLikedTracks();
+  }
+}
+
+// Update Active Account Display in Header
+function updateHeaderProfileUI() {
+  const activeProfileName = document.getElementById('active-profile-name');
+  if (activeProfileName) {
+    if (currentUser) {
+      activeProfileName.textContent = currentUser.displayName;
+    } else {
+      activeProfileName.textContent = currentProfile || 'Default';
+    }
+  }
+}
+
+// Handle Authentication Submission
+async function handleAuthSubmit() {
+  const username = document.getElementById('auth-username').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const errorEl = document.getElementById('auth-error');
+  if (errorEl) errorEl.classList.add('hidden');
+
+  if (!username || !password) {
+    if (errorEl) {
+      errorEl.textContent = 'Заполните имя пользователя и пароль';
+      errorEl.classList.remove('hidden');
+    }
+    return;
+  }
+
+  const payload = { username, password };
+  let url = `${BACKEND_URL}/auth/login`;
+
+  if (isRegistering) {
+    const displayName = document.getElementById('auth-displayname').value.trim();
+    if (!displayName) {
+      if (errorEl) {
+        errorEl.textContent = 'Заполните имя профиля';
+        errorEl.classList.remove('hidden');
+      }
+      return;
+    }
+    payload.displayName = displayName;
+    url = `${BACKEND_URL}/auth/register`;
+  }
+
+  const submitBtn = document.getElementById('auth-submit-btn');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Загрузка...';
+  }
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    const data = await res.json();
+    if (data.status === 'success') {
+      token = data.token;
+      currentUser = data.user;
+      localStorage.setItem('auth_token', token);
+      localStorage.setItem('auth_user', JSON.stringify(currentUser));
+      
+      // Load and sync favorites
+      await loadLikedTracks();
+      
+      showToastNotification(isRegistering ? 'Регистрация успешна!' : 'Успешный вход!');
+      renderProfileContainer();
+      updateHeaderProfileUI();
+    } else {
+      if (errorEl) {
+        errorEl.textContent = data.message || 'Произошла ошибка';
+        errorEl.classList.remove('hidden');
+      }
+    }
+  } catch (err) {
+    console.error(err);
+    if (errorEl) {
+      errorEl.textContent = 'Не удалось подключиться к серверу';
+      errorEl.classList.remove('hidden');
+    }
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = isRegistering ? 'Создать аккаунт' : 'Войти';
+    }
+  }
+}
+
+// Handle Logout
+function handleLogout() {
+  currentUser = null;
+  token = null;
+  localStorage.removeItem('auth_token');
+  localStorage.removeItem('auth_user');
+  
+  loadLikedTracks();
+  updateHeaderProfileUI();
+  renderProfileContainer();
+  showToastNotification('Вы вышли из аккаунта');
+}
+
+// Profile Modal Interactions
+function openEditProfileModal() {
+  const modal = document.getElementById('edit-profile-modal');
+  if (!modal) return;
+
+  document.getElementById('edit-display-name-input').value = currentUser.displayName || '';
+  document.getElementById('edit-bio-input').value = currentUser.bio || '';
+  
+  const avatarSrc = currentUser.avatarBase64 || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><circle cx="50" cy="50" r="48" fill="%23333"/><path d="M50 44a12 12 0 1 0 0-24 12 12 0 0 0 0 24zm0 8c-16 0-22 10-22 18v4h44v-4c0-8-6-18-22-18z" fill="%23666"/></svg>';
+  document.getElementById('edit-avatar-preview').src = avatarSrc;
+  
+  tempAvatarBase64 = currentUser.avatarBase64 || '';
+  modal.classList.remove('hidden');
+}
+
+function closeEditProfileModal() {
+  const modal = document.getElementById('edit-profile-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+// Initialise Profile Modal buttons
+function initEditProfileEventListeners() {
+  const selectBtn = document.getElementById('select-avatar-btn');
+  const fileInput = document.getElementById('edit-avatar-input');
+  
+  if (selectBtn && fileInput) {
+    selectBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        compressAndPreviewAvatar(file);
+      }
+    });
+  }
+
+  const cancelBtn = document.getElementById('cancel-edit-profile-btn');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', closeEditProfileModal);
+  }
+
+  const saveBtn = document.getElementById('save-edit-profile-btn');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', saveProfileChanges);
+  }
+}
+
+// Compress avatar with HTML5 Canvas to 100x100 JPEG @ 0.7
+function compressAndPreviewAvatar(file) {
+  const reader = new FileReader();
+  reader.onload = function(event) {
+    const img = new Image();
+    img.onload = function() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 100;
+      canvas.height = 100;
+      const ctx = canvas.getContext('2d');
+      
+      const size = Math.min(img.width, img.height);
+      const xOffset = (img.width - size) / 2;
+      const yOffset = (img.height - size) / 2;
+      
+      ctx.drawImage(img, xOffset, yOffset, size, size, 0, 0, 100, 100);
+      
+      const base64Str = canvas.toDataURL('image/jpeg', 0.7);
+      document.getElementById('edit-avatar-preview').src = base64Str;
+      tempAvatarBase64 = base64Str;
+    };
+    img.src = event.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// Update profile data in DB
+async function saveProfileChanges() {
+  const displayName = document.getElementById('edit-display-name-input').value.trim();
+  const bio = document.getElementById('edit-bio-input').value.trim();
+  
+  if (!displayName) {
+    showToastNotification('Имя профиля не может быть пустым');
+    return;
+  }
+
+  const saveBtn = document.getElementById('save-edit-profile-btn');
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Сохранение...';
+  }
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/auth/profile`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        displayName,
+        bio,
+        avatarBase64: tempAvatarBase64
+      })
+    });
+
+    const data = await response.json();
+    if (data.status === 'success') {
+      currentUser = data.user;
+      localStorage.setItem('auth_user', JSON.stringify(currentUser));
+      
+      showToastNotification('Профиль обновлен!');
+      closeEditProfileModal();
+      renderProfileContainer();
+      updateHeaderProfileUI();
+    } else {
+      showToastNotification(data.message || 'Ошибка обновления профиля');
+    }
+  } catch (err) {
+    console.error(err);
+    showToastNotification('Не удалось соединиться с сервером');
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Сохранить';
+    }
+  }
+}
+
+// Synchronise cloud likes list
+async function syncLikesWithBackend(likes) {
+  try {
+    const res = await fetch(`${BACKEND_URL}/auth/sync-likes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ likedTracks: likes })
+    });
+    const data = await res.json();
+    if (data.status === 'success') {
+      currentUser.likedTracks = data.likedTracks;
+      localStorage.setItem('auth_user', JSON.stringify(currentUser));
+    }
+  } catch (error) {
+    console.error('[Sync Likes Error]:', error);
+  }
+}
+
+// Renders friend profile details & their liked tracks
+async function loadFriendProfile(userId) {
+  activeView = 'friend-profile';
+  searchInput.value = '';
+  
+  const usersContainer = document.getElementById('users-search-results');
+  if (usersContainer) usersContainer.classList.add('hidden');
+  
+  welcomeScreen.classList.add('hidden');
+  tracksContainer.classList.add('hidden');
+  loadingIndicator.classList.remove('hidden');
+  
+  const existingBtn = document.getElementById('load-more-btn');
+  if (existingBtn) existingBtn.remove();
+  const existingMsg = document.getElementById('load-more-limit-msg');
+  if (existingMsg) existingMsg.remove();
+  
+  try {
+    const response = await fetch(`${BACKEND_URL}/users/${userId}`);
+    const data = await response.json();
+    
+    loadingIndicator.classList.add('hidden');
+    
+    if (data.status === 'success' && data.user) {
+      const friend = data.user;
+      tracksContainer.innerHTML = '';
+      
+      const avatarSrc = friend.avatarBase64 || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><circle cx="50" cy="50" r="48" fill="%23333"/><path d="M50 44a12 12 0 1 0 0-24 12 12 0 0 0 0 24zm0 8c-16 0-22 10-22 18v4h44v-4c0-8-6-18-22-18z" fill="%23666"/></svg>';
+      
+      const headerCard = document.createElement('div');
+      headerCard.className = 'friend-profile-banner';
+      headerCard.innerHTML = `
+        <img class="friend-profile-avatar" src="${avatarSrc}" alt="Avatar">
+        <h2 class="friend-profile-name">${escapeHTML(friend.displayName)}</h2>
+        <p class="friend-profile-username">@${escapeHTML(friend.username)}</p>
+        <p class="friend-profile-bio">${escapeHTML(friend.bio || 'Нет описания')}</p>
+        <div class="friend-profile-stats">
+          <span><strong>${friend.likedTracks ? friend.likedTracks.length : 0}</strong> лайков</span>
+          <span><strong>${friend.playlists ? friend.playlists.length : 0}</strong> плейлистов</span>
+        </div>
+      `;
+      tracksContainer.appendChild(headerCard);
+      
+      const sectionTitle = document.createElement('div');
+      sectionTitle.className = 'view-header';
+      sectionTitle.style.marginTop = '24px';
+      sectionTitle.innerHTML = `
+        <div class="view-header-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+          <span>Избранное</span>
+        </div>
+      `;
+      tracksContainer.appendChild(sectionTitle);
+      
+      if (friend.likedTracks && friend.likedTracks.length > 0) {
+        playlist = friend.likedTracks;
+        renderTracks(playlist, tracksContainer, true);
+      } else {
+        const noTracksMsg = document.createElement('div');
+        noTracksMsg.className = 'welcome-state';
+        noTracksMsg.style.minHeight = '150px';
+        noTracksMsg.style.marginTop = '10px';
+        noTracksMsg.innerHTML = '<p>В избранном пока нет треков</p>';
+        tracksContainer.appendChild(noTracksMsg);
+      }
+      
+      tracksContainer.classList.remove('hidden');
+      updateActiveTab(null);
+    } else {
+      tracksContainer.innerHTML = `<div class="welcome-state"><h2>Ошибка</h2><p>${data.message || 'Не удалось загрузить профиль пользователя'}</p></div>`;
+      tracksContainer.classList.remove('hidden');
+    }
+  } catch (error) {
+    console.error('Error loading friend profile:', error);
+    loadingIndicator.classList.add('hidden');
+    tracksContainer.innerHTML = '<div class="welcome-state"><h2>Не удалось подключиться к серверу</h2><p>Пожалуйста, проверьте подключение бэкенда</p></div>';
+    tracksContainer.classList.remove('hidden');
+  }
 }
 

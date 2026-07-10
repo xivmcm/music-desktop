@@ -1,6 +1,6 @@
 {
   "name": "music-desktop",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "Cross-platform music player aggregator desktop application",
   "main": "main.js",
   "scripts": {

@@ -4,6 +4,8 @@ const tracksContainer = document.getElementById('tracks-container');
 const welcomeScreen = document.getElementById('welcome-screen');
 const loadingIndicator = document.getElementById('loading-indicator');
 const favoritesButton = document.getElementById('favorites-button');
+const sourceScBtn = document.getElementById('source-sc');
+const sourceYtBtn = document.getElementById('source-yt');
 
 // Audio Element
 const audioPlayer = document.getElementById('audio-player');
@@ -54,6 +56,7 @@ let currentSeekOffset = 0;
 let currentTrackDuration = 0;
 let activeGenreChip = null;
 let originalHomeData = null;
+let trackLoadTimeout = null;
 
 // Web Audio API context for Audio Effects
 let audioCtx = null;
@@ -157,11 +160,17 @@ async function performSearch() {
   tracksContainer.classList.add('hidden');
   loadingIndicator.classList.remove('hidden');
 
+  // Determine active sources
+  const sources = [];
+  if (!sourceScBtn || sourceScBtn.classList.contains('active')) sources.push('soundcloud');
+  if (!sourceYtBtn || sourceYtBtn.classList.contains('active')) sources.push('youtube');
+  const sourcesStr = sources.join(',');
+
   try {
     // Refresh likes list first so search displays correct states
     await loadLikedTracks();
 
-    const response = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}`);
+    const response = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&sources=${sourcesStr}`);
     const data = await response.json();
 
     loadingIndicator.classList.add('hidden');
@@ -175,11 +184,13 @@ async function performSearch() {
       tracksContainer.innerHTML = '<div class="welcome-state"><h2>No results found</h2><p>Try searching for something else</p></div>';
       tracksContainer.classList.remove('hidden');
     }
+    updateActiveTab('search');
   } catch (error) {
     console.error('Search error:', error);
     loadingIndicator.classList.add('hidden');
     tracksContainer.innerHTML = '<div class="welcome-state"><h2>Не удалось подключиться к серверу</h2><p>Проверьте соединение с интернетом</p></div>';
     tracksContainer.classList.remove('hidden');
+    updateActiveTab('search');
   }
 }
 
@@ -388,22 +399,107 @@ function playTrack(index) {
   const playPromise = audioPlayer.play();
   currentPlayPromise = playPromise;
 
+  // Clear any previous loading timeout before starting a new track
+  clearTimeout(trackLoadTimeout);
+
+  // Set 5-second track loading timeout
+  trackLoadTimeout = setTimeout(() => {
+    if (currentPlayPromise === playPromise) {
+      handleTrackLoadError("Track loading timed out (5 seconds limit)");
+    }
+  }, 5000);
+
   playPromise
     .then(() => {
+      clearTimeout(trackLoadTimeout);
       if (currentPlayPromise === playPromise) {
         setPlayState(true);
       }
     })
     .catch(err => {
+      clearTimeout(trackLoadTimeout);
       if (err.name === 'AbortError') {
         return; // Ignore abort exceptions from consecutive clicks
       }
       console.error('Playback failed:', err);
-      // Only call playNext if this is still the active track's promise
       if (currentPlayPromise === playPromise) {
-        playNext();
+        handleTrackLoadError(err.message || 'Media playback error');
       }
     });
+}
+
+function handleTrackLoadError(reason) {
+  console.warn('[Track Load Error]:', reason);
+  clearTimeout(trackLoadTimeout);
+  
+  // Pause audio and update UI
+  audioPlayer.pause();
+  setPlayState(false);
+  
+  // Display toast notification
+  showToastNotification("Этот трек недоступен");
+}
+
+function showToastNotification(message) {
+  let toastContainer = document.getElementById('toast-container');
+  if (!toastContainer) {
+    toastContainer = document.createElement('div');
+    toastContainer.id = 'toast-container';
+    toastContainer.style.cssText = `
+      position: fixed;
+      top: 50px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 100000;
+      pointer-events: none;
+    `;
+    document.body.appendChild(toastContainer);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = 'toast-notification';
+  toast.innerHTML = `
+    <div class="toast-icon" style="font-size: 14px; line-height: 1;">✕</div>
+    <div class="toast-message">${message}</div>
+  `;
+  toast.style.cssText = `
+    background: rgba(255, 69, 58, 0.15);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 69, 58, 0.3);
+    border-radius: 12px;
+    padding: 12px 20px;
+    color: #ff453a;
+    font-size: 13px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 8px 32px rgba(255, 69, 58, 0.1);
+    transform: translateX(120%);
+    transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease;
+    opacity: 0;
+    pointer-events: auto;
+  `;
+
+  toastContainer.appendChild(toast);
+
+  // Force reflow and animate in
+  setTimeout(() => {
+    toast.style.transform = 'translateX(0)';
+    toast.style.opacity = '1';
+  }, 10);
+
+  // Auto-remove after 4 seconds
+  setTimeout(() => {
+    toast.style.transform = 'translateX(120%)';
+    toast.style.opacity = '0';
+    setTimeout(() => {
+      toast.remove();
+    }, 400);
+  }, 4000);
 }
 
 function setPlayState(isPlaying) {
@@ -412,11 +508,15 @@ function setPlayState(isPlaying) {
     pauseIcon.classList.remove('hidden');
     if (miniPlayIcon) miniPlayIcon.classList.add('hidden');
     if (miniPauseIcon) miniPauseIcon.classList.remove('hidden');
+    if (currentCover) currentCover.classList.add('playing');
+    if (miniCurrentCover) miniCurrentCover.classList.add('playing');
   } else {
     playIcon.classList.remove('hidden');
     pauseIcon.classList.add('hidden');
     if (miniPlayIcon) miniPlayIcon.classList.remove('hidden');
     if (miniPauseIcon) miniPauseIcon.classList.add('hidden');
+    if (currentCover) currentCover.classList.remove('playing');
+    if (miniCurrentCover) miniCurrentCover.classList.remove('playing');
   }
 }
 
@@ -514,6 +614,19 @@ searchInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') performSearch();
 });
 
+// Toggle search source active states
+if (sourceScBtn && sourceYtBtn) {
+  [sourceScBtn, sourceYtBtn].forEach(btn => {
+    btn.addEventListener('click', () => {
+      const activePills = document.querySelectorAll('.source-pill.active');
+      if (activePills.length === 1 && btn.classList.contains('active')) {
+        return; // At least one search source must remain active
+      }
+      btn.classList.toggle('active');
+    });
+  });
+}
+
 playButton.addEventListener('click', togglePlay);
 nextButton.addEventListener('click', playNext);
 prevButton.addEventListener('click', playPrev);
@@ -524,9 +637,14 @@ if (miniPrevButton) miniPrevButton.addEventListener('click', playPrev);
 
 // Audio Player Events
 audioPlayer.addEventListener('loadedmetadata', () => {
+  clearTimeout(trackLoadTimeout);
   progressSlider.max = 100;
   applyAudioEffectsState();
 });
+
+audioPlayer.onerror = () => {
+  handleTrackLoadError("Audio element fired onerror event");
+};
 
 audioPlayer.addEventListener('timeupdate', () => {
   // Accumulate stats total seconds
@@ -951,6 +1069,7 @@ function loadFavorites() {
       tracksContainer.innerHTML = '<div class="welcome-state"><h2>Your Library is empty</h2><p>Click the heart icon on any track to add it here</p></div>';
       tracksContainer.classList.remove('hidden');
     }
+    updateActiveTab('library');
   }, 200);
 }
 
@@ -1005,6 +1124,7 @@ function renderHistory() {
     tracksContainer.innerHTML = '<div class="welcome-state"><h2>No Playback History</h2><p>Play some tracks to build up your history</p></div>';
     tracksContainer.classList.remove('hidden');
   }
+  updateActiveTab('history');
 }
 
 // Playlists logic
@@ -1087,6 +1207,7 @@ function renderPlaylists() {
     tracksContainer.appendChild(emptyState);
   }
   tracksContainer.classList.remove('hidden');
+  updateActiveTab('playlists');
 }
 
 function openPlaylist(playlistId) {
@@ -1132,6 +1253,8 @@ function openPlaylist(playlistId) {
     emptyState.innerHTML = '<h2>This playlist is empty</h2><p>Add tracks here using the "+" button on search results</p>';
     tracksContainer.appendChild(emptyState);
   }
+  tracksContainer.classList.remove('hidden');
+  updateActiveTab('playlists');
 }
 
 function addTrackToPlaylistId(playlistId, track) {
@@ -1371,11 +1494,13 @@ async function loadHomeView() {
       tracksContainer.innerHTML = '<div class="welcome-state"><h2>Не удалось загрузить рекомендации</h2><p>Пожалуйста, проверьте соединение с бэкендом</p></div>';
       tracksContainer.classList.remove('hidden');
     }
+    updateActiveTab('home');
   } catch (error) {
     console.error('[Renderer] Failed to load home screen recommendations:', error);
     loadingIndicator.classList.add('hidden');
     tracksContainer.innerHTML = '<div class="welcome-state"><h2>Не удалось подключиться к серверу</h2><p>Проверьте соединение с интернетом</p></div>';
     tracksContainer.classList.remove('hidden');
+    updateActiveTab('home');
   }
 }
 
@@ -1639,11 +1764,13 @@ async function loadArtistView(artistId) {
       tracksContainer.innerHTML = '<div class="welcome-state"><h2>Артист не найден</h2><p>Не удалось получить данные профиля</p></div>';
       tracksContainer.classList.remove('hidden');
     }
+    updateActiveTab('artist');
   } catch (error) {
     console.error('[Renderer] Failed to load artist view:', error);
     loadingIndicator.classList.add('hidden');
     tracksContainer.innerHTML = '<div class="welcome-state"><h2>Ошибка сети</h2><p>Не удалось подключиться к серверу</p></div>';
     tracksContainer.classList.remove('hidden');
+    updateActiveTab('artist');
   }
 }
 
@@ -1859,7 +1986,10 @@ function showSearchHistory() {
       <span class="search-history-delete" data-query="${q}">✕</span>
     `;
 
-    item.querySelector('.history-query-text').addEventListener('click', () => {
+    item.addEventListener('click', (e) => {
+      if (e.target.closest('.search-history-delete')) {
+        return; // Handled by delete button click
+      }
       searchInput.value = q;
       searchHistoryDropdown.classList.add('hidden');
       performSearch();
@@ -2309,6 +2439,7 @@ function renderSettings() {
   });
 
   tracksContainer.classList.remove('hidden');
+  updateActiveTab('settings');
 }
 
 function applyTheme(themeName) {
@@ -2765,5 +2896,37 @@ if (localStorage.getItem('gp_visualizer') === 'true') {
 
 if (localStorage.getItem('gp_dynamic_cover') === 'true') {
   applyDynamicCoverColor();
+}
+
+function updateActiveTab(viewName) {
+  const tabButtons = {
+    'home': homeButton,
+    'library': favoritesButton,
+    'history': historyButton,
+    'playlists': playlistsButton,
+    'settings': settingsButton
+  };
+
+  Object.entries(tabButtons).forEach(([name, btn]) => {
+    if (btn) {
+      if (name === viewName) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    }
+  });
+
+  // If view is not home, reset genre chip active variables and styles
+  if (viewName !== 'home') {
+    activeGenreChip = null;
+    const activeChips = document.querySelectorAll('.genre-chip-btn');
+    activeChips.forEach(chip => chip.classList.remove('active'));
+  }
+
+  // Trigger smooth fade-in
+  tracksContainer.classList.remove('fade-in');
+  void tracksContainer.offsetWidth; // Force reflow
+  tracksContainer.classList.add('fade-in');
 }
 

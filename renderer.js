@@ -200,7 +200,7 @@ async function performSearch() {
           userCard.className = 'user-search-card';
           userCard.dataset.userId = user._id || user.id;
           
-          const avatarSrc = user.avatarBase64 || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54"><circle cx="27" cy="27" r="25" fill="%23333"/><path d="M27 24a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 4c-8 0-11 5-11 9v2h22v-2c0-4-3-9-11-9z" fill="%23666"/></svg>';
+          const avatarSrc = user.avatarBase64 || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'54\' height=\'54\' viewBox=\'0 0 54 54\'><circle cx=\'27\' cy=\'27\' r=\'25\' fill=\'%23333\'/><path d=\'M27 24a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 4c-8 0-11 5-11 9v2h22v-2c0-4-3-9-11-9z\' fill=\'%23666\'/></svg>';
           
           userCard.innerHTML = `
             <img class="user-search-avatar" src="${avatarSrc}" alt="Avatar">
@@ -2343,7 +2343,7 @@ function renderProfileContainer() {
     document.getElementById('auth-submit-btn').addEventListener('click', handleAuthSubmit);
   } else {
     // Logged in profile panel
-    const avatarSrc = currentUser.avatarBase64 || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="90" height="90" viewBox="0 0 90 90"><circle cx="45" cy="45" r="43" fill="%23333"/><path d="M45 40a10 10 0 1 0 0-20 10 10 0 0 0 0 20zm0 8c-14 0-20 8-20 16v3h40v-3c0-8-6-16-20-16z" fill="%23666"/></svg>';
+    const avatarSrc = currentUser.avatarBase64 || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'90\' height=\'90\' viewBox=\'0 0 90 90\'><circle cx=\'45\' cy=\'45\' r=\'43\' fill=\'%23333\'/><path d=\'M45 40a10 10 0 1 0 0-20 10 10 0 0 0 0 20zm0 8c-14 0-20 8-20 16v3h40v-3c0-8-6-16-20-16z\' fill=\'%23666\'/></svg>';
     
     container.innerHTML = `
       <div class="profile-dashboard-card">
@@ -3587,7 +3587,7 @@ async function loadFriendProfile(userId) {
       const friend = data.user;
       tracksContainer.innerHTML = '';
       
-      const avatarSrc = friend.avatarBase64 || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><circle cx="50" cy="50" r="48" fill="%23333"/><path d="M50 44a12 12 0 1 0 0-24 12 12 0 0 0 0 24zm0 8c-16 0-22 10-22 18v4h44v-4c0-8-6-18-22-18z" fill="%23666"/></svg>';
+      const avatarSrc = friend.avatarBase64 || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'><circle cx=\'50\' cy=\'50\' r=\'48\' fill=\'%23333\'/><path d=\'M50 44a12 12 0 1 0 0-24 12 12 0 0 0 0 24zm0 8c-16 0-22 10-22 18v4h44v-4c0-8-6-18-22-18z\' fill=\'%23666\'/></svg>';
       
       const headerCard = document.createElement('div');
       headerCard.className = 'friend-profile-banner';

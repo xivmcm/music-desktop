@@ -1,5 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
 
+html {
+  background: transparent !important;
+}
+
 :root {
   --bg-gradient: radial-gradient(circle at 50% 30%, #1e1e24 0%, #0a0a0c 100%);
   --blur-value: blur(28px);

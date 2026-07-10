@@ -1174,8 +1174,24 @@ function escapeHTML(str) {
 // Liked tracks services logic (using client-side localStorage and backend synchronization)
 async function loadLikedTracks() {
   if (currentUser && currentUser.likedTracks) {
-    saveLikedTracks(currentUser.likedTracks);
-    likedTrackIds = new Set(currentUser.likedTracks.map(t => t.id));
+    const localLikes = getLikedTracks();
+    const cloudLikes = currentUser.likedTracks;
+    
+    // Merge local and cloud likes by track ID
+    const mergedLikes = [...cloudLikes];
+    for (const localTrack of localLikes) {
+      if (!mergedLikes.some(t => t.id === localTrack.id)) {
+        mergedLikes.push(localTrack);
+      }
+    }
+    
+    saveLikedTracks(mergedLikes);
+    likedTrackIds = new Set(mergedLikes.map(t => t.id));
+    
+    // If local likes were added, sync them back to Atlas
+    if (mergedLikes.length > cloudLikes.length && token) {
+      syncLikesWithBackend(mergedLikes);
+    }
   } else {
     const likes = getLikedTracks();
     likedTrackIds = new Set(likes.map(t => t.id));
@@ -3307,7 +3323,7 @@ async function initAuth() {
         updateHeaderProfileUI();
         await loadLikedTracks();
         if (currentUser.playlists) {
-          savePlaylists(currentUser.playlists, false);
+          mergeAndSyncPlaylists(currentUser.playlists);
         }
       } else {
         handleLogout();
@@ -3389,7 +3405,7 @@ async function handleAuthSubmit() {
       // Load and sync favorites
       await loadLikedTracks();
       if (currentUser.playlists) {
-        savePlaylists(currentUser.playlists, false);
+        mergeAndSyncPlaylists(currentUser.playlists);
       }
       
       showToastNotification(isRegistering ? 'Регистрация успешна!' : 'Успешный вход!');
@@ -3592,6 +3608,25 @@ async function syncPlaylistsWithBackend(playlists) {
     }
   } catch (error) {
     console.error('[Sync Playlists Error]:', error);
+  }
+}
+
+// Merge offline and online playlists and sync back if necessary
+function mergeAndSyncPlaylists(cloudPlaylists) {
+  const localPlaylists = getPlaylists();
+  const merged = [...cloudPlaylists];
+  
+  for (const localPl of localPlaylists) {
+    const exists = merged.some(cloudPl => cloudPl.id === localPl.id || cloudPl.name.toLowerCase() === localPl.name.toLowerCase());
+    if (!exists) {
+      merged.push(localPl);
+    }
+  }
+  
+  localStorage.setItem(getStorageKey('playlists'), JSON.stringify(merged));
+  
+  if (merged.length > cloudPlaylists.length && currentUser && token) {
+    syncPlaylistsWithBackend(merged);
   }
 }
 

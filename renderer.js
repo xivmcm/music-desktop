@@ -2509,7 +2509,8 @@ function sendDiscordPresence() {
     artist: track.artist,
     isPaused: isPaused,
     position: position,
-    duration: duration
+    duration: duration,
+    artwork_url: track.thumbnail || null
   });
 }
 

@@ -121,7 +121,7 @@ function createWindow() {
 
     try {
       const activity = {
-        largeImageKey: 'app_logo',
+        largeImageKey: trackData.artwork_url || 'glassplayer_logo',
         largeImageText: 'GlassPlayer',
         instance: false,
       };

@@ -3619,16 +3619,20 @@ async function loadFriendProfile(userId) {
       `;
       tracksContainer.appendChild(sectionTitle);
       
+      const gridContainer = document.createElement('div');
+      gridContainer.className = 'tracks-layout-grid';
+      tracksContainer.appendChild(gridContainer);
+
       if (friend.likedTracks && friend.likedTracks.length > 0) {
         playlist = friend.likedTracks;
-        renderTracks(playlist, tracksContainer, true);
+        renderTracks(playlist, gridContainer, true);
       } else {
         const noTracksMsg = document.createElement('div');
         noTracksMsg.className = 'welcome-state';
         noTracksMsg.style.minHeight = '150px';
         noTracksMsg.style.marginTop = '10px';
         noTracksMsg.innerHTML = '<p>В избранном пока нет треков</p>';
-        tracksContainer.appendChild(noTracksMsg);
+        gridContainer.appendChild(noTracksMsg);
       }
       
       tracksContainer.classList.remove('hidden');

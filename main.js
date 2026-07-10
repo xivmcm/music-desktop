@@ -1,4 +1,4 @@
-const DISCORD_CLIENT_ID = "ЗАМЕНИ_МЕНЯ";
+const DISCORD_CLIENT_ID = "1525029080615882772";
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');

@@ -1955,3 +1955,44 @@ body.mini-player-active .mini-player-block {
 .home-btn.active svg, .favorites-btn.active svg, .history-btn.active svg, .playlists-btn.active svg, .settings-btn.active svg {
   color: var(--accent-color) !important;
 }
+
+.load-more-btn {
+  display: block;
+  margin: 24px auto;
+  padding: 10px 28px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  color: var(--text-color, #ffffff);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  backdrop-filter: var(--blur-value, blur(28px));
+  -webkit-backdrop-filter: var(--blur-value, blur(28px));
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  outline: none;
+}
+
+.load-more-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: scale(1.02);
+}
+
+.load-more-btn:active {
+  transform: scale(0.98);
+}
+
+.load-more-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.load-more-limit-msg {
+  text-align: center;
+  margin: 24px auto;
+  font-size: 12px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.45));
+  font-weight: 400;
+}

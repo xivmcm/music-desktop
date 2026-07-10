@@ -56,8 +56,9 @@ let currentTrackDuration = 0;
 let activeGenreChip = null;
 let originalHomeData = null;
 let trackLoadTimeout = null;
+let currentSearchPage = 1;
+const maxTracksLimit = 80;
 
-// Web Audio API context for Audio Effects
 let audioCtx = null;
 let bassFilter = null;
 let analyser = null;
@@ -151,6 +152,7 @@ async function performSearch() {
   if (!query) return;
 
   activeView = 'search';
+  currentSearchPage = 1; // Reset search page
   addToSearchHistory(query);
   searchHistoryDropdown.classList.add('hidden');
 
@@ -158,6 +160,12 @@ async function performSearch() {
   welcomeScreen.classList.add('hidden');
   tracksContainer.classList.add('hidden');
   loadingIndicator.classList.remove('hidden');
+
+  // Remove existing Load More elements
+  const existingBtn = document.getElementById('load-more-btn');
+  if (existingBtn) existingBtn.remove();
+  const existingMsg = document.getElementById('load-more-limit-msg');
+  if (existingMsg) existingMsg.remove();
 
   // Determine active sources
   const sources = [];
@@ -169,7 +177,7 @@ async function performSearch() {
     // Refresh likes list first so search displays correct states
     await loadLikedTracks();
 
-    const response = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&sources=${sourcesStr}`);
+    const response = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&sources=${sourcesStr}&page=1&limit=20`);
     const data = await response.json();
 
     loadingIndicator.classList.add('hidden');
@@ -178,6 +186,7 @@ async function performSearch() {
       playlist = data.results;
       renderTracks(playlist);
       tracksContainer.classList.remove('hidden');
+      updateLoadMoreButton(playlist.length); // Update pagination buttons
     } else {
       playlist = [];
       tracksContainer.innerHTML = '<div class="welcome-state"><h2>No results found</h2><p>Try searching for something else</p></div>';
@@ -190,6 +199,73 @@ async function performSearch() {
     tracksContainer.innerHTML = '<div class="welcome-state"><h2>Не удалось подключиться к серверу</h2><p>Проверьте соединение с интернетом</p></div>';
     tracksContainer.classList.remove('hidden');
     updateActiveTab('search');
+  }
+}
+
+function updateLoadMoreButton(resultsCount) {
+  const existingBtn = document.getElementById('load-more-btn');
+  if (existingBtn) existingBtn.remove();
+  const existingMsg = document.getElementById('load-more-limit-msg');
+  if (existingMsg) existingMsg.remove();
+
+  if (playlist.length >= maxTracksLimit) {
+    const msg = document.createElement('div');
+    msg.id = 'load-more-limit-msg';
+    msg.className = 'load-more-limit-msg';
+    msg.textContent = 'Достигнут предел результатов';
+    tracksContainer.appendChild(msg);
+    return;
+  }
+
+  if (activeSources.soundcloud && resultsCount >= 20) {
+    const btn = document.createElement('button');
+    btn.id = 'load-more-btn';
+    btn.className = 'load-more-btn';
+    btn.textContent = 'Показать еще';
+    btn.addEventListener('click', loadMoreTracks);
+    tracksContainer.appendChild(btn);
+  }
+}
+
+async function loadMoreTracks() {
+  const query = searchInput.value.trim();
+  if (!query) return;
+
+  const btn = document.getElementById('load-more-btn');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner banner-spinner" style="width:12px; height:12px; border-width:1.5px; display:inline-block; vertical-align:middle; margin-right:8px;"></span>Загрузка...';
+  }
+
+  currentSearchPage += 1;
+
+  const sources = [];
+  if (activeSources.soundcloud) sources.push('soundcloud');
+  if (activeSources.youtube) sources.push('youtube');
+  const sourcesStr = sources.join(',');
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&sources=${sourcesStr}&page=${currentSearchPage}&limit=20`);
+    const data = await response.json();
+
+    if (btn) btn.remove();
+
+    if (data.status === 'success' && data.results && data.results.length > 0) {
+      const newTracks = data.results;
+      playlist = playlist.concat(newTracks);
+      
+      renderTracks(newTracks, null, true);
+      updateLoadMoreButton(newTracks.length);
+    } else {
+      updateLoadMoreButton(0);
+    }
+  } catch (error) {
+    console.error('Load more error:', error);
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Показать еще';
+    }
+    showToastNotification("Не удалось загрузить еще треки");
   }
 }
 
@@ -207,15 +283,23 @@ function formatPlaybackCount(count) {
 }
 
 // 2. Render Results
-function renderTracks(tracks, container = null) {
+function renderTracks(tracks, container = null, append = false) {
   const targetContainer = container || tracksContainer;
-  targetContainer.innerHTML = '';
   
-  let gridContainer = targetContainer;
+  let gridContainer;
   if (targetContainer === tracksContainer) {
-    gridContainer = document.createElement('div');
-    gridContainer.className = 'tracks-layout-grid';
-    targetContainer.appendChild(gridContainer);
+    gridContainer = targetContainer.querySelector('.tracks-layout-grid');
+    if (!gridContainer || !append) {
+      targetContainer.innerHTML = '';
+      gridContainer = document.createElement('div');
+      gridContainer.className = 'tracks-layout-grid';
+      targetContainer.appendChild(gridContainer);
+    }
+  } else {
+    gridContainer = targetContainer;
+    if (!append) {
+      gridContainer.innerHTML = '';
+    }
   }
   
   tracks.forEach((track, index) => {
@@ -223,7 +307,10 @@ function renderTracks(tracks, container = null) {
     const currentTrack = playlist[currentTrackIndex];
     const isActive = currentTrack && track.id === currentTrack.id;
     card.className = `track-card ${isActive ? 'active' : ''}`;
-    card.dataset.index = index;
+    
+    // Correct playlist index so click events play the correct track!
+    const overallIndex = append ? playlist.length - tracks.length + index : index;
+    card.dataset.index = overallIndex;
     card.dataset.trackId = track.id;
 
     // Strict validation and fallbacks
@@ -300,7 +387,7 @@ function renderTracks(tracks, container = null) {
       if (isCurrent) {
         togglePlay();
       } else {
-        playTrack(index);
+        playTrack(overallIndex);
       }
     });
 

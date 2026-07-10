@@ -2509,6 +2509,17 @@ if (window.electronAPI && window.electronAPI.onMiniPlayerToggled) {
   });
 }
 
+// --- Window Maximized Status listener ---
+if (window.electronAPI && window.electronAPI.onWindowMaximizedStatus) {
+  window.electronAPI.onWindowMaximizedStatus((maximized) => {
+    if (maximized) {
+      document.body.classList.add('window-maximized');
+    } else {
+      document.body.classList.remove('window-maximized');
+    }
+  });
+}
+
 // --- Dynamic Cover Vibrant Glass Color Extractor ---
 function extractDominantColor(imgElement) {
   try {

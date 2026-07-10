@@ -1671,3 +1671,51 @@ body.mini-player-active .progress-bar-container input[type="range"]::-webkit-sli
 body.mini-player-active .max-btn {
   display: none !important; /* Hide maximize button in mini player mode */
 }
+
+/* Release 1.1.1 Updates */
+
+/* Maximized Window Style Resets */
+body.window-maximized {
+  border-radius: 0 !important;
+  border: none !important;
+}
+
+/* Mini Player Refinement & Redesign */
+body.mini-player-active {
+  border-radius: 12px !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5) !important;
+  overflow: hidden;
+}
+
+body.mini-player-active .player-bar {
+  animation: miniPlayerFadeIn 0.3s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+@keyframes miniPlayerFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Soft rounding for mini player controls */
+body.mini-player-active .control-btn {
+  border-radius: 8px !important;
+}
+
+body.mini-player-active .player-btn {
+  border-radius: 8px !important;
+}
+
+body.mini-player-active .play-main {
+  border-radius: 50% !important;
+}
+
+body.mini-player-active .track-cover-container img {
+  border-radius: 8px !important;
+}

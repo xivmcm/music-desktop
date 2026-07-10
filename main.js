@@ -1,14 +1,20 @@
+const DISCORD_CLIENT_ID = "ЗАМЕНИ_МЕНЯ";
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
 const DiscordRPC = require('discord-rpc');
 
 // Discord RPC configuration
-const DISCORD_CLIENT_ID = '1260533470659641434'; // Replace with your actual Client ID if needed
 let rpcConnected = false;
 let rpcClient = null;
 
 function initDiscordRPC() {
+  const isValidId = DISCORD_CLIENT_ID && /^\d+$/.test(DISCORD_CLIENT_ID) && DISCORD_CLIENT_ID !== "ЗАМЕНИ_МЕНЯ";
+  if (!isValidId) {
+    console.log('[Discord RPC] Client ID is invalid or not configured ("ЗАМЕНИ_МЕНЯ"). Skipping Rich Presence initialization.');
+    return;
+  }
+
   try {
     DiscordRPC.register(DISCORD_CLIENT_ID);
     rpcClient = new DiscordRPC.Client({ transport: 'ipc' });
@@ -81,6 +87,15 @@ function createWindow() {
   });
 
   mainWindow.loadFile('index.html');
+
+  // Notify renderer of window maximize events to toggle rounded corners
+  mainWindow.on('maximize', () => {
+    mainWindow.webContents.send('window-maximized-status', true);
+  });
+
+  mainWindow.on('unmaximize', () => {
+    mainWindow.webContents.send('window-maximized-status', false);
+  });
 
   // Register IPC listeners for custom title bar controls
   ipcMain.on('window-minimize', () => {

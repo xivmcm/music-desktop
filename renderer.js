@@ -1034,8 +1034,11 @@ function getPlaylists() {
   return data ? JSON.parse(data) : [];
 }
 
-function savePlaylists(playlists) {
+function savePlaylists(playlists, sync = true) {
   localStorage.setItem(getStorageKey('playlists'), JSON.stringify(playlists));
+  if (sync && currentUser && token) {
+    syncPlaylistsWithBackend(playlists);
+  }
 }
 
 // User Profiles Manager
@@ -3303,6 +3306,9 @@ async function initAuth() {
         localStorage.setItem('auth_user', JSON.stringify(currentUser));
         updateHeaderProfileUI();
         await loadLikedTracks();
+        if (currentUser.playlists) {
+          savePlaylists(currentUser.playlists, false);
+        }
       } else {
         handleLogout();
       }
@@ -3382,6 +3388,9 @@ async function handleAuthSubmit() {
       
       // Load and sync favorites
       await loadLikedTracks();
+      if (currentUser.playlists) {
+        savePlaylists(currentUser.playlists, false);
+      }
       
       showToastNotification(isRegistering ? 'Регистрация успешна!' : 'Успешный вход!');
       renderProfileContainer();
@@ -3565,6 +3574,27 @@ async function syncLikesWithBackend(likes) {
   }
 }
 
+// Synchronise cloud playlists list
+async function syncPlaylistsWithBackend(playlists) {
+  try {
+    const res = await fetch(`${BACKEND_URL}/auth/sync-playlists`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ playlists })
+    });
+    const data = await res.json();
+    if (data.status === 'success') {
+      currentUser.playlists = data.playlists;
+      localStorage.setItem('auth_user', JSON.stringify(currentUser));
+    }
+  } catch (error) {
+    console.error('[Sync Playlists Error]:', error);
+  }
+}
+
 // Renders friend profile details & their liked tracks
 async function loadFriendProfile(userId) {
   activeView = 'friend-profile';
@@ -3608,13 +3638,74 @@ async function loadFriendProfile(userId) {
       `;
       tracksContainer.appendChild(headerCard);
       
+      // Renders the playlists section
+      const playlistsSection = document.createElement('div');
+      playlistsSection.className = 'friend-playlists-section';
+      
+      const pHeader = document.createElement('h3');
+      pHeader.textContent = 'Плейлисты и Избранное';
+      playlistsSection.appendChild(pHeader);
+      
+      const pRow = document.createElement('div');
+      pRow.className = 'friend-playlists-row';
+      
+      // 1. Render Liked Tracks tab card
+      const likesCount = friend.likedTracks ? friend.likedTracks.length : 0;
+      const likesCard = document.createElement('div');
+      likesCard.className = 'friend-playlist-card active';
+      likesCard.id = 'friend-likes-tab';
+      likesCard.innerHTML = `
+        <div class="friend-playlist-cover" style="background: rgba(255, 69, 58, 0.15); color: #ff453a;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        </div>
+        <div class="friend-playlist-info">
+          <span class="friend-playlist-name">Избранное</span>
+          <span class="friend-playlist-count">${likesCount} треков</span>
+        </div>
+      `;
+      pRow.appendChild(likesCard);
+      
+      // 2. Render other playlists
+      const playlists = friend.playlists || [];
+      playlists.forEach(pl => {
+        const plCard = document.createElement('div');
+        plCard.className = 'friend-playlist-card';
+        plCard.dataset.playlistId = pl.id;
+        plCard.innerHTML = `
+          <div class="friend-playlist-cover">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+          </div>
+          <div class="friend-playlist-info">
+            <span class="friend-playlist-name">${escapeHTML(pl.name)}</span>
+            <span class="friend-playlist-count">${pl.tracks ? pl.tracks.length : 0} треков</span>
+          </div>
+        `;
+        pRow.appendChild(plCard);
+        
+        plCard.addEventListener('click', () => {
+          pRow.querySelectorAll('.friend-playlist-card').forEach(c => c.classList.remove('active'));
+          plCard.classList.add('active');
+          showFriendPlaylistTracks(friend, pl.id);
+        });
+      });
+      
+      likesCard.addEventListener('click', () => {
+        pRow.querySelectorAll('.friend-playlist-card').forEach(c => c.classList.remove('active'));
+        likesCard.classList.add('active');
+        showFriendLikedTracks(friend);
+      });
+      
+      playlistsSection.appendChild(pRow);
+      tracksContainer.appendChild(playlistsSection);
+      
+      // 3. Render section title
       const sectionTitle = document.createElement('div');
       sectionTitle.className = 'view-header';
       sectionTitle.style.marginTop = '24px';
       sectionTitle.innerHTML = `
-        <div class="view-header-title">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-          <span>Избранное</span>
+        <div class="view-header-title" id="friend-tracks-title-container">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" id="friend-tracks-title-icon"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+          <span id="friend-tracks-title-text">Избранное</span>
         </div>
       `;
       tracksContainer.appendChild(sectionTitle);
@@ -3646,6 +3737,64 @@ async function loadFriendProfile(userId) {
     loadingIndicator.classList.add('hidden');
     tracksContainer.innerHTML = '<div class="welcome-state"><h2>Не удалось подключиться к серверу</h2><p>Пожалуйста, проверьте подключение бэкенда</p></div>';
     tracksContainer.classList.remove('hidden');
+  }
+}
+
+// Helpers for switching between friend's likes and custom playlists
+function showFriendLikedTracks(friend) {
+  const titleText = document.getElementById('friend-tracks-title-text');
+  if (titleText) titleText.textContent = 'Избранное';
+  const titleIcon = document.getElementById('friend-tracks-title-icon');
+  if (titleIcon) {
+    titleIcon.innerHTML = `<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>`;
+    titleIcon.setAttribute('fill', 'currentColor');
+  }
+  
+  const gridContainer = tracksContainer.querySelector('.tracks-layout-grid');
+  if (gridContainer) {
+    gridContainer.innerHTML = '';
+    if (friend.likedTracks && friend.likedTracks.length > 0) {
+      playlist = friend.likedTracks;
+      renderTracks(playlist, gridContainer, true);
+    } else {
+      const noTracksMsg = document.createElement('div');
+      noTracksMsg.className = 'welcome-state';
+      noTracksMsg.style.minHeight = '150px';
+      noTracksMsg.style.marginTop = '10px';
+      noTracksMsg.innerHTML = '<p>В избранном пока нет треков</p>';
+      gridContainer.appendChild(noTracksMsg);
+    }
+  }
+}
+
+function showFriendPlaylistTracks(friend, playlistId) {
+  const pl = friend.playlists.find(p => p.id === playlistId);
+  if (!pl) return;
+  
+  const titleText = document.getElementById('friend-tracks-title-text');
+  if (titleText) titleText.textContent = `Плейлист: ${pl.name}`;
+  const titleIcon = document.getElementById('friend-tracks-title-icon');
+  if (titleIcon) {
+    titleIcon.innerHTML = `<path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle>`;
+    titleIcon.setAttribute('fill', 'none');
+    titleIcon.setAttribute('stroke', 'currentColor');
+    titleIcon.setAttribute('stroke-width', '2');
+  }
+  
+  const gridContainer = tracksContainer.querySelector('.tracks-layout-grid');
+  if (gridContainer) {
+    gridContainer.innerHTML = '';
+    if (pl.tracks && pl.tracks.length > 0) {
+      playlist = pl.tracks;
+      renderTracks(playlist, gridContainer, true);
+    } else {
+      const noTracksMsg = document.createElement('div');
+      noTracksMsg.className = 'welcome-state';
+      noTracksMsg.style.minHeight = '150px';
+      noTracksMsg.style.marginTop = '10px';
+      noTracksMsg.innerHTML = '<p>В этом плейлисте пока нет треков</p>';
+      gridContainer.appendChild(noTracksMsg);
+    }
   }
 }
 

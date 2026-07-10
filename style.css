@@ -2336,3 +2336,87 @@ body.mini-player-active .mini-player-block {
   color: var(--text-color, #ffffff);
   margin-right: 4px;
 }
+
+/* Friend Playlists switcher layout styling */
+.friend-playlists-section {
+  margin-top: 24px;
+}
+.friend-playlists-section h3 {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.45));
+  margin-bottom: 12px;
+}
+.friend-playlists-row {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+}
+.friend-playlists-row::-webkit-scrollbar {
+  height: 4px;
+}
+.friend-playlists-row::-webkit-scrollbar-track {
+  background: transparent;
+}
+.friend-playlists-row::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+}
+.friend-playlist-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 8px 12px;
+  min-width: 150px;
+  max-width: 200px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+  flex-shrink: 0;
+}
+.friend-playlist-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+}
+.friend-playlist-card.active {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--accent-color, #ffffff);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.03);
+}
+.friend-playlist-cover {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim, rgba(255, 255, 255, 0.6));
+  flex-shrink: 0;
+}
+.friend-playlist-card.active .friend-playlist-cover {
+  color: var(--accent-color, #ffffff);
+}
+.friend-playlist-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.friend-playlist-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-color, #ffffff);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.friend-playlist-count {
+  font-size: 10px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.45));
+}

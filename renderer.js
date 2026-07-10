@@ -3316,17 +3316,28 @@ async function initAuth() {
       const res = await fetch(`${BACKEND_URL}/auth/me`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      const data = await res.json();
-      if (data.status === 'success') {
-        currentUser = data.user;
-        localStorage.setItem('auth_user', JSON.stringify(currentUser));
-        updateHeaderProfileUI();
-        await loadLikedTracks();
-        if (currentUser.playlists) {
-          mergeAndSyncPlaylists(currentUser.playlists);
+      
+      if (res.status === 200) {
+        const data = await res.json();
+        if (data.status === 'success') {
+          currentUser = data.user;
+          localStorage.setItem('auth_user', JSON.stringify(currentUser));
+          updateHeaderProfileUI();
+          await loadLikedTracks();
+          if (currentUser.playlists) {
+            mergeAndSyncPlaylists(currentUser.playlists);
+          }
+        } else {
+          handleLogout();
         }
-      } else {
+      } else if (res.status === 401 || res.status === 403) {
+        // Token is invalid or expired, log out
         handleLogout();
+      } else {
+        // Temporary server or database error (e.g. 500), keep offline session active
+        console.warn('[Auth Auto-login] Server returned error status, keeping offline session:', res.status);
+        updateHeaderProfileUI();
+        loadLikedTracks();
       }
     } catch (err) {
       console.warn('[Auth Auto-login Error] Backend offline, using offline auth state:', err);

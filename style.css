@@ -1302,7 +1302,7 @@ input[type="range"]:hover::-webkit-slider-thumb {
   top: calc(100% + 8px);
   left: 0;
   right: 0;
-  background: rgba(20, 20, 25, 0.95);
+  background: rgba(15, 15, 20, 0.7);
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -1801,32 +1801,37 @@ body.mini-player-active .mini-player-block {
   transform: scale(1.08);
 }
 
-/* --- Search Sources Selectors --- */
-.search-sources {
+/* --- Search Sources Selectors in Dropdown --- */
+.dropdown-sources-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dropdown-sources-row {
   display: flex;
   gap: 8px;
-  margin-left: 16px;
-  -webkit-app-region: no-drag;
+  margin: 4px 6px 8px 6px;
 }
 
 .source-pill {
-  background: rgba(255, 255, 255, 0.02);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
+  flex: 1;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
   color: var(--text-dim, rgba(255, 255, 255, 0.6));
-  padding: 8px 16px;
+  padding: 8px 12px;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
   outline: none;
+  text-align: center;
 }
 
 .source-pill:hover {
-  transform: scale(1.03);
-  background: rgba(255, 255, 255, 0.06);
+  transform: scale(1.02);
+  background: rgba(255, 255, 255, 0.07);
   color: var(--text-color, #ffffff);
 }
 
@@ -1834,7 +1839,7 @@ body.mini-player-active .mini-player-block {
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.2);
   color: var(--text-color, #ffffff);
-  box-shadow: 0 0 15px var(--accent-color);
+  box-shadow: 0 0 10px var(--accent-color);
 }
 
 /* --- Active Header Tab Buttons --- */

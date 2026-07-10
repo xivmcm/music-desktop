@@ -4,8 +4,7 @@ const tracksContainer = document.getElementById('tracks-container');
 const welcomeScreen = document.getElementById('welcome-screen');
 const loadingIndicator = document.getElementById('loading-indicator');
 const favoritesButton = document.getElementById('favorites-button');
-const sourceScBtn = document.getElementById('source-sc');
-const sourceYtBtn = document.getElementById('source-yt');
+let activeSources = { soundcloud: true, youtube: true };
 
 // Audio Element
 const audioPlayer = document.getElementById('audio-player');
@@ -162,8 +161,8 @@ async function performSearch() {
 
   // Determine active sources
   const sources = [];
-  if (!sourceScBtn || sourceScBtn.classList.contains('active')) sources.push('soundcloud');
-  if (!sourceYtBtn || sourceYtBtn.classList.contains('active')) sources.push('youtube');
+  if (activeSources.soundcloud) sources.push('soundcloud');
+  if (activeSources.youtube) sources.push('youtube');
   const sourcesStr = sources.join(',');
 
   try {
@@ -614,18 +613,7 @@ searchInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') performSearch();
 });
 
-// Toggle search source active states
-if (sourceScBtn && sourceYtBtn) {
-  [sourceScBtn, sourceYtBtn].forEach(btn => {
-    btn.addEventListener('click', () => {
-      const activePills = document.querySelectorAll('.source-pill.active');
-      if (activePills.length === 1 && btn.classList.contains('active')) {
-        return; // At least one search source must remain active
-      }
-      btn.classList.toggle('active');
-    });
-  });
-}
+// Search source states are managed dynamically inside showSearchHistory dropdown
 
 playButton.addEventListener('click', togglePlay);
 nextButton.addEventListener('click', playNext);
@@ -1966,47 +1954,93 @@ function addToSearchHistory(query) {
 
 function showSearchHistory() {
   const history = getSearchHistory();
-  if (history.length === 0 || searchInput.value.trim() !== '') {
+  if (searchInput.value.trim() !== '') {
     searchHistoryDropdown.classList.add('hidden');
     return;
   }
 
-  searchHistoryDropdown.innerHTML = `
-    <div class="search-history-header">
-      <span>История поиска</span>
-      <span class="search-history-clear" id="clear-history-btn">Очистить</span>
+  searchHistoryDropdown.innerHTML = '';
+
+  // 1. Render Sources Selection Block at the top of the dropdown
+  const sourcesContainer = document.createElement('div');
+  sourcesContainer.className = 'dropdown-sources-container';
+  sourcesContainer.innerHTML = `
+    <div class="search-history-header">Источники поиска</div>
+    <div class="dropdown-sources-row">
+      <button id="source-sc" class="source-pill ${activeSources.soundcloud ? 'active' : ''}">SoundCloud</button>
+      <button id="source-yt" class="source-pill ${activeSources.youtube ? 'active' : ''}">YouTube</button>
     </div>
   `;
+  searchHistoryDropdown.appendChild(sourcesContainer);
 
-  history.forEach(q => {
-    const item = document.createElement('div');
-    item.className = 'search-history-item';
-    item.innerHTML = `
-      <span class="history-query-text">${q}</span>
-      <span class="search-history-delete" data-query="${q}">✕</span>
+  // Bind click events on the dynamic source pills
+  const newSourceScBtn = sourcesContainer.querySelector('#source-sc');
+  const newSourceYtBtn = sourcesContainer.querySelector('#source-yt');
+  
+  [newSourceScBtn, newSourceYtBtn].forEach(btn => {
+    if (btn) {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation(); // Keep dropdown open
+        
+        const sourceName = btn.id === 'source-sc' ? 'soundcloud' : 'youtube';
+        const activeCount = Object.values(activeSources).filter(Boolean).length;
+        
+        if (activeCount === 1 && activeSources[sourceName]) {
+          return; // Prevent deselecting last active source
+        }
+        
+        activeSources[sourceName] = !activeSources[sourceName];
+        btn.classList.toggle('active', activeSources[sourceName]);
+      });
+    }
+  });
+
+  // 2. Render History if not empty
+  if (history.length > 0) {
+    const historyHeader = document.createElement('div');
+    historyHeader.className = 'search-history-header';
+    historyHeader.style.marginTop = '10px';
+    historyHeader.style.borderTop = '1px solid rgba(255, 255, 255, 0.05)';
+    historyHeader.style.paddingTop = '8px';
+    historyHeader.innerHTML = `
+      <span>История поиска</span>
+      <span class="search-history-clear" id="clear-history-btn">Очистить</span>
     `;
+    searchHistoryDropdown.appendChild(historyHeader);
 
-    item.addEventListener('click', (e) => {
-      if (e.target.closest('.search-history-delete')) {
-        return; // Handled by delete button click
-      }
-      searchInput.value = q;
-      searchHistoryDropdown.classList.add('hidden');
-      performSearch();
+    history.forEach(q => {
+      const item = document.createElement('div');
+      item.className = 'search-history-item';
+      item.innerHTML = `
+        <span class="history-query-text">${q}</span>
+        <span class="search-history-delete" data-query="${q}">✕</span>
+      `;
+
+      item.addEventListener('click', (e) => {
+        if (e.target.closest('.search-history-delete')) {
+          return; // Handled by delete button click
+        }
+        searchInput.value = q;
+        searchHistoryDropdown.classList.add('hidden');
+        performSearch();
+      });
+
+      item.querySelector('.search-history-delete').addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteSearchHistoryItem(q);
+      });
+
+      searchHistoryDropdown.appendChild(item);
     });
 
-    item.querySelector('.search-history-delete').addEventListener('click', (e) => {
-      e.stopPropagation();
-      deleteSearchHistoryItem(q);
-    });
-
-    searchHistoryDropdown.appendChild(item);
-  });
-
-  document.getElementById('clear-history-btn').addEventListener('click', (e) => {
-    e.stopPropagation();
-    clearSearchHistory();
-  });
+    const clearHistoryBtn = historyHeader.querySelector('#clear-history-btn');
+    if (clearHistoryBtn) {
+      clearHistoryBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        clearSearchHistory();
+      });
+    }
+  }
 
   searchHistoryDropdown.classList.remove('hidden');
 }

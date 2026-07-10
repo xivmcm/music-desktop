@@ -92,24 +92,8 @@ body {
 body:not(.window-maximized) {
   border-radius: 12px !important;
   overflow: hidden !important;
-}
-
-body:not(.window-maximized) .titlebar {
-  border-top-left-radius: 12px !important;
-  border-top-right-radius: 12px !important;
-  overflow: hidden !important;
-}
-
-body:not(.window-maximized) .container {
-  border-bottom-left-radius: 12px !important;
-  border-bottom-right-radius: 12px !important;
-  overflow: hidden !important;
-}
-
-body:not(.window-maximized) .player-bar {
-  border-bottom-left-radius: 12px !important;
-  border-bottom-right-radius: 12px !important;
-  overflow: hidden !important;
+  clip-path: inset(0 round 12px) !important;
+  -webkit-clip-path: inset(0 round 12px) !important;
 }
 
 /* Custom Titlebar */
@@ -1564,6 +1548,8 @@ input:checked + .slider:before {
 body.window-maximized {
   border-radius: 0 !important;
   border: none !important;
+  clip-path: none !important;
+  -webkit-clip-path: none !important;
 }
 
 /* Mini Player Mode Styles & Redesign */

@@ -109,6 +109,7 @@ body:not(.window-maximized) .container {
 body:not(.window-maximized) .player-bar {
   border-bottom-left-radius: 12px !important;
   border-bottom-right-radius: 12px !important;
+  overflow: hidden !important;
 }
 
 /* Custom Titlebar */

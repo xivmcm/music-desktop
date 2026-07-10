@@ -2051,10 +2051,15 @@ function showSearchHistory() {
   sourcesContainer.innerHTML = `
     <div class="search-history-header">Источники поиска</div>
     <div class="dropdown-sources-row">
-      <button id="source-sc" class="source-pill ${activeSources.soundcloud ? 'active' : ''}">SoundCloud</button>
-      <button id="source-yt" class="source-pill ${activeSources.youtube ? 'active' : ''}">YouTube</button>
+      <button id="source-sc" class="source-pill ${activeSources.soundcloud ? 'active' : ''}" title="SoundCloud">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M23.95 14.47c0-2.45-1.92-4.44-4.29-4.44h-.35c-.48-2.61-2.73-4.6-5.46-4.6-2.58 0-4.73 1.83-5.32 4.26-.26-.06-.53-.09-.81-.09-2.58 0-4.67 2.09-4.67 4.67 0 .16.01.32.02.48C1.29 14.53 0 16.03 0 17.84c0 2.08 1.68 3.76 3.76 3.76h16.5c1.96 0 3.69-1.55 3.69-3.51 0-1.74-1.28-3.18-2.97-3.52z"/></svg>
+      </button>
+      <button id="source-yt" class="source-pill ${activeSources.youtube ? 'active' : ''}" title="YouTube">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+      </button>
     </div>
   `;
+
   searchHistoryDropdown.appendChild(sourcesContainer);
 
   // Bind click events on the dynamic source pills

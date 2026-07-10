@@ -204,7 +204,7 @@ body:not(.window-maximized) {
   opacity: 0.7;
 }
 
-.search-box button {
+#search-button {
   background: var(--card-bg);
   border: none;
   width: 32px;
@@ -218,7 +218,7 @@ body:not(.window-maximized) {
   transition: all 0.2s ease;
 }
 
-.search-box button:hover {
+#search-button:hover {
   background: var(--card-hover-bg);
   transform: scale(1.05);
 }
@@ -386,6 +386,15 @@ body:not(.window-maximized) {
   display: flex;
   align-items: center;
   gap: 3px;
+  white-space: nowrap;
+}
+
+.card-meta-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .track-card .track-cover-container {
@@ -1907,33 +1916,33 @@ body.mini-player-active .mini-player-block {
 }
 
 .source-pill {
+  width: 36px;
+  height: 36px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 8px;
   color: var(--text-dim, rgba(255, 255, 255, 0.6));
-  padding: 6px 14px;
-  font-size: 12px;
-  font-weight: 500;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
   outline: none;
-  text-align: center;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  padding: 0;
+  box-sizing: border-box;
 }
 
 .source-pill:hover {
-  transform: scale(1.02);
+  transform: scale(1.05);
   background: rgba(255, 255, 255, 0.07);
   color: var(--text-color, #ffffff);
 }
 
 .source-pill.active {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
   color: var(--text-color, #ffffff);
-  box-shadow: 0 0 10px var(--accent-color);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.15);
 }
 
 /* --- Active Header Tab Buttons --- */

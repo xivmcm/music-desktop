@@ -73,30 +73,30 @@ let dataArray = null;
 
 function initAudioEffects() {
   if (audioCtx) return;
-  
+
   try {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const source = audioCtx.createMediaElementSource(audioPlayer);
-    
+
     // Create lowshelf filter for Bass Boost
     bassFilter = audioCtx.createBiquadFilter();
     bassFilter.type = 'lowshelf';
     bassFilter.frequency.value = 100;
-    
+
     const savedBassBoost = localStorage.getItem('gp_effect_bassboost') === 'true';
     bassFilter.gain.value = savedBassBoost ? 10 : 0;
-    
+
     // Create Analyser
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 256;
     bufferLength = analyser.frequencyBinCount;
     dataArray = new Uint8Array(bufferLength);
-    
+
     // Chain: Source -> Filter -> Analyser -> Destination
     source.connect(bassFilter);
     bassFilter.connect(analyser);
     analyser.connect(audioCtx.destination);
-    
+
     console.log('[Web Audio API] AudioContext, Bass Boost filter, and Analyser initialized successfully');
   } catch (err) {
     console.error('[Web Audio API] Initialization failed:', err);
@@ -107,13 +107,13 @@ function applyAudioEffectsState() {
   const speed = parseFloat(localStorage.getItem('gp_effect_speed') || '1.0');
   const pitchLinked = localStorage.getItem('gp_effect_pitch_linked') === 'true';
   const bassBoost = localStorage.getItem('gp_effect_bassboost') === 'true';
-  
+
   if (audioPlayer) {
     audioPlayer.playbackRate = speed;
     audioPlayer.defaultPlaybackRate = speed;
     audioPlayer.preservesPitch = !pitchLinked;
   }
-  
+
   if (bassFilter) {
     bassFilter.gain.value = bassBoost ? 10 : 0;
   }
@@ -121,7 +121,7 @@ function applyAudioEffectsState() {
 let cachedForYouData = null;
 
 // Base Server API URL Configuration
-const API_URL = 'http://localhost:5000';
+const API_URL = 'https://music-backend-iyni.onrender.com';
 const BACKEND_URL = `${API_URL}/api`;
 
 // Default Base64-encoded SVG avatars to prevent HTML template quote clash
@@ -196,7 +196,7 @@ async function performSearch() {
     // Handle user search results (only page 1)
     const usersContainer = document.getElementById('users-search-results');
     const usersRow = usersContainer ? usersContainer.querySelector('.users-search-row') : null;
-    
+
     if (usersContainer && usersRow) {
       if (data.users && data.users.length > 0) {
         usersRow.innerHTML = '';
@@ -204,19 +204,19 @@ async function performSearch() {
           const userCard = document.createElement('div');
           userCard.className = 'user-search-card';
           userCard.dataset.userId = user._id || user.id;
-          
+
           const avatarSrc = user.avatarBase64 || DEFAULT_AVATAR_54;
-          
+
           userCard.innerHTML = `
             <img class="user-search-avatar" src="${avatarSrc}" alt="Avatar">
             <div class="user-search-name">${escapeHTML(user.displayName)}</div>
             <div class="user-search-username">@${escapeHTML(user.username)}</div>
           `;
-          
+
           userCard.addEventListener('click', () => {
             loadFriendProfile(user._id || user.id);
           });
-          
+
           usersRow.appendChild(userCard);
         });
         usersContainer.classList.remove('hidden');
@@ -298,7 +298,7 @@ async function loadMoreTracks() {
     if (data.status === 'success' && data.results && data.results.length > 0) {
       const newTracks = data.results;
       playlist = playlist.concat(newTracks);
-      
+
       renderTracks(newTracks, null, true);
       updateLoadMoreButton(newTracks.length);
     } else {
@@ -330,7 +330,7 @@ function formatPlaybackCount(count) {
 // 2. Render Results
 function renderTracks(tracks, container = null, append = false) {
   const targetContainer = container || tracksContainer;
-  
+
   let gridContainer;
   if (targetContainer === tracksContainer) {
     gridContainer = targetContainer.querySelector('.tracks-layout-grid');
@@ -346,13 +346,13 @@ function renderTracks(tracks, container = null, append = false) {
       gridContainer.innerHTML = '';
     }
   }
-  
+
   tracks.forEach((track, index) => {
     const card = document.createElement('div');
     const currentTrack = playlist[currentTrackIndex];
     const isActive = currentTrack && track.id === currentTrack.id;
     card.className = `track-card ${isActive ? 'active' : ''}`;
-    
+
     // Correct playlist index so click events play the correct track!
     const overallIndex = append ? playlist.length - tracks.length + index : index;
     card.dataset.index = overallIndex;
@@ -367,7 +367,7 @@ function renderTracks(tracks, container = null, append = false) {
       : defaultSvgCover;
 
     const isLiked = likedTrackIds.has(track.id);
-    const heartIcon = isLiked 
+    const heartIcon = isLiked
       ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`
       : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`;
 
@@ -426,7 +426,7 @@ function renderTracks(tracks, container = null, append = false) {
     card.addEventListener('click', (e) => {
       // Don't play if clicking the like, playlist or artist link button itself
       if (e.target.closest('.like-btn') || e.target.closest('.playlist-add-btn') || e.target.closest('.playlist-remove-track-btn') || e.target.closest('.artist-link')) return;
-      
+
       const currentTrack = playlist[currentTrackIndex];
       const isCurrent = currentTrack && track.id === currentTrack.id;
       if (isCurrent) {
@@ -512,7 +512,7 @@ function playTrack(index) {
   // Update Player Meta Info
   currentTitle.textContent = track.title;
   if (miniCurrentTitle) miniCurrentTitle.textContent = track.title;
-  
+
   if (track.artistId && track.source === 'soundcloud') {
     currentArtist.innerHTML = `<span class="artist-link" data-artist-id="${track.artistId}">${track.artist}</span>`;
     const artistLink = currentArtist.querySelector('.artist-link');
@@ -526,7 +526,7 @@ function playTrack(index) {
     currentArtist.textContent = track.artist;
   }
   if (miniCurrentArtist) miniCurrentArtist.textContent = track.artist;
-  
+
   const coverUrl = track.thumbnail
     ? `${BACKEND_URL}/cover?url=${encodeURIComponent(track.thumbnail)}`
     : 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23222"/><path d="M30 30 L70 50 L30 70 Z" fill="%23444"/></svg>';
@@ -542,7 +542,7 @@ function playTrack(index) {
   // Update player like button state
   if (playerLikeBtn) {
     const isLiked = likedTrackIds.has(track.id);
-    const heartIcon = isLiked 
+    const heartIcon = isLiked
       ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`
       : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`;
     if (isLiked) {
@@ -558,14 +558,14 @@ function playTrack(index) {
 
   // Load stream
   audioPlayer.src = `${BACKEND_URL}/stream?id=${encodeURIComponent(track.id)}&source=${track.source}`;
-  
+
   // Initialize and apply Audio Effects
   initAudioEffects();
   if (audioCtx && audioCtx.state === 'suspended') {
     audioCtx.resume();
   }
   applyAudioEffectsState();
-  
+
   const playPromise = audioPlayer.play();
   currentPlayPromise = playPromise;
 
@@ -601,11 +601,11 @@ function playTrack(index) {
 function handleTrackLoadError(reason) {
   console.warn('[Track Load Error]:', reason);
   clearTimeout(trackLoadTimeout);
-  
+
   // Pause audio and update UI
   audioPlayer.pause();
   setPlayState(false);
-  
+
   // Display toast notification
   showToastNotification("Этот трек недоступен");
 }
@@ -694,12 +694,12 @@ function setPlayState(isPlaying) {
 function updateCoverPlayButtons() {
   const isPlaying = !audioPlayer.paused;
   const currentTrack = playlist[currentTrackIndex];
-  
+
   document.querySelectorAll('.track-card').forEach(card => {
     const trackId = card.dataset.trackId;
     const playBtn = card.querySelector('.cover-play-btn');
     if (!playBtn) return;
-    
+
     const isCurrent = currentTrack && trackId === currentTrack.id;
     if (isCurrent && isPlaying) {
       playBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
@@ -737,7 +737,7 @@ function togglePlay() {
 
 function playNext() {
   if (playlist.length === 0) return;
-  
+
   let nextIndex;
   if (isShuffle) {
     if (playlist.length === 1) {
@@ -758,7 +758,7 @@ function playNext() {
 
 function playPrev() {
   if (playlist.length === 0) return;
-  
+
   let prevIndex;
   if (isShuffle) {
     if (playlist.length === 1) {
@@ -843,7 +843,7 @@ audioPlayer.addEventListener('timeupdate', () => {
   if (isSeeking) return;
   const current = currentSeekOffset + audioPlayer.currentTime;
   const duration = currentTrackDuration || audioPlayer.duration || 0;
-  
+
   currentTimeText.textContent = formatTime(current);
   if (duration > 0) {
     totalTimeText.textContent = formatTime(duration);
@@ -896,7 +896,7 @@ progressSlider.addEventListener('change', () => {
   if (duration > 0 && track) {
     const seekTime = (parseFloat(progressSlider.value) / 100) * duration;
     currentSeekOffset = seekTime;
-    
+
     // Set src with seek parameter to play from the new position
     audioPlayer.src = `${BACKEND_URL}/stream?id=${encodeURIComponent(track.id)}&source=${track.source}&seek=${seekTime}`;
     const playPromise = audioPlayer.play();
@@ -978,7 +978,7 @@ async function loadForYouTracks() {
   const followed = getFollowedArtists();
   let queryParams = '';
   let recommendationSource = '';
-  
+
   if (followed.length > 0) {
     const randomArtist = followed[Math.floor(Math.random() * followed.length)];
     queryParams = `artistId=${encodeURIComponent(randomArtist.id)}`;
@@ -991,11 +991,11 @@ async function loadForYouTracks() {
       recommendationSource = `на основе поиска «${lastQuery}»`;
     }
   }
-  
+
   if (!queryParams) {
     return null;
   }
-  
+
   try {
     const response = await fetch(`${BACKEND_URL}/search/related?${queryParams}`);
     const data = await response.json();
@@ -1091,10 +1091,10 @@ function switchUserProfile(profileName) {
   currentProfile = profileName;
   localStorage.setItem('gp_active_profile', currentProfile);
   activeProfileName.textContent = currentProfile;
-  
+
   // Reload liked ids
   loadLikedTracks();
-  
+
   // Update player like button UI if a track is playing
   if (currentTrackIndex !== -1 && playlist[currentTrackIndex]) {
     updateLikeUI(playlist[currentTrackIndex].id);
@@ -1105,9 +1105,9 @@ function switchUserProfile(profileName) {
       playerLikeBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`;
     }
   }
-  
+
   renderProfilesDropdown();
-  
+
   // Switch view or refresh search results
   if (activeView === 'home') {
     loadHomeView();
@@ -1160,7 +1160,7 @@ function deleteUserProfile(profileName) {
 // Escape HTML string helper to prevent XSS
 function escapeHTML(str) {
   if (!str) return '';
-  return str.replace(/[&<>'"]/g, 
+  return str.replace(/[&<>'"]/g,
     tag => ({
       '&': '&amp;',
       '<': '&lt;',
@@ -1176,7 +1176,7 @@ async function loadLikedTracks() {
   if (currentUser && currentUser.likedTracks) {
     const localLikes = getLikedTracks();
     const cloudLikes = currentUser.likedTracks;
-    
+
     // Merge local and cloud likes by track ID
     const mergedLikes = [...cloudLikes];
     for (const localTrack of localLikes) {
@@ -1184,10 +1184,10 @@ async function loadLikedTracks() {
         mergedLikes.push(localTrack);
       }
     }
-    
+
     saveLikedTracks(mergedLikes);
     likedTrackIds = new Set(mergedLikes.map(t => t.id));
-    
+
     // If local likes were added, sync them back to Atlas
     if (mergedLikes.length > cloudLikes.length && token) {
       syncLikesWithBackend(mergedLikes);
@@ -1364,9 +1364,9 @@ function loadPlaylistsView() {
 function renderPlaylists() {
   loadingIndicator.classList.add('hidden');
   const playlists = getPlaylists();
-  
+
   tracksContainer.innerHTML = '';
-  
+
   const viewHeader = document.createElement('div');
   viewHeader.className = 'view-header';
   viewHeader.innerHTML = `
@@ -1391,11 +1391,11 @@ function renderPlaylists() {
   if (playlists && playlists.length > 0) {
     const grid = document.createElement('div');
     grid.className = 'tracks-layout-grid';
-    
+
     playlists.forEach(pl => {
       const card = document.createElement('div');
       card.className = 'playlist-card';
-      
+
       card.innerHTML = `
         <div class="playlist-card-icon">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
@@ -1419,7 +1419,7 @@ function renderPlaylists() {
 
       grid.appendChild(card);
     });
-    
+
     tracksContainer.appendChild(grid);
   } else {
     const emptyState = document.createElement('div');
@@ -1434,7 +1434,7 @@ function renderPlaylists() {
 function openPlaylist(playlistId) {
   activeView = 'playlist-tracks';
   activePlaylistId = playlistId;
-  
+
   const playlists = getPlaylists();
   const pl = playlists.find(p => p.id === playlistId);
   if (!pl) return;
@@ -1461,11 +1461,11 @@ function openPlaylist(playlistId) {
 
   if (pl.tracks && pl.tracks.length > 0) {
     playlist = pl.tracks;
-    
+
     const listGrid = document.createElement('div');
     listGrid.className = 'tracks-layout-grid';
     tracksContainer.appendChild(listGrid);
-    
+
     renderTracks(playlist, listGrid);
   } else {
     playlist = [];
@@ -1523,7 +1523,7 @@ function createPlaylist(name) {
   if (!cleanedName) return;
 
   let playlists = getPlaylists();
-  
+
   if (playlists.some(p => p.name.toLowerCase() === cleanedName.toLowerCase())) {
     alert('Playlist with this name already exists.');
     return;
@@ -1552,21 +1552,21 @@ function showPlaylistMenu(e, track) {
   selectedTrackForPlaylist = track;
   const rect = e.currentTarget.getBoundingClientRect();
   const playlists = getPlaylists();
-  
+
   playlistMenuList.innerHTML = '<div class="playlist-menu-title">Add to Playlist</div>';
-  
+
   if (playlists && playlists.length > 0) {
     playlists.forEach(pl => {
       const item = document.createElement('button');
       item.className = 'playlist-menu-item';
-      
+
       const containsTrack = pl.tracks.some(t => t.id === track.id);
-      
+
       item.innerHTML = `
         <span>${pl.name}</span>
         <span class="playlist-menu-item-count">${containsTrack ? '✓' : ''}</span>
       `;
-      
+
       item.addEventListener('click', () => {
         if (containsTrack) {
           removeTrackFromPlaylistId(pl.id, track.id);
@@ -1575,7 +1575,7 @@ function showPlaylistMenu(e, track) {
         }
         playlistMenu.classList.add('hidden');
       });
-      
+
       playlistMenuList.appendChild(item);
     });
   } else {
@@ -1585,7 +1585,7 @@ function showPlaylistMenu(e, track) {
     noPlaylists.innerHTML = '<span style="color:rgba(255,255,255,0.4);">No Playlists</span>';
     playlistMenuList.appendChild(noPlaylists);
   }
-  
+
   const createNewItem = document.createElement('button');
   createNewItem.className = 'playlist-menu-item';
   createNewItem.style.color = '#30d158';
@@ -1732,7 +1732,7 @@ function renderHome(sectionsData, forYouData) {
   const chipsContainer = document.createElement('div');
   chipsContainer.className = 'genre-chips-bar';
   chipsContainer.style.cssText = 'display: flex; gap: 8px; overflow-x: auto; padding: 10px 5px; margin-bottom: 15px; scrollbar-width: none; -webkit-overflow-scrolling: touch;';
-  
+
   if (!document.getElementById('genre-chips-style')) {
     const style = document.createElement('style');
     style.id = 'genre-chips-style';
@@ -1825,16 +1825,16 @@ function renderHomeContent(sectionsData, forYouData) {
   if (forYouData && forYouData.tracks && forYouData.tracks.length > 0) {
     const sectionEl = document.createElement('div');
     sectionEl.className = 'home-section';
-    
+
     const titleEl = document.createElement('div');
     titleEl.className = 'home-section-title';
     titleEl.innerHTML = `Для вас <span style="font-size: 12px; font-weight: normal; color: rgba(255,255,255,0.4); margin-left: 8px;">${forYouData.source}</span>`;
     sectionEl.appendChild(titleEl);
-    
+
     const scroller = document.createElement('div');
     scroller.className = 'scroller-container';
     sectionEl.appendChild(scroller);
-    
+
     renderTracksForSection(forYouData.tracks, scroller);
     contentArea.appendChild(sectionEl);
   }
@@ -1854,7 +1854,7 @@ function renderHomeContent(sectionsData, forYouData) {
 
     const sectionEl = document.createElement('div');
     sectionEl.className = 'home-section';
-    
+
     const titleEl = document.createElement('div');
     titleEl.className = 'home-section-title';
     titleEl.textContent = sec.title;
@@ -1876,7 +1876,7 @@ function renderGenreTracks(tracks, tagName) {
 
   const sectionEl = document.createElement('div');
   sectionEl.className = 'home-section';
-  
+
   const titleEl = document.createElement('div');
   titleEl.className = 'home-section-title';
   titleEl.textContent = `Жанр: ${tagName}`;
@@ -1885,14 +1885,14 @@ function renderGenreTracks(tracks, tagName) {
   const grid = document.createElement('div');
   grid.className = 'tracks-layout-grid';
   sectionEl.appendChild(grid);
-  
+
   if (tracks && tracks.length > 0) {
     playlist = tracks;
     renderTracks(tracks, grid);
   } else {
     grid.innerHTML = '<div style="color: rgba(255,255,255,0.4); padding: 20px;">Нет треков в этом жанре</div>';
   }
-  
+
   contentArea.appendChild(sectionEl);
 }
 
@@ -1914,7 +1914,7 @@ function renderTracksForSection(sectionTracks, container) {
       ? `${BACKEND_URL}/cover?url=${encodeURIComponent(track.thumbnail)}`
       : defaultSvgCover;
     const isLiked = likedTrackIds.has(track.id);
-    const heartIcon = isLiked 
+    const heartIcon = isLiked
       ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`
       : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`;
 
@@ -1959,7 +1959,7 @@ function renderTracksForSection(sectionTracks, container) {
 
     card.addEventListener('click', (e) => {
       if (e.target.closest('.like-btn') || e.target.closest('.playlist-add-btn') || e.target.closest('.artist-link')) return;
-      
+
       const currentTrack = playlist[currentTrackIndex];
       const isCurrent = currentTrack && track.id === currentTrack.id;
       if (isCurrent) {
@@ -2023,7 +2023,7 @@ async function loadArtistView(artistId) {
 
 function renderArtistProfile(artistData) {
   tracksContainer.innerHTML = '';
-  
+
   const followed = isArtistFollowed(artistData.id);
   const followBtnHTML = followed
     ? `<button id="follow-artist-btn" class="view-btn active" style="align-self: flex-start; margin-top: 8px;">
@@ -2049,7 +2049,7 @@ function renderArtistProfile(artistData) {
     </div>
   `;
   tracksContainer.appendChild(header);
-  
+
   const followBtn = header.querySelector('#follow-artist-btn');
   followBtn.addEventListener('click', () => {
     const nowFollowed = toggleFollowArtist(artistData);
@@ -2061,26 +2061,26 @@ function renderArtistProfile(artistData) {
       followBtn.querySelector('span').textContent = 'Подписаться';
     }
   });
-  
+
   document.getElementById('back-to-previous').addEventListener('click', () => {
     loadHomeView();
   });
 
   const sections = document.createElement('div');
   sections.className = 'artist-sections';
-  
+
   // Tracks Section
   if (artistData.tracks && artistData.tracks.length > 0) {
     const tracksSection = document.createElement('div');
     tracksSection.className = 'home-section';
     tracksSection.innerHTML = '<div class="home-section-title">Популярные треки</div>';
-    
+
     const tracksGrid = document.createElement('div');
     tracksGrid.className = 'tracks-layout-grid';
     tracksSection.appendChild(tracksGrid);
-    
+
     sections.appendChild(tracksSection);
-    
+
     renderTracksForSection(artistData.tracks, tracksGrid);
   }
 
@@ -2089,17 +2089,17 @@ function renderArtistProfile(artistData) {
     const playlistsSection = document.createElement('div');
     playlistsSection.className = 'home-section';
     playlistsSection.innerHTML = '<div class="home-section-title">Плейлисты артиста</div>';
-    
+
     const scroller = document.createElement('div');
     scroller.className = 'scroller-container';
     playlistsSection.appendChild(scroller);
-    
+
     artistData.playlists.forEach(pl => {
       const card = document.createElement('div');
       card.className = 'playlist-card';
       card.style.flex = '0 0 220px';
       card.style.cursor = 'pointer';
-      
+
       const plThumbnail = pl.thumbnail
         ? `${BACKEND_URL}/cover?url=${encodeURIComponent(pl.thumbnail)}`
         : 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'><rect width=\'100\' height=\'100\' fill=\'%23222\'/></svg>';
@@ -2109,14 +2109,14 @@ function renderArtistProfile(artistData) {
         <div class="playlist-card-title" style="margin-top:8px;">${pl.name}</div>
         <div class="playlist-card-count">${pl.tracksCount} треков</div>
       `;
-      
+
       card.addEventListener('click', () => {
         loadArtistPlaylist(pl.id, pl.name);
       });
 
       scroller.appendChild(card);
     });
-    
+
     sections.appendChild(playlistsSection);
   }
 
@@ -2138,7 +2138,7 @@ async function loadArtistPlaylist(playlistId, playlistName) {
 
     if (data.status === 'success' && data.results) {
       playlist = data.results;
-      
+
       tracksContainer.innerHTML = '';
       const viewHeader = document.createElement('div');
       viewHeader.className = 'view-header';
@@ -2240,19 +2240,19 @@ function showSearchHistory() {
   // Bind click events on the dynamic source pills
   const newSourceScBtn = sourcesContainer.querySelector('#source-sc');
   const newSourceYtBtn = sourcesContainer.querySelector('#source-yt');
-  
+
   [newSourceScBtn, newSourceYtBtn].forEach(btn => {
     if (btn) {
       btn.addEventListener('click', (e) => {
         e.stopPropagation(); // Keep dropdown open
-        
+
         const sourceName = btn.id === 'source-sc' ? 'soundcloud' : 'youtube';
         const activeCount = Object.values(activeSources).filter(Boolean).length;
-        
+
         if (activeCount === 1 && activeSources[sourceName]) {
           return; // Prevent deselecting last active source
         }
-        
+
         activeSources[sourceName] = !activeSources[sourceName];
         btn.classList.toggle('active', activeSources[sourceName]);
       });
@@ -2368,7 +2368,7 @@ function renderProfileContainer() {
   } else {
     // Logged in profile panel
     const avatarSrc = currentUser.avatarBase64 || DEFAULT_AVATAR_90;
-    
+
     container.innerHTML = `
       <div class="profile-dashboard-card">
         <img class="profile-dashboard-avatar" src="${avatarSrc}" alt="Avatar">
@@ -2437,7 +2437,7 @@ function renderSettings() {
 
   const panel = document.createElement('div');
   panel.className = 'settings-panel';
-  
+
   const currentTheme = localStorage.getItem('gp_theme') || 'theme-dark-glass';
 
   panel.innerHTML = `
@@ -2587,10 +2587,10 @@ function renderSettings() {
       </div>
       <div style="display: flex; flex-direction: column; gap: 8px;">
         ${topTracks.length > 0 ? topTracks.map((track, i) => {
-          const trackCover = track.thumbnail
-            ? `${BACKEND_URL}/cover?url=${encodeURIComponent(track.thumbnail)}`
-            : 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'50\' height=\'50\' viewBox=\'0 0 100 100\'><rect width=\'100\' height=\'100\' fill=\'%23222\'/></svg>';
-          return `
+    const trackCover = track.thumbnail
+      ? `${BACKEND_URL}/cover?url=${encodeURIComponent(track.thumbnail)}`
+      : 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'50\' height=\'50\' viewBox=\'0 0 100 100\'><rect width=\'100\' height=\'100\' fill=\'%23222\'/></svg>';
+    return `
             <div style="display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.03); padding: 6px 10px; border-radius: 6px;">
               <div style="font-weight: bold; color: #30d158; width: 15px;">${i + 1}</div>
               <img src="${trackCover}" style="width: 32px; height: 32px; border-radius: 4px; object-fit: cover;">
@@ -2601,7 +2601,7 @@ function renderSettings() {
               <div style="font-size: 12px; color: rgba(255,255,255,0.4);">${track.count} воспр.</div>
             </div>
           `;
-        }).join('') : '<div style="color: rgba(255,255,255,0.4); font-size: 12px; padding: 4px 0;">Нет данных о прослушиваниях</div>'}
+  }).join('') : '<div style="color: rgba(255,255,255,0.4); font-size: 12px; padding: 4px 0;">Нет данных о прослушиваниях</div>'}
       </div>
     </div>
 
@@ -2638,7 +2638,7 @@ function renderSettings() {
   const themeAccentInput = panel.querySelector('#theme-accent-color');
   const themeBlurSlider = panel.querySelector('#theme-blur-slider');
   const themeOpacitySlider = panel.querySelector('#theme-opacity-slider');
-  
+
   function updateCustomThemeFromUI() {
     const customThemeVal = {
       bgColor: themeBgInput.value,
@@ -2649,17 +2649,17 @@ function renderSettings() {
       blur: parseInt(themeBlurSlider.value, 10),
       opacity: parseFloat(themeOpacitySlider.value) / 100
     };
-    
+
     panel.querySelector('#blur-val-text').textContent = `${customThemeVal.blur}px`;
     panel.querySelector('#opacity-val-text').textContent = `${Math.round(customThemeVal.opacity * 100)}%`;
-    
+
     applyCustomTheme(customThemeVal);
     localStorage.setItem('gp_custom_theme', JSON.stringify(customThemeVal));
     localStorage.setItem('gp_theme', 'custom');
-    
+
     btns.forEach(b => b.classList.remove('active'));
   }
-  
+
   themeBgInput.addEventListener('input', updateCustomThemeFromUI);
   themeTextInput.addEventListener('input', updateCustomThemeFromUI);
   themePlayerInput.addEventListener('input', updateCustomThemeFromUI);
@@ -2755,10 +2755,10 @@ function renderSettings() {
     const val = parseFloat(e.target.value);
     localStorage.setItem('gp_effect_speed', val);
     panel.querySelector('#speed-val-text').textContent = `${val.toFixed(2)}x`;
-    
+
     audioPlayer.playbackRate = val;
     audioPlayer.defaultPlaybackRate = val;
-    
+
     if (pitchLinkedCheckbox.checked) {
       pitchSlider.value = val;
       panel.querySelector('#pitch-val-text').textContent = `${val.toFixed(2)}x`;
@@ -2769,7 +2769,7 @@ function renderSettings() {
     const checked = e.target.checked;
     localStorage.setItem('gp_effect_pitch_linked', checked);
     audioPlayer.preservesPitch = !checked;
-    
+
     if (checked) {
       const speedVal = parseFloat(speedSlider.value);
       pitchSlider.value = speedVal;
@@ -2789,14 +2789,14 @@ function renderSettings() {
     pitchLinkedCheckbox.checked = true;
     localStorage.setItem('gp_effect_pitch_linked', true);
     audioPlayer.preservesPitch = false;
-    
+
     pitchSlider.style.opacity = '';
     pitchSlider.style.pointerEvents = '';
-    
+
     speedSlider.value = val;
     panel.querySelector('#speed-val-text').textContent = `${val.toFixed(2)}x`;
     panel.querySelector('#pitch-val-text').textContent = `${val.toFixed(2)}x`;
-    
+
     audioPlayer.playbackRate = val;
     audioPlayer.defaultPlaybackRate = val;
     localStorage.setItem('gp_effect_speed', val);
@@ -2862,23 +2862,23 @@ function applyCustomTheme(theme) {
   const root = document.documentElement;
   root.style.setProperty('--text-color', theme.textColor);
   root.style.setProperty('--blur-value', `blur(${theme.blur}px)`);
-  
+
   const textDim = hexToRgba(theme.textColor, 0.55);
   root.style.setProperty('--text-dim', textDim);
   root.style.setProperty('--bg-gradient', theme.bgColor);
-  
+
   // Resolve theme custom colors
   const playerBgHex = theme.playerBg || '#050505';
   const cardBgHex = theme.cardBg || '#ffffff';
   const accentColorHex = theme.accentColor || theme.textColor || '#ffffff';
-  
+
   root.style.setProperty('--player-bg', hexToRgba(playerBgHex, theme.opacity));
   root.style.setProperty('--player-border', hexToRgba(playerBgHex, theme.opacity * 0.15));
   root.style.setProperty('--card-bg', hexToRgba(cardBgHex, theme.opacity * 0.15));
   root.style.setProperty('--card-border', hexToRgba(cardBgHex, theme.opacity * 0.2));
   root.style.setProperty('--card-hover-bg', hexToRgba(cardBgHex, theme.opacity * 0.3));
   root.style.setProperty('--card-hover-border', hexToRgba(cardBgHex, theme.opacity * 0.5));
-  
+
   const isDarkBg = isColorDark(theme.bgColor);
   if (isDarkBg) {
     root.style.setProperty('--panel-bg', `rgba(0, 0, 0, ${theme.opacity * 0.4})`);
@@ -3059,59 +3059,59 @@ function extractDominantColor(imgElement) {
     const ctx = canvas.getContext('2d');
     canvas.width = 30;
     canvas.height = 30;
-    
+
     ctx.drawImage(imgElement, 0, 0, 30, 30);
     const imgData = ctx.getImageData(0, 0, 30, 30).data;
-    
+
     let colorCounts = {};
     let maxCount = 0;
     let dominantColor = '#ffffff';
     let highestSaturation = 0;
-    
+
     for (let i = 0; i < imgData.length; i += 4) {
       const r = imgData[i];
-      const g = imgData[i+1];
-      const b = imgData[i+2];
-      const a = imgData[i+3];
-      
+      const g = imgData[i + 1];
+      const b = imgData[i + 2];
+      const a = imgData[i + 3];
+
       if (a < 200) continue;
-      
+
       const max = Math.max(r, g, b);
       const min = Math.min(r, g, b);
       const delta = max - min;
-      
+
       const s = max === 0 ? 0 : delta / max;
       const l = (max + min) / 2 / 255;
-      
+
       if (s > 0.25 && l > 0.25 && l < 0.75) {
         const qr = Math.round(r / 16) * 16;
         const qg = Math.round(g / 16) * 16;
         const qb = Math.round(b / 16) * 16;
         const key = `${qr},${qg},${qb}`;
-        
+
         colorCounts[key] = (colorCounts[key] || 0) + 1;
-        
+
         if (colorCounts[key] > maxCount) {
           maxCount = colorCounts[key];
           dominantColor = `rgb(${qr}, ${qg}, ${qb})`;
         }
       }
     }
-    
+
     if (maxCount === 0) {
       let sumR = 0, sumG = 0, sumB = 0, count = 0;
       for (let i = 0; i < imgData.length; i += 4) {
         sumR += imgData[i];
-        sumG += imgData[i+1];
-        sumB += imgData[i+2];
+        sumG += imgData[i + 1];
+        sumB += imgData[i + 2];
         count++;
       }
       if (count > 0) {
-        return `rgb(${Math.round(sumR/count)}, ${Math.round(sumG/count)}, ${Math.round(sumB/count)})`;
+        return `rgb(${Math.round(sumR / count)}, ${Math.round(sumG / count)}, ${Math.round(sumB / count)})`;
       }
       return '#ffffff';
     }
-    
+
     return dominantColor;
   } catch (err) {
     console.error('Error extracting cover color:', err);
@@ -3125,7 +3125,7 @@ function applyDynamicCoverColor() {
       const color = extractDominantColor(currentCover);
       document.documentElement.style.setProperty('--accent-color', color);
     } else {
-      currentCover.onload = function() {
+      currentCover.onload = function () {
         const color = extractDominantColor(currentCover);
         document.documentElement.style.setProperty('--accent-color', color);
         currentCover.onload = null;
@@ -3186,11 +3186,11 @@ function startVisualizer() {
       ctx.shadowBlur = 0;
       ctx.fillStyle = accentColor;
       ctx.globalAlpha = 0.15;
-      
+
       const numBars = 30;
       const barSpacing = width / numBars;
       const barWidth = barSpacing * 0.4;
-      
+
       for (let i = 0; i < numBars; i++) {
         const x = i * barSpacing + (barSpacing - barWidth) / 2;
         drawRoundedRect(ctx, x, height - 2, barWidth, 2, 1);
@@ -3310,13 +3310,13 @@ function updateActiveTab(viewName) {
 async function initAuth() {
   token = localStorage.getItem('auth_token');
   currentUser = localStorage.getItem('auth_user') ? JSON.parse(localStorage.getItem('auth_user')) : null;
-  
+
   if (token) {
     try {
       const res = await fetch(`${BACKEND_URL}/auth/me`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
+
       if (res.status === 200) {
         const data = await res.json();
         if (data.status === 'success') {
@@ -3405,20 +3405,20 @@ async function handleAuthSubmit() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    
+
     const data = await res.json();
     if (data.status === 'success') {
       token = data.token;
       currentUser = data.user;
       localStorage.setItem('auth_token', token);
       localStorage.setItem('auth_user', JSON.stringify(currentUser));
-      
+
       // Load and sync favorites
       await loadLikedTracks();
       if (currentUser.playlists) {
         mergeAndSyncPlaylists(currentUser.playlists);
       }
-      
+
       showToastNotification(isRegistering ? 'Регистрация успешна!' : 'Успешный вход!');
       renderProfileContainer();
       updateHeaderProfileUI();
@@ -3448,7 +3448,7 @@ function handleLogout() {
   token = null;
   localStorage.removeItem('auth_token');
   localStorage.removeItem('auth_user');
-  
+
   loadLikedTracks();
   updateHeaderProfileUI();
   renderProfileContainer();
@@ -3462,10 +3462,10 @@ function openEditProfileModal() {
 
   document.getElementById('edit-display-name-input').value = currentUser.displayName || '';
   document.getElementById('edit-bio-input').value = currentUser.bio || '';
-  
+
   const avatarSrc = currentUser.avatarBase64 || DEFAULT_AVATAR_100;
   document.getElementById('edit-avatar-preview').src = avatarSrc;
-  
+
   tempAvatarBase64 = currentUser.avatarBase64 || '';
   modal.classList.remove('hidden');
 }
@@ -3479,7 +3479,7 @@ function closeEditProfileModal() {
 function initEditProfileEventListeners() {
   const selectBtn = document.getElementById('select-avatar-btn');
   const fileInput = document.getElementById('edit-avatar-input');
-  
+
   if (selectBtn && fileInput) {
     selectBtn.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', (e) => {
@@ -3504,20 +3504,20 @@ function initEditProfileEventListeners() {
 // Compress avatar with HTML5 Canvas to 100x100 JPEG @ 0.7
 function compressAndPreviewAvatar(file) {
   const reader = new FileReader();
-  reader.onload = function(event) {
+  reader.onload = function (event) {
     const img = new Image();
-    img.onload = function() {
+    img.onload = function () {
       const canvas = document.createElement('canvas');
       canvas.width = 100;
       canvas.height = 100;
       const ctx = canvas.getContext('2d');
-      
+
       const size = Math.min(img.width, img.height);
       const xOffset = (img.width - size) / 2;
       const yOffset = (img.height - size) / 2;
-      
+
       ctx.drawImage(img, xOffset, yOffset, size, size, 0, 0, 100, 100);
-      
+
       const base64Str = canvas.toDataURL('image/jpeg', 0.7);
       document.getElementById('edit-avatar-preview').src = base64Str;
       tempAvatarBase64 = base64Str;
@@ -3531,7 +3531,7 @@ function compressAndPreviewAvatar(file) {
 async function saveProfileChanges() {
   const displayName = document.getElementById('edit-display-name-input').value.trim();
   const bio = document.getElementById('edit-bio-input').value.trim();
-  
+
   if (!displayName) {
     showToastNotification('Имя профиля не может быть пустым');
     return;
@@ -3561,7 +3561,7 @@ async function saveProfileChanges() {
     if (data.status === 'success') {
       currentUser = data.user;
       localStorage.setItem('auth_user', JSON.stringify(currentUser));
-      
+
       showToastNotification('Профиль обновлен!');
       closeEditProfileModal();
       renderProfileContainer();
@@ -3626,16 +3626,16 @@ async function syncPlaylistsWithBackend(playlists) {
 function mergeAndSyncPlaylists(cloudPlaylists) {
   const localPlaylists = getPlaylists();
   const merged = [...cloudPlaylists];
-  
+
   for (const localPl of localPlaylists) {
     const exists = merged.some(cloudPl => cloudPl.id === localPl.id || cloudPl.name.toLowerCase() === localPl.name.toLowerCase());
     if (!exists) {
       merged.push(localPl);
     }
   }
-  
+
   localStorage.setItem(getStorageKey('playlists'), JSON.stringify(merged));
-  
+
   if (merged.length > cloudPlaylists.length && currentUser && token) {
     syncPlaylistsWithBackend(merged);
   }
@@ -3645,31 +3645,31 @@ function mergeAndSyncPlaylists(cloudPlaylists) {
 async function loadFriendProfile(userId) {
   activeView = 'friend-profile';
   searchInput.value = '';
-  
+
   const usersContainer = document.getElementById('users-search-results');
   if (usersContainer) usersContainer.classList.add('hidden');
-  
+
   welcomeScreen.classList.add('hidden');
   tracksContainer.classList.add('hidden');
   loadingIndicator.classList.remove('hidden');
-  
+
   const existingBtn = document.getElementById('load-more-btn');
   if (existingBtn) existingBtn.remove();
   const existingMsg = document.getElementById('load-more-limit-msg');
   if (existingMsg) existingMsg.remove();
-  
+
   try {
     const response = await fetch(`${BACKEND_URL}/users/${userId}`);
     const data = await response.json();
-    
+
     loadingIndicator.classList.add('hidden');
-    
+
     if (data.status === 'success' && data.user) {
       const friend = data.user;
       tracksContainer.innerHTML = '';
-      
+
       const avatarSrc = friend.avatarBase64 || DEFAULT_AVATAR_100;
-      
+
       const headerCard = document.createElement('div');
       headerCard.className = 'friend-profile-banner';
       headerCard.innerHTML = `
@@ -3683,18 +3683,18 @@ async function loadFriendProfile(userId) {
         </div>
       `;
       tracksContainer.appendChild(headerCard);
-      
+
       // Renders the playlists section
       const playlistsSection = document.createElement('div');
       playlistsSection.className = 'friend-playlists-section';
-      
+
       const pHeader = document.createElement('h3');
       pHeader.textContent = 'Плейлисты и Избранное';
       playlistsSection.appendChild(pHeader);
-      
+
       const pRow = document.createElement('div');
       pRow.className = 'friend-playlists-row';
-      
+
       // 1. Render Liked Tracks tab card
       const likesCount = friend.likedTracks ? friend.likedTracks.length : 0;
       const likesCard = document.createElement('div');
@@ -3710,7 +3710,7 @@ async function loadFriendProfile(userId) {
         </div>
       `;
       pRow.appendChild(likesCard);
-      
+
       // 2. Render other playlists
       const playlists = friend.playlists || [];
       playlists.forEach(pl => {
@@ -3727,23 +3727,23 @@ async function loadFriendProfile(userId) {
           </div>
         `;
         pRow.appendChild(plCard);
-        
+
         plCard.addEventListener('click', () => {
           pRow.querySelectorAll('.friend-playlist-card').forEach(c => c.classList.remove('active'));
           plCard.classList.add('active');
           showFriendPlaylistTracks(friend, pl.id);
         });
       });
-      
+
       likesCard.addEventListener('click', () => {
         pRow.querySelectorAll('.friend-playlist-card').forEach(c => c.classList.remove('active'));
         likesCard.classList.add('active');
         showFriendLikedTracks(friend);
       });
-      
+
       playlistsSection.appendChild(pRow);
       tracksContainer.appendChild(playlistsSection);
-      
+
       // 3. Render section title
       const sectionTitle = document.createElement('div');
       sectionTitle.className = 'view-header';
@@ -3755,7 +3755,7 @@ async function loadFriendProfile(userId) {
         </div>
       `;
       tracksContainer.appendChild(sectionTitle);
-      
+
       const gridContainer = document.createElement('div');
       gridContainer.className = 'tracks-layout-grid';
       tracksContainer.appendChild(gridContainer);
@@ -3771,7 +3771,7 @@ async function loadFriendProfile(userId) {
         noTracksMsg.innerHTML = '<p>В избранном пока нет треков</p>';
         gridContainer.appendChild(noTracksMsg);
       }
-      
+
       tracksContainer.classList.remove('hidden');
       updateActiveTab(null);
     } else {
@@ -3795,7 +3795,7 @@ function showFriendLikedTracks(friend) {
     titleIcon.innerHTML = `<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>`;
     titleIcon.setAttribute('fill', 'currentColor');
   }
-  
+
   const gridContainer = tracksContainer.querySelector('.tracks-layout-grid');
   if (gridContainer) {
     gridContainer.innerHTML = '';
@@ -3816,7 +3816,7 @@ function showFriendLikedTracks(friend) {
 function showFriendPlaylistTracks(friend, playlistId) {
   const pl = friend.playlists.find(p => p.id === playlistId);
   if (!pl) return;
-  
+
   const titleText = document.getElementById('friend-tracks-title-text');
   if (titleText) titleText.textContent = `Плейлист: ${pl.name}`;
   const titleIcon = document.getElementById('friend-tracks-title-icon');
@@ -3826,7 +3826,7 @@ function showFriendPlaylistTracks(friend, playlistId) {
     titleIcon.setAttribute('stroke', 'currentColor');
     titleIcon.setAttribute('stroke-width', '2');
   }
-  
+
   const gridContainer = tracksContainer.querySelector('.tracks-layout-grid');
   if (gridContainer) {
     gridContainer.innerHTML = '';

@@ -2464,8 +2464,19 @@ function renderSettings() {
       
       <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 15px;">
         <div style="display: flex; flex-direction: column; gap: 6px;">
-          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Цвет фона:</span>
-          <input type="color" id="theme-bg-color" value="${customTheme.bgColor}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
+          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Цвет фона 1:</span>
+          <input type="color" id="theme-bg-color1" value="${customTheme.bgColor1 || customTheme.bgColor || '#1e1e24'}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Цвет фона 2:</span>
+          <input type="color" id="theme-bg-color2" value="${customTheme.bgColor2 || customTheme.bgColor || '#0a0a0c'}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px; grid-column: span 2;">
+          <div style="display: flex; justify-content: space-between; font-size: 12px;">
+            <span style="color: rgba(255,255,255,0.5);">Угол градиента:</span>
+            <span id="angle-val-text" style="color: #fff;">${customTheme.bgAngle !== undefined ? customTheme.bgAngle : 135}°</span>
+          </div>
+          <input type="range" id="theme-bg-angle" min="0" max="360" value="${customTheme.bgAngle !== undefined ? customTheme.bgAngle : 135}" style="width: 100%; accent-color: #30d158; cursor: pointer;">
         </div>
         <div style="display: flex; flex-direction: column; gap: 6px;">
           <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Цвет текста:</span>
@@ -2479,7 +2490,7 @@ function renderSettings() {
           <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Фон карточек:</span>
           <input type="color" id="theme-card-color" value="${customTheme.cardBg || '#ffffff'}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
         </div>
-        <div style="display: flex; flex-direction: column; gap: 6px; grid-column: span 2;">
+        <div style="display: flex; flex-direction: column; gap: 6px;">
           <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Акцентный цвет:</span>
           <input type="color" id="theme-accent-color" value="${customTheme.accentColor || '#ffffff'}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
         </div>
@@ -2494,6 +2505,14 @@ function renderSettings() {
           <input type="range" id="theme-blur-slider" min="0" max="80" value="${customTheme.blur}" style="width: 100%; accent-color: #30d158; cursor: pointer;">
         </div>
         
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="display: flex; justify-content: space-between; font-size: 12px;">
+            <span style="color: rgba(255,255,255,0.5);">Интенсивность свечения (glow):</span>
+            <span id="glow-val-text" style="color: #fff;">${customTheme.glow !== undefined ? Math.round(customTheme.glow * 100) : 5}%</span>
+          </div>
+          <input type="range" id="theme-glow-slider" min="0" max="100" value="${customTheme.glow !== undefined ? Math.round(customTheme.glow * 100) : 5}" style="width: 100%; accent-color: #30d158; cursor: pointer;">
+        </div>
+
         <div style="display: flex; flex-direction: column; gap: 6px;">
           <div style="display: flex; justify-content: space-between; font-size: 12px;">
             <span style="color: rgba(255,255,255,0.5);">Прозрачность панелей:</span>
@@ -2516,6 +2535,30 @@ function renderSettings() {
           <button id="theme-import-btn" class="view-btn">
             <span>Применить</span>
           </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>Фоновое изображение</h3>
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <button id="bg-image-upload-btn" class="view-btn" style="flex: 1; justify-content: center;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            <span style="margin-left: 6px;">Выбрать фото</span>
+          </button>
+          <button id="bg-image-clear-btn" class="view-btn danger ${localStorage.getItem('gp_bg_image') ? '' : 'hidden'}" style="justify-content: center;">
+            <span>Сбросить</span>
+          </button>
+          <input type="file" id="bg-image-file-input" accept="image/*" style="display: none;">
+        </div>
+        
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="display: flex; justify-content: space-between; font-size: 12px;">
+            <span style="color: rgba(255,255,255,0.5);">Прозрачность фона:</span>
+            <span id="bg-opacity-val-text" style="color: #fff;">${localStorage.getItem('gp_bg_image_opacity') || 0}%</span>
+          </div>
+          <input type="range" id="bg-opacity-slider" min="0" max="100" value="${localStorage.getItem('gp_bg_image_opacity') || 0}" style="width: 100%; accent-color: #30d158; cursor: pointer;">
         </div>
       </div>
     </div>
@@ -2631,26 +2674,34 @@ function renderSettings() {
   });
 
   // Custom Theme Constructor bindings
-  const themeBgInput = panel.querySelector('#theme-bg-color');
+  const themeBgColor1Input = panel.querySelector('#theme-bg-color1');
+  const themeBgColor2Input = panel.querySelector('#theme-bg-color2');
+  const themeBgAngleSlider = panel.querySelector('#theme-bg-angle');
   const themeTextInput = panel.querySelector('#theme-text-color');
   const themePlayerInput = panel.querySelector('#theme-player-color');
   const themeCardInput = panel.querySelector('#theme-card-color');
   const themeAccentInput = panel.querySelector('#theme-accent-color');
   const themeBlurSlider = panel.querySelector('#theme-blur-slider');
+  const themeGlowSlider = panel.querySelector('#theme-glow-slider');
   const themeOpacitySlider = panel.querySelector('#theme-opacity-slider');
 
   function updateCustomThemeFromUI() {
     const customThemeVal = {
-      bgColor: themeBgInput.value,
+      bgColor1: themeBgColor1Input.value,
+      bgColor2: themeBgColor2Input.value,
+      bgAngle: parseInt(themeBgAngleSlider.value, 10),
       textColor: themeTextInput.value,
       playerBg: themePlayerInput.value,
       cardBg: themeCardInput.value,
       accentColor: themeAccentInput.value,
       blur: parseInt(themeBlurSlider.value, 10),
+      glow: parseFloat(themeGlowSlider.value) / 100,
       opacity: parseFloat(themeOpacitySlider.value) / 100
     };
 
+    panel.querySelector('#angle-val-text').textContent = `${customThemeVal.bgAngle}°`;
     panel.querySelector('#blur-val-text').textContent = `${customThemeVal.blur}px`;
+    panel.querySelector('#glow-val-text').textContent = `${Math.round(customThemeVal.glow * 100)}%`;
     panel.querySelector('#opacity-val-text').textContent = `${Math.round(customThemeVal.opacity * 100)}%`;
 
     applyCustomTheme(customThemeVal);
@@ -2660,22 +2711,73 @@ function renderSettings() {
     btns.forEach(b => b.classList.remove('active'));
   }
 
-  themeBgInput.addEventListener('input', updateCustomThemeFromUI);
+  themeBgColor1Input.addEventListener('input', updateCustomThemeFromUI);
+  themeBgColor2Input.addEventListener('input', updateCustomThemeFromUI);
+  themeBgAngleSlider.addEventListener('input', updateCustomThemeFromUI);
   themeTextInput.addEventListener('input', updateCustomThemeFromUI);
   themePlayerInput.addEventListener('input', updateCustomThemeFromUI);
   themeCardInput.addEventListener('input', updateCustomThemeFromUI);
   themeAccentInput.addEventListener('input', updateCustomThemeFromUI);
   themeBlurSlider.addEventListener('input', updateCustomThemeFromUI);
+  themeGlowSlider.addEventListener('input', updateCustomThemeFromUI);
   themeOpacitySlider.addEventListener('input', updateCustomThemeFromUI);
+
+  // Background Image bindings
+  const bgImageUploadBtn = panel.querySelector('#bg-image-upload-btn');
+  const bgImageClearBtn = panel.querySelector('#bg-image-clear-btn');
+  const bgImageFileInput = panel.querySelector('#bg-image-file-input');
+  const bgOpacitySlider = panel.querySelector('#bg-opacity-slider');
+  const bgOpacityValText = panel.querySelector('#bg-opacity-val-text');
+
+  if (bgImageUploadBtn && bgImageFileInput) {
+    bgImageUploadBtn.addEventListener('click', () => bgImageFileInput.click());
+    
+    bgImageFileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const base64Str = evt.target.result;
+        localStorage.setItem('gp_bg_image', base64Str);
+        applyBackgroundImage(base64Str);
+        bgImageClearBtn.classList.remove('hidden');
+        showToastNotification('Фоновое изображение установлено!');
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  if (bgImageClearBtn) {
+    bgImageClearBtn.addEventListener('click', () => {
+      localStorage.removeItem('gp_bg_image');
+      applyBackgroundImage(null);
+      bgImageClearBtn.classList.add('hidden');
+      bgImageFileInput.value = '';
+      showToastNotification('Фон сброшен');
+    });
+  }
+
+  if (bgOpacitySlider && bgOpacityValText) {
+    bgOpacitySlider.addEventListener('input', (e) => {
+      const val = e.target.value;
+      bgOpacityValText.textContent = `${val}%`;
+      localStorage.setItem('gp_bg_image_opacity', val);
+      document.documentElement.style.setProperty('--bg-image-opacity', parseFloat(val) / 100);
+    });
+  }
 
   panel.querySelector('#theme-export-btn').addEventListener('click', () => {
     const customThemeVal = {
-      bgColor: themeBgInput.value,
+      bgColor1: themeBgColor1Input.value,
+      bgColor2: themeBgColor2Input.value,
+      bgAngle: parseInt(themeBgAngleSlider.value, 10),
       textColor: themeTextInput.value,
       playerBg: themePlayerInput.value,
       cardBg: themeCardInput.value,
       accentColor: themeAccentInput.value,
       blur: parseInt(themeBlurSlider.value, 10),
+      glow: parseFloat(themeGlowSlider.value) / 100,
       opacity: parseFloat(themeOpacitySlider.value) / 100
     };
     try {
@@ -2694,10 +2796,20 @@ function renderSettings() {
     if (!code) return;
     try {
       const decoded = JSON.parse(atob(code));
-      if (decoded.bgColor && decoded.textColor && decoded.blur !== undefined && decoded.opacity !== undefined) {
+      if (decoded.textColor && decoded.blur !== undefined && decoded.opacity !== undefined) {
+        // Backwards compatibility for single bgColor
+        if (decoded.bgColor && !decoded.bgColor1) {
+          decoded.bgColor1 = decoded.bgColor;
+          decoded.bgColor2 = decoded.bgColor;
+          decoded.bgAngle = 135;
+        }
+        if (!decoded.bgColor1) decoded.bgColor1 = '#1e1e24';
+        if (!decoded.bgColor2) decoded.bgColor2 = '#0a0a0c';
+        if (decoded.bgAngle === undefined) decoded.bgAngle = 135;
         if (!decoded.playerBg) decoded.playerBg = '#050505';
         if (!decoded.cardBg) decoded.cardBg = '#ffffff';
         if (!decoded.accentColor) decoded.accentColor = decoded.textColor || '#ffffff';
+        if (decoded.glow === undefined) decoded.glow = 0.05;
 
         applyCustomTheme(decoded);
         localStorage.setItem('gp_custom_theme', JSON.stringify(decoded));
@@ -2858,6 +2970,15 @@ function isColorDark(hex) {
   return true;
 }
 
+function applyBackgroundImage(base64Str) {
+  const root = document.documentElement;
+  if (base64Str) {
+    root.style.setProperty('--bg-image', `url("${base64Str}")`);
+  } else {
+    root.style.removeProperty('--bg-image');
+  }
+}
+
 function applyCustomTheme(theme) {
   const root = document.documentElement;
   root.style.setProperty('--text-color', theme.textColor);
@@ -2865,7 +2986,13 @@ function applyCustomTheme(theme) {
 
   const textDim = hexToRgba(theme.textColor, 0.55);
   root.style.setProperty('--text-dim', textDim);
-  root.style.setProperty('--bg-gradient', theme.bgColor);
+
+  if (theme.bgColor1 && theme.bgColor2) {
+    const angle = theme.bgAngle !== undefined ? theme.bgAngle : 135;
+    root.style.setProperty('--bg-gradient', `linear-gradient(${angle}deg, ${theme.bgColor1} 0%, ${theme.bgColor2} 100%)`);
+  } else {
+    root.style.setProperty('--bg-gradient', theme.bgColor || '#1e1e24');
+  }
 
   // Resolve theme custom colors
   const playerBgHex = theme.playerBg || '#050505';
@@ -2879,13 +3006,16 @@ function applyCustomTheme(theme) {
   root.style.setProperty('--card-hover-bg', hexToRgba(cardBgHex, theme.opacity * 0.3));
   root.style.setProperty('--card-hover-border', hexToRgba(cardBgHex, theme.opacity * 0.5));
 
-  const isDarkBg = isColorDark(theme.bgColor);
+  const isDarkBg = isColorDark(theme.bgColor1 || theme.bgColor || '#1e1e24');
   if (isDarkBg) {
     root.style.setProperty('--panel-bg', `rgba(0, 0, 0, ${theme.opacity * 0.4})`);
   } else {
     root.style.setProperty('--panel-bg', `rgba(255, 255, 255, ${theme.opacity * 0.4})`);
   }
   root.style.setProperty('--accent-color', accentColorHex);
+
+  const glowAlpha = theme.glow !== undefined ? theme.glow : 0.05;
+  root.style.setProperty('--glass-glow', `inset 0 1px 0 0 rgba(255, 255, 255, ${glowAlpha})`);
 }
 
 function clearCustomThemeProperties() {
@@ -2902,6 +3032,7 @@ function clearCustomThemeProperties() {
   root.style.removeProperty('--player-border');
   root.style.removeProperty('--panel-bg');
   root.style.removeProperty('--accent-color');
+  root.style.removeProperty('--glass-glow');
 }
 
 // Startup Initialization
@@ -2913,6 +3044,14 @@ loadHomeView();
 // Apply Saved Theme on Startup
 const savedTheme = localStorage.getItem('gp_theme') || 'theme-dark-glass';
 applyTheme(savedTheme);
+
+// Apply Saved Background Image & Opacity on Startup
+const savedBgImage = localStorage.getItem('gp_bg_image');
+if (savedBgImage) {
+  applyBackgroundImage(savedBgImage);
+}
+const savedBgOpacity = localStorage.getItem('gp_bg_image_opacity') || '0';
+document.documentElement.style.setProperty('--bg-image-opacity', parseFloat(savedBgOpacity) / 100);
 
 // Apply Saved Volume on Startup
 const savedVolume = localStorage.getItem('gp_volume');
@@ -3604,7 +3743,7 @@ async function syncLikesWithBackend(likes) {
 // Synchronise cloud playlists list
 async function syncPlaylistsWithBackend(playlists) {
   try {
-    const res = await fetch(`${BACKEND_URL}/auth/sync-playlists`, {
+    const res = await fetch(`${BACKEND_URL}/users/sync-playlists`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -227,14 +227,20 @@ async function performSearch() {
       usersContainer.classList.add('hidden');
     }
 
-    if (data.status === 'success' && data.results && data.results.length > 0) {
-      playlist = data.results;
-      renderTracks(playlist);
-      tracksContainer.classList.remove('hidden');
-      updateLoadMoreButton(playlist.length); // Update pagination buttons
+    if (data.status === 'success') {
+      if (data.results && data.results.length > 0) {
+        playlist = data.results;
+        renderTracks(playlist);
+        tracksContainer.classList.remove('hidden');
+        updateLoadMoreButton(playlist.length); // Update pagination buttons
+      } else {
+        playlist = [];
+        tracksContainer.innerHTML = '<div class="welcome-state"><h2>No results found</h2><p>Try searching for something else</p></div>';
+        tracksContainer.classList.remove('hidden');
+      }
     } else {
       playlist = [];
-      tracksContainer.innerHTML = '<div class="welcome-state"><h2>No results found</h2><p>Try searching for something else</p></div>';
+      tracksContainer.innerHTML = `<div class="welcome-state"><h2>Ошибка сервера</h2><p>${data.message || 'Произошла ошибка при выполнении поиска'}</p></div>`;
       tracksContainer.classList.remove('hidden');
     }
     updateActiveTab('search');

@@ -167,7 +167,7 @@ body:not(.window-maximized) {
   justify-content: center;
   font-size: 9px;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: 10px;
   transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
@@ -284,7 +284,7 @@ body:not(.window-maximized) {
 .sidebar-btn {
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: 14px;
   color: var(--text-dim);
   padding: 12px 16px;
   display: flex;
@@ -528,7 +528,7 @@ body:not(.window-maximized) {
   backdrop-filter: var(--blur-value);
   -webkit-backdrop-filter: var(--blur-value);
   border: 1px solid var(--card-border, rgba(255, 255, 255, 0.05));
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 12px;
   display: flex;
   gap: 12px;
@@ -556,7 +556,7 @@ body:not(.window-maximized) {
 .card-cover {
   width: 54px;
   height: 54px;
-  border-radius: 8px;
+  border-radius: 12px;
   object-fit: cover;
   background: #121214;
   border: 1px solid rgba(255, 255, 255, 0.05);
@@ -621,7 +621,7 @@ body:not(.window-maximized) {
   position: relative;
   width: 54px;
   height: 54px;
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -629,7 +629,7 @@ body:not(.window-maximized) {
 .track-card .track-cover-container .card-cover {
   width: 100%;
   height: 100%;
-  border-radius: 8px;
+  border-radius: 12px;
   object-fit: cover;
   display: block;
   background: #121214;
@@ -709,32 +709,36 @@ body:not(.window-maximized) {
 /* Bottom Player Bar */
 .player-bar {
   position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 84px;
+  bottom: 12px;
+  left: 16px;
+  right: 16px;
+  width: auto;
+  height: 86px;
   background: var(--player-bg, rgba(5, 5, 5, 0.45));
   backdrop-filter: var(--blur-value);
   -webkit-backdrop-filter: var(--blur-value);
-  border-top: 1px solid var(--player-border, rgba(255, 255, 255, 0.05));
-  padding: 0 24px;
+  border: 1px solid var(--player-border, rgba(255, 255, 255, 0.05));
+  border-radius: 20px;
+  padding: 0 22px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   z-index: 50;
-  transform: translateY(100%);
+  transform: translateY(calc(100% + 18px));
   transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
   overflow: hidden;
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.35), var(--glass-glow, none);
+  transform-origin: bottom center;
 }
 
 #player-visualizer {
   position: absolute;
-  top: 0;
-  left: 0;
+  inset: 0;
   width: 100%;
   height: 100%;
   z-index: 1;
   pointer-events: none;
+  border-radius: inherit;
 }
 
 .player-bar > * {
@@ -747,7 +751,7 @@ body:not(.window-maximized) {
 }
 
 .container.player-active .content-area {
-  padding-bottom: 96px;
+  padding-bottom: 116px;
 }
 
 .player-track-info {
@@ -761,7 +765,7 @@ body:not(.window-maximized) {
 .track-cover-container img {
   width: 46px;
   height: 46px;
-  border-radius: 6px;
+  border-radius: 12px;
   object-fit: cover;
   background: #121214;
   border: 1px solid rgba(255, 255, 255, 0.05);
@@ -1027,7 +1031,7 @@ input[type="range"]:hover::-webkit-slider-thumb {
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
+  border-radius: 16px;
   min-width: 170px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
   padding: 6px;
@@ -1043,7 +1047,7 @@ input[type="range"]:hover::-webkit-slider-thumb {
   color: rgba(255, 255, 255, 0.7);
   padding: 8px 12px;
   text-align: left;
-  border-radius: 8px;
+  border-radius: 14px;
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -1076,7 +1080,7 @@ input[type="range"]:hover::-webkit-slider-thumb {
   color: #bf5af2;
   padding: 8px 12px;
   text-align: left;
-  border-radius: 8px;
+  border-radius: 14px;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -1129,7 +1133,7 @@ input[type="range"]:hover::-webkit-slider-thumb {
 .modal-content input {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
-  border-radius: 8px;
+  border-radius: 14px;
   padding: 10px 14px;
   color: var(--text-color);
   outline: none;
@@ -1151,7 +1155,7 @@ input[type="range"]:hover::-webkit-slider-thumb {
 
 .modal-btn {
   border: none;
-  border-radius: 8px;
+  border-radius: 14px;
   padding: 8px 16px;
   font-size: 13px;
   font-weight: 500;
@@ -1186,7 +1190,7 @@ input[type="range"]:hover::-webkit-slider-thumb {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -1206,7 +1210,7 @@ input[type="range"]:hover::-webkit-slider-thumb {
 .playlist-card-icon {
   width: 44px;
   height: 44px;
-  border-radius: 8px;
+  border-radius: 14px;
   background: rgba(48, 209, 88, 0.12);
   color: #30d158;
   display: flex;
@@ -1239,7 +1243,7 @@ input[type="range"]:hover::-webkit-slider-thumb {
   color: var(--text-dim);
   cursor: pointer;
   padding: 6px;
-  border-radius: 6px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1336,7 +1340,7 @@ input[type="range"]:hover::-webkit-slider-thumb {
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
+  border-radius: 16px;
   min-width: 190px;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
   padding: 6px;
@@ -1352,7 +1356,7 @@ input[type="range"]:hover::-webkit-slider-thumb {
   color: var(--text-dim);
   padding: 8px 12px;
   text-align: left;
-  border-radius: 8px;
+  border-radius: 14px;
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -1414,13 +1418,13 @@ input[type="range"]:hover::-webkit-slider-thumb {
 /* Auto-Update Banner Styling */
 .update-banner {
   position: fixed;
-  bottom: 100px;
+  bottom: 118px;
   right: 24px;
   background: var(--player-bg, rgba(20, 20, 25, 0.85)) !important;
   backdrop-filter: var(--blur-value, blur(28px)) !important;
   -webkit-backdrop-filter: var(--blur-value, blur(28px)) !important;
   border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08)) !important;
-  border-radius: 12px;
+  border-radius: 16px;
   box-shadow: var(--glass-shadow, 0 16px 48px rgba(0, 0, 0, 0.6)) !important;
   padding: 14px 18px;
   z-index: 10000;
@@ -1651,7 +1655,7 @@ input[type="range"]:hover::-webkit-slider-thumb {
   backdrop-filter: var(--blur-value, blur(20px)) !important;
   -webkit-backdrop-filter: var(--blur-value, blur(20px)) !important;
   border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08)) !important;
-  border-radius: 12px;
+  border-radius: 16px;
   box-shadow: var(--glass-shadow, 0 20px 40px rgba(0, 0, 0, 0.5)) !important;
   padding: 6px;
   display: flex;
@@ -1676,7 +1680,7 @@ input[type="range"]:hover::-webkit-slider-thumb {
   color: var(--text-color);
   padding: 8px 14px;
   text-align: left;
-  border-radius: 8px;
+  border-radius: 14px;
   font-size: 13px;
   cursor: pointer;
   display: flex;
@@ -1694,7 +1698,7 @@ input[type="range"]:hover::-webkit-slider-thumb {
 .search-history-delete {
   color: var(--text-dim);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: 10px;
   cursor: pointer;
   font-size: 10px;
 }
@@ -1738,7 +1742,7 @@ input[type="range"]:hover::-webkit-slider-thumb {
 .settings-section {
   background: var(--card-bg, rgba(255, 255, 255, 0.02));
   border: 1px solid var(--card-border);
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -1762,7 +1766,7 @@ input[type="range"]:hover::-webkit-slider-thumb {
   padding: 4px;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
-  border-radius: 12px;
+  border-radius: 16px;
   backdrop-filter: var(--blur-value);
   -webkit-backdrop-filter: var(--blur-value);
 }
@@ -1772,7 +1776,7 @@ input[type="range"]:hover::-webkit-slider-thumb {
   min-height: 36px;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 14px;
   color: var(--text-dim);
   font-size: 13px;
   font-weight: 500;
@@ -1802,7 +1806,7 @@ input[type="range"]:hover::-webkit-slider-thumb {
   min-width: 0;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
-  border-radius: 8px;
+  border-radius: 14px;
   color: var(--text-color);
   padding: 8px 12px;
   font-size: 12px;
@@ -1831,14 +1835,14 @@ input[type="range"]:hover::-webkit-slider-thumb {
   gap: 8px;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
-  border-radius: 8px;
+  border-radius: 14px;
   padding: 6px;
 }
 
 .saved-theme-activate,
 .saved-theme-delete {
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 12px;
   background: transparent;
   color: var(--text-color);
   cursor: pointer;
@@ -1886,7 +1890,7 @@ input[type="range"]:hover::-webkit-slider-thumb {
   padding: 12px;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
-  border-radius: 10px;
+  border-radius: 16px;
 }
 
 .eq-band {
@@ -1924,7 +1928,7 @@ input[type="range"]:hover::-webkit-slider-thumb {
 .theme-option-btn {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  border-radius: 16px;
   color: var(--text-color);
   padding: 12px 18px;
   font-size: 13px;
@@ -2130,7 +2134,7 @@ body.mini-player-active .mini-player-block {
   backdrop-filter: var(--blur-value);
   -webkit-backdrop-filter: var(--blur-value);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
+  border-radius: 16px;
   box-shadow: var(--glass-shadow);
   overflow: hidden;
   -webkit-app-region: drag;
@@ -2183,7 +2187,7 @@ body.mini-player-active .mini-player-block {
   justify-content: center;
   font-size: 8px;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: 10px;
   transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
@@ -2250,7 +2254,7 @@ body.mini-player-active .mini-player-block {
 .mini-cover-container img {
   width: 40px;
   height: 40px;
-  border-radius: 6px;
+  border-radius: 12px;
   object-fit: cover;
   background: #121214;
   border: 1px solid rgba(255, 255, 255, 0.05);
@@ -2561,7 +2565,7 @@ body.mini-player-active .mini-player-block {
 .auth-form-group input {
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  border-radius: 14px;
   padding: 12px 14px;
   color: var(--text-color, #ffffff);
   outline: none;
@@ -2580,7 +2584,7 @@ body.mini-player-active .mini-player-block {
 .auth-action-btn {
   width: 100%;
   padding: 12px;
-  border-radius: 8px;
+  border-radius: 14px;
   border: none;
   background: var(--text-color, #ffffff);
   color: var(--player-bg, #050505);
@@ -2800,7 +2804,7 @@ body.mini-player-active .mini-player-block {
   gap: 12px;
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
+  border-radius: 14px;
   padding: 8px 12px;
   min-width: 150px;
   max-width: 200px;
@@ -2821,7 +2825,7 @@ body.mini-player-active .mini-player-block {
 .friend-playlist-cover {
   width: 32px;
   height: 32px;
-  border-radius: 6px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.04);
   display: flex;
   align-items: center;
@@ -3333,7 +3337,7 @@ body.mini-player-active .mini-player-block {
 .card-cover-horizontal {
   width: 58px;
   height: 58px;
-  border-radius: 8px;
+  border-radius: 12px;
   object-fit: cover;
   border: 1px solid rgba(255, 255, 255, 0.05);
   flex-shrink: 0;

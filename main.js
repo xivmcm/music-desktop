@@ -107,6 +107,7 @@ function createWindow() {
     transparent: true,      // Allows the desktop to show through for glassmorphism
     hasShadow: true,
     backgroundColor: '#00000000',
+    icon: path.join(__dirname, 'assets/icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

@@ -607,12 +607,12 @@ function playTrack(index) {
   // Clear any previous loading timeout before starting a new track
   clearTimeout(trackLoadTimeout);
 
-  // Set 5-second track loading timeout
+  // Set 10-second track loading timeout
   trackLoadTimeout = setTimeout(() => {
     if (currentPlayPromise === playPromise) {
-      handleTrackLoadError("Track loading timed out (5 seconds limit)");
+      handleTrackLoadError("Track loading timed out (10 seconds limit)");
     }
-  }, 5000);
+  }, 10000);
 
   playPromise
     .then(() => {

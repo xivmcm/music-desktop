@@ -52,6 +52,7 @@ const miniPauseIcon = document.getElementById('mini-pause-icon');
 const miniPrevButton = document.getElementById('mini-prev-button');
 const miniNextButton = document.getElementById('mini-next-button');
 const miniProgressBar = document.getElementById('mini-progress-bar');
+const miniProgressSlider = document.getElementById('mini-progress-slider');
 
 // App state variables
 let playlist = [];
@@ -68,6 +69,11 @@ let isShuffle = false;
 let currentPlayPromise = null;
 let currentSeekOffset = 0;
 let currentTrackDuration = 0;
+let playCountSession = {
+  trackId: null,
+  continuousSeconds: 0,
+  counted: false
+};
 let activeGenreChip = null;
 let originalHomeData = null;
 let trackLoadTimeout = null;
@@ -82,6 +88,7 @@ let isRegistering = false;
 
 let audioCtx = null;
 let bassFilter = null;
+let eqFilters = [];
 let analyser = null;
 let bufferLength = 0;
 let dataArray = null;
@@ -101,15 +108,30 @@ function initAudioEffects() {
     const savedBassBoost = localStorage.getItem('gp_effect_bassboost') === 'true';
     bassFilter.gain.value = savedBassBoost ? 10 : 0;
 
+    const eqBands = [60, 230, 910, 4000, 14000];
+    eqFilters = eqBands.map((frequency) => {
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'peaking';
+      filter.frequency.value = frequency;
+      filter.Q.value = 1;
+      filter.gain.value = parseFloat(localStorage.getItem(`gp_eq_${frequency}`) || '0');
+      return filter;
+    });
+
     // Create Analyser
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 256;
     bufferLength = analyser.frequencyBinCount;
     dataArray = new Uint8Array(bufferLength);
 
-    // Chain: Source -> Filter -> Analyser -> Destination
+    // Chain: Source -> Bass Boost -> EQ bands -> Analyser -> Destination
     source.connect(bassFilter);
-    bassFilter.connect(analyser);
+    let previousNode = bassFilter;
+    eqFilters.forEach(filter => {
+      previousNode.connect(filter);
+      previousNode = filter;
+    });
+    previousNode.connect(analyser);
     analyser.connect(audioCtx.destination);
 
     console.log('[Web Audio API] AudioContext, Bass Boost filter, and Analyser initialized successfully');
@@ -131,6 +153,14 @@ function applyAudioEffectsState() {
 
   if (bassFilter) {
     bassFilter.gain.value = bassBoost ? 10 : 0;
+  }
+
+  if (eqFilters.length) {
+    [60, 230, 910, 4000, 14000].forEach((frequency, index) => {
+      if (eqFilters[index]) {
+        eqFilters[index].gain.value = parseFloat(localStorage.getItem(`gp_eq_${frequency}`) || '0');
+      }
+    });
   }
 }
 let cachedForYouData = null;
@@ -164,6 +194,8 @@ const DEFAULT_AVATAR_100 = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http
 const homeButton = document.getElementById('home-button');
 const historyButton = document.getElementById('history-button');
 const playlistsButton = document.getElementById('playlists-button');
+const studioButton = document.getElementById('studio-button');
+const statsButton = document.getElementById('stats-button');
 const settingsButton = document.getElementById('settings-button');
 const profileButton = document.getElementById('profile-button');
 const profileDropdown = document.getElementById('profile-dropdown');
@@ -536,6 +568,45 @@ function incrementPlayCount(track) {
   }
 }
 
+function resetPlayCountSession(track) {
+  playCountSession = {
+    trackId: track?.id || null,
+    continuousSeconds: 0,
+    counted: false
+  };
+}
+
+function maybeCommitQualifiedPlay() {
+  const track = playlist[currentTrackIndex];
+  if (!track || playCountSession.counted || playCountSession.trackId !== track.id) return;
+
+  const duration = currentTrackDuration || audioPlayer.duration || 0;
+  const listenedEnough = playCountSession.continuousSeconds >= 30;
+  const passedHalf = duration > 0 && playCountSession.continuousSeconds >= duration * 0.5;
+
+  if (listenedEnough || passedHalf) {
+    incrementPlayCount(track);
+    playCountSession.counted = true;
+  }
+}
+
+setInterval(() => {
+  if (!audioPlayer || audioPlayer.paused || isSeeking) return;
+
+  const track = playlist[currentTrackIndex];
+  if (!track) return;
+
+  let totalSeconds = parseFloat(localStorage.getItem('gp_stats_total_seconds')) || 0;
+  totalSeconds += 10;
+  localStorage.setItem('gp_stats_total_seconds', totalSeconds);
+
+  if (playCountSession.trackId !== track.id) {
+    resetPlayCountSession(track);
+  }
+  playCountSession.continuousSeconds += 10;
+  maybeCommitQualifiedPlay();
+}, 10000);
+
 // 3. Play Track
 // 3. Play Track
 function playTrack(index) {
@@ -553,9 +624,7 @@ function playTrack(index) {
   // Add to playback history
   addToHistory(track);
 
-  // Increment local stats play count
-  incrementPlayCount(track);
-  audioPlayer.lastStatsTime = null;
+  resetPlayCountSession(track);
 
   // Update Active UI State
   const cards = document.querySelectorAll('.track-card, .track-card-horizontal');
@@ -938,21 +1007,6 @@ audioPlayer.onerror = () => {
 };
 
 audioPlayer.addEventListener('timeupdate', () => {
-  // Accumulate stats total seconds
-  if (!audioPlayer.paused && !isSeeking) {
-    if (audioPlayer.lastStatsTime !== undefined && audioPlayer.lastStatsTime !== null) {
-      const diff = audioPlayer.currentTime - audioPlayer.lastStatsTime;
-      if (diff > 0 && diff < 2) {
-        let totalSeconds = parseFloat(localStorage.getItem('gp_stats_total_seconds')) || 0;
-        totalSeconds += diff;
-        localStorage.setItem('gp_stats_total_seconds', totalSeconds);
-      }
-    }
-    audioPlayer.lastStatsTime = audioPlayer.currentTime;
-  } else {
-    audioPlayer.lastStatsTime = audioPlayer.currentTime;
-  }
-
   if (isSeeking) return;
   const current = currentSeekOffset + audioPlayer.currentTime;
   const duration = currentTrackDuration || audioPlayer.duration || 0;
@@ -965,10 +1019,16 @@ audioPlayer.addEventListener('timeupdate', () => {
     if (miniProgressBar) {
       miniProgressBar.style.width = `${(current / duration) * 100}%`;
     }
+    if (miniProgressSlider && !miniProgressSlider.matches(':active')) {
+      miniProgressSlider.value = (current / duration) * 100;
+    }
   } else {
     progressSlider.value = 0;
     if (miniProgressBar) {
       miniProgressBar.style.width = '0%';
+    }
+    if (miniProgressSlider) {
+      miniProgressSlider.value = 0;
     }
   }
 });
@@ -997,20 +1057,13 @@ audioPlayer.addEventListener('ended', () => {
 });
 
 // Seek Slider Actions
-progressSlider.addEventListener('input', () => {
-  isSeeking = true;
-  const duration = currentTrackDuration || audioPlayer.duration || 0;
-  currentTimeText.textContent = formatTime((parseFloat(progressSlider.value) / 100) * duration);
-});
-
-progressSlider.addEventListener('change', () => {
+function seekToPercent(percent) {
   const duration = currentTrackDuration || audioPlayer.duration || 0;
   const track = playlist[currentTrackIndex];
   if (duration > 0 && track) {
-    const seekTime = (parseFloat(progressSlider.value) / 100) * duration;
+    const seekTime = (parseFloat(percent) / 100) * duration;
     currentSeekOffset = seekTime;
 
-    // Set src with seek parameter to play from the new position
     audioPlayer.src = `${BACKEND_URL}/stream?id=${encodeURIComponent(track.id)}&source=${track.source}&seek=${seekTime}&artist=${encodeURIComponent(track.artist)}&title=${encodeURIComponent(track.title)}`;
     const playPromise = audioPlayer.play();
     currentPlayPromise = playPromise;
@@ -1026,8 +1079,32 @@ progressSlider.addEventListener('change', () => {
         }
       });
   }
+}
+
+progressSlider.addEventListener('input', () => {
+  isSeeking = true;
+  const duration = currentTrackDuration || audioPlayer.duration || 0;
+  currentTimeText.textContent = formatTime((parseFloat(progressSlider.value) / 100) * duration);
+});
+
+progressSlider.addEventListener('change', () => {
+  seekToPercent(progressSlider.value);
   isSeeking = false;
 });
+
+if (miniProgressSlider) {
+  miniProgressSlider.addEventListener('input', () => {
+    isSeeking = true;
+    if (miniProgressBar) {
+      miniProgressBar.style.width = `${miniProgressSlider.value}%`;
+    }
+  });
+
+  miniProgressSlider.addEventListener('change', () => {
+    seekToPercent(miniProgressSlider.value);
+    isSeeking = false;
+  });
+}
 
 // Volume Slider Actions
 volumeSlider.addEventListener('input', () => {
@@ -1896,6 +1973,12 @@ favoritesButton.addEventListener('click', loadFavorites);
 historyButton.addEventListener('click', loadHistoryView);
 playlistsButton.addEventListener('click', loadPlaylistsView);
 settingsButton.addEventListener('click', loadSettingsView);
+if (studioButton) {
+  studioButton.addEventListener('click', () => loadStudioView('visual'));
+}
+if (statsButton) {
+  statsButton.addEventListener('click', loadStatsView);
+}
 
 // Search input focus/input listeners for autocomplete dropdown
 searchInput.addEventListener('focus', showSearchHistory);
@@ -2385,8 +2468,7 @@ async function loadArtistView(artistId) {
       renderArtistProfile(data.results);
       tracksContainer.classList.remove('hidden');
     } else {
-      tracksContainer.innerHTML = '<div class="welcome-state"><h2>Артист не найден</h2><p>Не удалось получить данные профиля</p></div>';
-      tracksContainer.classList.remove('hidden');
+      renderArtistProfileError();
     }
     updateActiveTab('artist');
   } catch (error) {
@@ -2396,9 +2478,32 @@ async function loadArtistView(artistId) {
     const msg = isTimeout
       ? 'Сервер не ответил вовремя. Попробуйте ещё раз.'
       : 'Не удалось загрузить профиль артиста. Проверьте соединение.';
-    tracksContainer.innerHTML = `<div class="welcome-state"><h2>${isTimeout ? 'Таймаут' : 'Ошибка загрузки'}</h2><p>${msg}</p></div>`;
-    tracksContainer.classList.remove('hidden');
+    renderArtistProfileError(isTimeout ? '\u0422\u0430\u0439\u043c\u0430\u0443\u0442' : '\u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438', msg);
     updateActiveTab('artist');
+  }
+}
+
+function renderArtistProfileError(title = '\u0410\u0440\u0442\u0438\u0441\u0442 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d', message = 'SoundCloud \u043d\u0435 \u043e\u0442\u0434\u0430\u043b \u0434\u0430\u043d\u043d\u044b\u0435 \u043f\u0440\u043e\u0444\u0438\u043b\u044f.') {
+  const track = playlist[currentTrackIndex];
+  const artistName = track?.artist || searchInput?.value || '';
+  tracksContainer.innerHTML = `
+    <div class="welcome-state artist-profile-error">
+      <h2>${title}</h2>
+      <p>${message}</p>
+      <button id="artist-global-search-btn" class="view-btn">
+        <span>\u0418\u0441\u043a\u0430\u0442\u044c \u0442\u0440\u0435\u043a\u0438 \u0430\u0440\u0442\u0438\u0441\u0442\u0430 \u0447\u0435\u0440\u0435\u0437 \u0433\u043b\u043e\u0431\u0430\u043b\u044c\u043d\u044b\u0439 \u043f\u043e\u0438\u0441\u043a</span>
+      </button>
+    </div>
+  `;
+  tracksContainer.classList.remove('hidden');
+
+  const searchBtn = document.getElementById('artist-global-search-btn');
+  if (searchBtn) {
+    searchBtn.addEventListener('click', () => {
+      if (!artistName || !searchInput) return;
+      searchInput.value = artistName;
+      performSearch();
+    });
   }
 }
 
@@ -2716,6 +2821,30 @@ function loadSettingsView() {
   }, 100);
 }
 
+function loadStudioView(tab = 'visual') {
+  activeView = 'studio';
+  searchInput.value = '';
+  welcomeScreen.classList.add('hidden');
+  tracksContainer.classList.add('hidden');
+  loadingIndicator.classList.remove('hidden');
+
+  setTimeout(() => {
+    renderSettings({ scope: 'studio', studioTab: tab });
+  }, 100);
+}
+
+function loadStatsView() {
+  activeView = 'stats';
+  searchInput.value = '';
+  welcomeScreen.classList.add('hidden');
+  tracksContainer.classList.add('hidden');
+  loadingIndicator.classList.remove('hidden');
+
+  setTimeout(() => {
+    renderSettings({ scope: 'stats' });
+  }, 100);
+}
+
 // Render Profile & Auth Card
 function renderProfileContainer() {
   const container = document.getElementById('profile-section-container');
@@ -2775,9 +2904,11 @@ function renderProfileContainer() {
   }
 }
 
-function renderSettings() {
+function renderSettings(options = {}) {
   loadingIndicator.classList.add('hidden');
   tracksContainer.innerHTML = '';
+  const scope = options.scope || 'settings';
+  const studioTab = options.studioTab || 'visual';
 
   const totalSeconds = parseFloat(localStorage.getItem('gp_stats_total_seconds')) || 0;
   const totalHours = (totalSeconds / 3600).toFixed(1);
@@ -2801,20 +2932,29 @@ function renderSettings() {
 
   const viewHeader = document.createElement('div');
   viewHeader.className = 'view-header';
+  const headerCopy = scope === 'studio'
+    ? {
+        title: 'Studio',
+        subtitle: studioTab === 'audio' ? 'Audio effects and equalizer' : 'Visual theme constructor'
+      }
+    : scope === 'stats'
+      ? { title: 'Stats', subtitle: 'Listening analytics' }
+      : { title: 'Profile & Settings', subtitle: '' };
   viewHeader.innerHTML = `
     <div class="view-header-title">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-      <span>Профиль и Настройки</span>
+      <span>${headerCopy.title}</span>
+      ${headerCopy.subtitle ? `<span class="view-header-subtitle">${headerCopy.subtitle}</span>` : ``}
     </div>
   `;
   tracksContainer.appendChild(viewHeader);
 
-  // Profile Section container
-  const profileSection = document.createElement('div');
-  profileSection.id = 'profile-section-container';
-  tracksContainer.appendChild(profileSection);
-
-  renderProfileContainer();
+  if (scope === 'settings') {
+    const profileSection = document.createElement('div');
+    profileSection.id = 'profile-section-container';
+    tracksContainer.appendChild(profileSection);
+    renderProfileContainer();
+  }
 
   const panel = document.createElement('div');
   panel.className = 'settings-panel';
@@ -2822,7 +2962,13 @@ function renderSettings() {
   const currentTheme = localStorage.getItem('gp_theme') || 'theme-dark-glass';
 
   panel.innerHTML = `
-    <div class="settings-section">
+    ${scope === 'studio' ? `
+      <div class="studio-tabs">
+        <button id="studio-visual-tab" class="studio-tab-btn ${studioTab === 'visual' ? 'active' : ''}" type="button">Visual</button>
+        <button id="studio-audio-tab" class="studio-tab-btn ${studioTab === 'audio' ? 'active' : ''}" type="button">Audio</button>
+      </div>
+    ` : ''}
+    <div class="settings-section" data-section="theme-presets">
       <h3>Тема оформления</h3>
       <div class="theme-options">
         <button class="theme-option-btn ${currentTheme === 'theme-dark-glass' ? 'active' : ''}" data-theme="theme-dark-glass">
@@ -2840,7 +2986,7 @@ function renderSettings() {
       </div>
     </div>
 
-    <div class="settings-section" style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 20px;">
+    <div class="settings-section" data-section="theme-constructor" style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 20px;">
       <h3>Конструктор темы</h3>
       
       <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 15px;">
@@ -2909,6 +3055,15 @@ function renderSettings() {
         </button>
       </div>
 
+      <div class="saved-theme-tools">
+        <input type="text" id="theme-save-name-input" class="theme-save-name-input" placeholder="Theme name">
+        <button id="theme-save-btn" class="view-btn">
+          <span>Save Theme</span>
+        </button>
+      </div>
+
+      <div id="saved-themes-list" class="saved-themes-list"></div>
+
       <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 15px; margin-top: 15px; display: flex; flex-direction: column; gap: 8px;">
         <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Импорт темы по коду:</span>
         <div style="display: flex; gap: 8px;">
@@ -2920,7 +3075,7 @@ function renderSettings() {
       </div>
     </div>
 
-    <div class="settings-section">
+    <div class="settings-section" data-section="background-image">
       <h3>Фоновое изображение</h3>
       <div style="display: flex; flex-direction: column; gap: 12px;">
         <div style="display: flex; gap: 10px; align-items: center;">
@@ -2944,7 +3099,7 @@ function renderSettings() {
       </div>
     </div>
 
-    <div class="settings-section">
+    <div class="settings-section" data-section="interface-effects">
       <h3>Эффекты интерфейса</h3>
       
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
@@ -2964,9 +3119,24 @@ function renderSettings() {
       </div>
     </div>
 
-    <div class="settings-section">
+    <div class="settings-section" data-section="audio-effects">
       <h3>Аудиоэффекты</h3>
       
+      <div class="eq-panel">
+        ${[
+          { hz: 60, label: '60Hz' },
+          { hz: 230, label: '230Hz' },
+          { hz: 910, label: '910Hz' },
+          { hz: 4000, label: '4kHz' },
+          { hz: 14000, label: '14kHz' }
+        ].map(band => `
+          <label class="eq-band">
+            <span class="eq-band-value" id="eq-${band.hz}-value">${localStorage.getItem(`gp_eq_${band.hz}`) || '0'}dB</span>
+            <input class="eq-slider" data-frequency="${band.hz}" type="range" min="-12" max="12" step="1" value="${localStorage.getItem(`gp_eq_${band.hz}`) || '0'}">
+            <span class="eq-band-label">${band.label}</span>
+          </label>
+        `).join('')}
+      </div>
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
         <span style="font-size: 13px; color: rgba(255,255,255,0.7);">Bass Boost (+10dB 100Hz)</span>
         <label class="switch">
@@ -3000,7 +3170,7 @@ function renderSettings() {
       </div>
     </div>
 
-    <div class="settings-section">
+    <div class="settings-section" data-section="listening-stats">
       <h3>Статистика прослушивания</h3>
       <div class="settings-info-row">
         <span class="settings-info-label">Общее время прослушивания:</span>
@@ -3029,7 +3199,7 @@ function renderSettings() {
       </div>
     </div>
 
-    <div class="settings-section">
+    <div class="settings-section" data-section="user-info">
       <h3>Информация о пользователе</h3>
       <div class="settings-info-row">
         <span class="settings-info-label">Активный профиль:</span>
@@ -3043,6 +3213,29 @@ function renderSettings() {
   `;
 
   tracksContainer.appendChild(panel);
+
+  const visibleSectionsByScope = {
+    settings: ['interface-effects', 'user-info'],
+    studio: studioTab === 'audio'
+      ? ['audio-effects']
+      : ['theme-presets', 'theme-constructor', 'background-image'],
+    stats: ['listening-stats']
+  };
+  const visibleSections = visibleSectionsByScope[scope] || visibleSectionsByScope.settings;
+  panel.querySelectorAll('[data-section]').forEach(section => {
+    if (!visibleSections.includes(section.dataset.section)) {
+      section.remove();
+    }
+  });
+
+  const studioVisualTab = panel.querySelector('#studio-visual-tab');
+  const studioAudioTab = panel.querySelector('#studio-audio-tab');
+  if (studioVisualTab) {
+    studioVisualTab.addEventListener('click', () => loadStudioView('visual'));
+  }
+  if (studioAudioTab) {
+    studioAudioTab.addEventListener('click', () => loadStudioView('audio'));
+  }
 
   const btns = panel.querySelectorAll('.theme-option-btn');
   btns.forEach(btn => {
@@ -3092,16 +3285,31 @@ function renderSettings() {
     btns.forEach(b => b.classList.remove('active'));
   }
 
-  themeBgColor1Input.addEventListener('input', updateCustomThemeFromUI);
-  themeBgColor2Input.addEventListener('input', updateCustomThemeFromUI);
-  themeBgAngleSlider.addEventListener('input', updateCustomThemeFromUI);
-  themeTextInput.addEventListener('input', updateCustomThemeFromUI);
-  themePlayerInput.addEventListener('input', updateCustomThemeFromUI);
-  themeCardInput.addEventListener('input', updateCustomThemeFromUI);
-  themeAccentInput.addEventListener('input', updateCustomThemeFromUI);
-  themeBlurSlider.addEventListener('input', updateCustomThemeFromUI);
-  themeGlowSlider.addEventListener('input', updateCustomThemeFromUI);
-  themeOpacitySlider.addEventListener('input', updateCustomThemeFromUI);
+  const hasThemeConstructor = [
+    themeBgColor1Input,
+    themeBgColor2Input,
+    themeBgAngleSlider,
+    themeTextInput,
+    themePlayerInput,
+    themeCardInput,
+    themeAccentInput,
+    themeBlurSlider,
+    themeGlowSlider,
+    themeOpacitySlider
+  ].every(Boolean);
+
+  if (hasThemeConstructor) {
+    themeBgColor1Input.addEventListener('input', updateCustomThemeFromUI);
+    themeBgColor2Input.addEventListener('input', updateCustomThemeFromUI);
+    themeBgAngleSlider.addEventListener('input', updateCustomThemeFromUI);
+    themeTextInput.addEventListener('input', updateCustomThemeFromUI);
+    themePlayerInput.addEventListener('input', updateCustomThemeFromUI);
+    themeCardInput.addEventListener('input', updateCustomThemeFromUI);
+    themeAccentInput.addEventListener('input', updateCustomThemeFromUI);
+    themeBlurSlider.addEventListener('input', updateCustomThemeFromUI);
+    themeGlowSlider.addEventListener('input', updateCustomThemeFromUI);
+    themeOpacitySlider.addEventListener('input', updateCustomThemeFromUI);
+  }
 
   // Background Image bindings
   const bgImageUploadBtn = panel.querySelector('#bg-image-upload-btn');
@@ -3118,10 +3326,23 @@ function renderSettings() {
       if (!file) return;
       
       const reader = new FileReader();
-      reader.onload = function(evt) {
+      reader.onload = async function(evt) {
         const base64Str = evt.target.result;
-        localStorage.setItem('gp_bg_image', base64Str);
-        applyBackgroundImage(base64Str);
+        let bgRef = base64Str;
+        try {
+          if (window.electronAPI?.saveThemeBackground) {
+            const saved = await window.electronAPI.saveThemeBackground({
+              sourcePath: file.path,
+              dataUrl: base64Str,
+              name: file.name
+            });
+            bgRef = saved.bgUrl || saved.bgPath || base64Str;
+          }
+        } catch (err) {
+          console.warn('[Theme Background] Falling back to inline image:', err.message);
+        }
+        localStorage.setItem('gp_bg_image', bgRef);
+        applyBackgroundImage(bgRef);
         bgImageClearBtn.classList.remove('hidden');
         showToastNotification('Фоновое изображение установлено!');
       };
@@ -3148,7 +3369,9 @@ function renderSettings() {
     });
   }
 
-  panel.querySelector('#theme-export-btn').addEventListener('click', () => {
+  const themeExportBtn = panel.querySelector('#theme-export-btn');
+  if (themeExportBtn && hasThemeConstructor) {
+    themeExportBtn.addEventListener('click', () => {
     const customThemeVal = {
       bgColor1: themeBgColor1Input.value,
       bgColor2: themeBgColor2Input.value,
@@ -3170,8 +3393,11 @@ function renderSettings() {
       alert('Не удалось экспортировать тему');
     }
   });
+  }
 
-  panel.querySelector('#theme-import-btn').addEventListener('click', () => {
+  const themeImportBtn = panel.querySelector('#theme-import-btn');
+  if (themeImportBtn) {
+    themeImportBtn.addEventListener('click', () => {
     const input = panel.querySelector('#theme-import-input');
     const code = input.value.trim();
     if (!code) return;
@@ -3197,7 +3423,7 @@ function renderSettings() {
         localStorage.setItem('gp_theme', 'custom');
         input.value = '';
         alert('Тема успешно импортирована!');
-        renderSettings();
+        renderSettings({ scope, studioTab });
       } else {
         alert('Некорректный код темы');
       }
@@ -3206,97 +3432,227 @@ function renderSettings() {
       alert('Не удалось расшифровать код темы');
     }
   });
+  }
+
+  const getCurrentThemeColors = () => ({
+    bgColor1: themeBgColor1Input?.value || customTheme.bgColor1 || customTheme.bgColor || '#1e1e24',
+    bgColor2: themeBgColor2Input?.value || customTheme.bgColor2 || customTheme.bgColor || '#0a0a0c',
+    bgAngle: parseInt(themeBgAngleSlider?.value || customTheme.bgAngle || 135, 10),
+    textColor: themeTextInput?.value || customTheme.textColor || '#f5f5f7',
+    playerBg: themePlayerInput?.value || customTheme.playerBg || '#050505',
+    cardBg: themeCardInput?.value || customTheme.cardBg || '#ffffff',
+    accentColor: themeAccentInput?.value || customTheme.accentColor || '#ffffff',
+    blur: parseInt(themeBlurSlider?.value || customTheme.blur || 28, 10),
+    glow: parseFloat(themeGlowSlider?.value || ((customTheme.glow || 0.05) * 100)) / 100,
+    opacity: parseFloat(themeOpacitySlider?.value || ((customTheme.opacity || 0.45) * 100)) / 100
+  });
+
+  function getSavedThemes() {
+    try {
+      return JSON.parse(localStorage.getItem('gp_saved_themes') || '[]');
+    } catch {
+      return [];
+    }
+  }
+
+  function setSavedThemes(themes) {
+    localStorage.setItem('gp_saved_themes', JSON.stringify(themes));
+  }
+
+  function renderSavedThemesList() {
+    const list = panel.querySelector('#saved-themes-list');
+    if (!list) return;
+
+    const themes = getSavedThemes();
+    if (!themes.length) {
+      list.innerHTML = '<div class="saved-themes-empty">No saved themes yet</div>';
+      return;
+    }
+
+    list.innerHTML = themes.map(theme => `
+      <div class="saved-theme-item" data-theme-id="${theme.id}">
+        <button class="saved-theme-activate" type="button">
+          <span class="saved-theme-name">${escapeHTML(theme.name)}</span>
+          <span class="saved-theme-meta">${theme.bgPath ? 'Background saved' : 'Colors only'}</span>
+        </button>
+        <button class="saved-theme-delete" type="button" title="Delete theme">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14H6L5 6"></path></svg>
+        </button>
+      </div>
+    `).join('');
+
+    list.querySelectorAll('.saved-theme-activate').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.closest('.saved-theme-item')?.dataset.themeId;
+        const selected = getSavedThemes().find(theme => theme.id === id);
+        if (!selected) return;
+        applyCustomTheme(selected.colors);
+        localStorage.setItem('gp_custom_theme', JSON.stringify(selected.colors));
+        localStorage.setItem('gp_theme', 'custom');
+        if (selected.bgUrl || selected.bgPath) {
+          const bgRef = selected.bgUrl || selected.bgPath;
+          localStorage.setItem('gp_bg_image', bgRef);
+          applyBackgroundImage(bgRef);
+        } else {
+          localStorage.removeItem('gp_bg_image');
+          applyBackgroundImage(null);
+        }
+        showToastNotification('Theme applied');
+      });
+    });
+
+    list.querySelectorAll('.saved-theme-delete').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.closest('.saved-theme-item')?.dataset.themeId;
+        setSavedThemes(getSavedThemes().filter(theme => theme.id !== id));
+        renderSavedThemesList();
+      });
+    });
+  }
+
+  const themeSaveBtn = panel.querySelector('#theme-save-btn');
+  const themeSaveNameInput = panel.querySelector('#theme-save-name-input');
+  if (themeSaveBtn && themeSaveNameInput && hasThemeConstructor) {
+    themeSaveBtn.addEventListener('click', () => {
+      const name = themeSaveNameInput.value.trim();
+      if (!name) {
+        showToastNotification('Enter theme name');
+        return;
+      }
+
+      const id = `theme_${Date.now()}`;
+      const bgRef = localStorage.getItem('gp_bg_image') || '';
+      const themes = getSavedThemes();
+      themes.unshift({
+        id,
+        name,
+        bgPath: bgRef,
+        bgUrl: bgRef,
+        colors: getCurrentThemeColors()
+      });
+      setSavedThemes(themes);
+      themeSaveNameInput.value = '';
+      renderSavedThemesList();
+      showToastNotification('Theme saved');
+    });
+    renderSavedThemesList();
+  }
 
   // Interface Effects bindings
   const dynamicCoverCheckbox = panel.querySelector('#dynamic-cover-checkbox');
   const visualizerCheckbox = panel.querySelector('#visualizer-checkbox');
 
-  dynamicCoverCheckbox.addEventListener('change', (e) => {
-    localStorage.setItem('gp_dynamic_cover', e.target.checked);
-    if (e.target.checked) {
-      applyDynamicCoverColor();
-    } else {
-      resetAccentColor();
-    }
-  });
+  if (dynamicCoverCheckbox) {
+    dynamicCoverCheckbox.addEventListener('change', (e) => {
+      localStorage.setItem('gp_dynamic_cover', e.target.checked);
+      if (e.target.checked) {
+        applyDynamicCoverColor();
+      } else {
+        resetAccentColor();
+      }
+    });
+  }
 
-  visualizerCheckbox.addEventListener('change', (e) => {
-    localStorage.setItem('gp_visualizer', e.target.checked);
-    if (e.target.checked) {
-      initAudioEffects();
-      startVisualizer();
-    } else {
-      stopVisualizer();
-    }
-  });
+  if (visualizerCheckbox) {
+    visualizerCheckbox.addEventListener('change', (e) => {
+      localStorage.setItem('gp_visualizer', e.target.checked);
+      if (e.target.checked) {
+        initAudioEffects();
+        startVisualizer();
+      } else {
+        stopVisualizer();
+      }
+    });
+  }
 
   // Audio Effects bindings
   const bassboostCheckbox = panel.querySelector('#effect-bassboost-checkbox');
   const speedSlider = panel.querySelector('#effect-speed-slider');
   const pitchSlider = panel.querySelector('#effect-pitch-slider');
   const pitchLinkedCheckbox = panel.querySelector('#effect-pitch-linked-checkbox');
+  const eqSliders = panel.querySelectorAll('.eq-slider');
 
-  bassboostCheckbox.addEventListener('change', (e) => {
-    localStorage.setItem('gp_effect_bassboost', e.target.checked);
-    initAudioEffects();
-    if (bassFilter) {
-      bassFilter.gain.value = e.target.checked ? 10 : 0;
-    }
+  eqSliders.forEach((slider, index) => {
+    slider.addEventListener('input', (e) => {
+      const frequency = e.target.dataset.frequency;
+      const gain = parseFloat(e.target.value);
+      localStorage.setItem(`gp_eq_${frequency}`, gain);
+      const valueLabel = panel.querySelector(`#eq-${frequency}-value`);
+      if (valueLabel) {
+        valueLabel.textContent = `${gain}dB`;
+      }
+      initAudioEffects();
+      if (eqFilters[index]) {
+        eqFilters[index].gain.value = gain;
+      }
+    });
   });
 
-  speedSlider.addEventListener('input', (e) => {
-    const val = parseFloat(e.target.value);
-    localStorage.setItem('gp_effect_speed', val);
-    panel.querySelector('#speed-val-text').textContent = `${val.toFixed(2)}x`;
+  if (bassboostCheckbox) {
+    bassboostCheckbox.addEventListener('change', (e) => {
+      localStorage.setItem('gp_effect_bassboost', e.target.checked);
+      initAudioEffects();
+      if (bassFilter) {
+        bassFilter.gain.value = e.target.checked ? 10 : 0;
+      }
+    });
+  }
 
-    audioPlayer.playbackRate = val;
-    audioPlayer.defaultPlaybackRate = val;
+  if (speedSlider && pitchSlider && pitchLinkedCheckbox) {
+    speedSlider.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      localStorage.setItem('gp_effect_speed', val);
+      panel.querySelector('#speed-val-text').textContent = `${val.toFixed(2)}x`;
 
-    if (pitchLinkedCheckbox.checked) {
-      pitchSlider.value = val;
-      panel.querySelector('#pitch-val-text').textContent = `${val.toFixed(2)}x`;
-    }
-  });
+      audioPlayer.playbackRate = val;
+      audioPlayer.defaultPlaybackRate = val;
 
-  pitchLinkedCheckbox.addEventListener('change', (e) => {
-    const checked = e.target.checked;
-    localStorage.setItem('gp_effect_pitch_linked', checked);
-    audioPlayer.preservesPitch = !checked;
+      if (pitchLinkedCheckbox.checked) {
+        pitchSlider.value = val;
+        panel.querySelector('#pitch-val-text').textContent = `${val.toFixed(2)}x`;
+      }
+    });
 
-    if (checked) {
-      const speedVal = parseFloat(speedSlider.value);
-      pitchSlider.value = speedVal;
-      panel.querySelector('#pitch-val-text').textContent = `${speedVal.toFixed(2)}x`;
+    pitchLinkedCheckbox.addEventListener('change', (e) => {
+      const checked = e.target.checked;
+      localStorage.setItem('gp_effect_pitch_linked', checked);
+      audioPlayer.preservesPitch = !checked;
+
+      if (checked) {
+        const speedVal = parseFloat(speedSlider.value);
+        pitchSlider.value = speedVal;
+        panel.querySelector('#pitch-val-text').textContent = `${speedVal.toFixed(2)}x`;
+        pitchSlider.style.opacity = '';
+        pitchSlider.style.pointerEvents = '';
+      } else {
+        pitchSlider.value = 1.0;
+        panel.querySelector('#pitch-val-text').textContent = '1.00x';
+        pitchSlider.style.opacity = '0.5';
+        pitchSlider.style.pointerEvents = 'none';
+      }
+    });
+
+    pitchSlider.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      pitchLinkedCheckbox.checked = true;
+      localStorage.setItem('gp_effect_pitch_linked', true);
+      audioPlayer.preservesPitch = false;
+
       pitchSlider.style.opacity = '';
       pitchSlider.style.pointerEvents = '';
-    } else {
-      pitchSlider.value = 1.0;
-      panel.querySelector('#pitch-val-text').textContent = '1.00x';
-      pitchSlider.style.opacity = '0.5';
-      pitchSlider.style.pointerEvents = 'none';
-    }
-  });
 
-  pitchSlider.addEventListener('input', (e) => {
-    const val = parseFloat(e.target.value);
-    pitchLinkedCheckbox.checked = true;
-    localStorage.setItem('gp_effect_pitch_linked', true);
-    audioPlayer.preservesPitch = false;
+      speedSlider.value = val;
+      panel.querySelector('#speed-val-text').textContent = `${val.toFixed(2)}x`;
+      panel.querySelector('#pitch-val-text').textContent = `${val.toFixed(2)}x`;
 
-    pitchSlider.style.opacity = '';
-    pitchSlider.style.pointerEvents = '';
-
-    speedSlider.value = val;
-    panel.querySelector('#speed-val-text').textContent = `${val.toFixed(2)}x`;
-    panel.querySelector('#pitch-val-text').textContent = `${val.toFixed(2)}x`;
-
-    audioPlayer.playbackRate = val;
-    audioPlayer.defaultPlaybackRate = val;
-    localStorage.setItem('gp_effect_speed', val);
-  });
+      audioPlayer.playbackRate = val;
+      audioPlayer.defaultPlaybackRate = val;
+      localStorage.setItem('gp_effect_speed', val);
+    });
+  }
 
   tracksContainer.classList.remove('hidden');
-  updateActiveTab('settings');
+  updateActiveTab(scope);
 }
 
 function applyTheme(themeName) {
@@ -3557,6 +3913,7 @@ audioPlayer.addEventListener('play', () => {
 });
 
 audioPlayer.addEventListener('pause', () => {
+  playCountSession.continuousSeconds = 0;
   sendDiscordPresence();
   broadcastPlayerStatus();
 });
@@ -3714,25 +4071,36 @@ function startVisualizer() {
     const height = visualizerCanvas.height;
     ctx.clearRect(0, 0, width, height);
 
-    // Compute bass value from lower frequencies
+    // Compute sub-bass/bass value from 20Hz-120Hz bins
     let bassSum = 0;
-    const numBassBins = 8;
+    let bassBins = 0;
     
     if (analyser && !audioPlayer.paused) {
       analyser.getByteFrequencyData(dataArray);
-      for (let i = 0; i < numBassBins; i++) {
+      const nyquist = audioCtx ? audioCtx.sampleRate / 2 : 24000;
+      const binHz = nyquist / bufferLength;
+      const startBin = Math.max(0, Math.floor(20 / binHz));
+      const endBin = Math.min(bufferLength - 1, Math.ceil(120 / binHz));
+      for (let i = startBin; i <= endBin; i++) {
         bassSum += dataArray[i];
+        bassBins += 1;
       }
     }
     
-    const avgBass = bassSum / numBassBins;
+    const avgBass = bassBins > 0 ? bassSum / bassBins : 0;
     const bassNormalized = avgBass / 255;
     smoothBass = smoothBass * 0.85 + bassNormalized * 0.15;
+    const bassKick = bassNormalized > 0.62;
+    const playerBar = document.querySelector('.player-bar');
+    if (playerBar) {
+      playerBar.classList.toggle('bass-pulse', bassKick);
+    }
 
     // Determine target amplitude
     let targetAmp = 0;
     if (!audioPlayer.paused && analyser) {
-      targetAmp = 3 + smoothBass * height * 0.5; // oscillate slightly when playing even during quiet parts
+      const bassMultiplier = bassKick ? 1.65 : 1 + smoothBass * 0.45;
+      targetAmp = (3 + smoothBass * height * 0.5) * bassMultiplier;
     }
     currentAmp = currentAmp * 0.9 + targetAmp * 0.1;
 
@@ -3844,6 +4212,8 @@ function updateActiveTab(viewName) {
     'library': favoritesButton,
     'history': historyButton,
     'playlists': playlistsButton,
+    'studio': studioButton,
+    'stats': statsButton,
     'settings': settingsButton
   };
 
@@ -4426,19 +4796,24 @@ function showFriendPlaylistTracks(friend, playlistId) {
 
   if (sidebar && sidebarTrigger) {
     let hideTimeout;
+    let showFrame;
 
     const showSidebar = () => {
       clearTimeout(hideTimeout);
-      sidebar.classList.add('open');
-      sidebarTrigger.classList.add('open');
+      cancelAnimationFrame(showFrame);
+      showFrame = requestAnimationFrame(() => {
+        sidebar.classList.add('open');
+        sidebarTrigger.classList.add('open');
+      });
     };
 
     const hideSidebar = () => {
       clearTimeout(hideTimeout);
+      cancelAnimationFrame(showFrame);
       hideTimeout = setTimeout(() => {
         sidebar.classList.remove('open');
         sidebarTrigger.classList.remove('open');
-      }, 150);
+      }, 190);
     };
 
     sidebarTrigger.addEventListener('mouseenter', showSidebar);
@@ -5019,10 +5394,10 @@ function renderFindFriendsList(users) {
     row.className = 'user-search-row';
     row.innerHTML = `
       <div class="user-search-info">
-        ${user.avatarBase64 ? `<img src="${user.avatarBase64}" style="width: 32px; height: 32px; border-radius:50%;" />` : `<div style="width: 32px; height: 32px; border-radius:50%; background:#3a3f50; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; color:#fff;">${user.displayName[0].toUpperCase()}</div>`}
-        <div style="display:flex; flex-direction:column; gap:2px;">
-          <span style="font-size:13px; font-weight:500; color:var(--text-color);">${escapeHTML(user.displayName)}</span>
-          <span style="font-size:11px; color:var(--text-dim);">@${escapeHTML(user.username)}</span>
+        ${user.avatarBase64 ? `<img src="${user.avatarBase64}" class="user-search-avatar" alt="">` : `<div class="user-search-avatar user-search-avatar-placeholder">${user.displayName[0].toUpperCase()}</div>`}
+        <div class="user-search-copy">
+          <span class="user-search-name">${escapeHTML(user.displayName)}</span>
+          <span class="user-search-username">@${escapeHTML(user.username)}</span>
         </div>
       </div>
       <button class="follow-btn ${isFollowing ? 'following' : ''}" data-user-id="${user.id}">

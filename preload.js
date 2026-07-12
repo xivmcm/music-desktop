@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   downloadUpdate: () => ipcRenderer.send('download-update'),
   installUpdate: () => ipcRenderer.send('install-update'),
   updatePresence: (trackData) => ipcRenderer.send('update-presence', trackData),
+  saveThemeBackground: (payload) => ipcRenderer.invoke('save-theme-background', payload),
   toggleMiniPlayer: () => ipcRenderer.send('toggle-mini-player'),
   onMiniPlayerToggled: (callback) => ipcRenderer.on('mini-player-toggled', (event, active) => callback(active)),
   onWindowMaximizedStatus: (callback) => ipcRenderer.on('window-maximized-status', (event, maximized) => callback(maximized))

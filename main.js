@@ -1,6 +1,7 @@
 const DISCORD_CLIENT_ID = "1525029080615882772";
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 const DiscordRPC = require('discord-rpc');
 
@@ -71,6 +72,32 @@ function smoothResize(window, targetWidth, targetHeight, duration = 200, callbac
   };
   step();
 }
+
+ipcMain.handle('save-theme-background', async (event, payload = {}) => {
+  const themesDir = path.join(app.getPath('userData'), 'themes');
+  await fs.promises.mkdir(themesDir, { recursive: true });
+
+  const originalName = payload.name || payload.sourcePath || 'theme-background';
+  const extFromName = path.extname(originalName).toLowerCase();
+  const safeExt = extFromName && extFromName.length <= 8 ? extFromName : '.png';
+  const id = `theme_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const targetPath = path.join(themesDir, `${id}${safeExt}`);
+
+  if (payload.sourcePath) {
+    await fs.promises.copyFile(payload.sourcePath, targetPath);
+  } else if (payload.dataUrl) {
+    const base64 = String(payload.dataUrl).replace(/^data:[^;]+;base64,/, '');
+    await fs.promises.writeFile(targetPath, Buffer.from(base64, 'base64'));
+  } else {
+    throw new Error('No theme background source provided');
+  }
+
+  return {
+    id,
+    bgPath: targetPath,
+    bgUrl: `file://${targetPath.replace(/\\/g, '/')}`
+  };
+});
 
 function createWindow() {
   const mainWindow = new BrowserWindow({

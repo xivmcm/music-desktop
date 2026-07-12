@@ -4529,7 +4529,7 @@ function connectWS() {
         if (activeView === 'playlists') {
           renderPlaylists();
         }
-      } else if (data.type === 'playlist_updated') {
+      } else if (data.type === 'playlist_updated' || data.type === 'playlist_added') {
         const { playlistId } = data;
         syncPlaylistsFromServer(playlistId);
       }

@@ -136,7 +136,8 @@ function applyAudioEffectsState() {
 let cachedForYouData = null;
 
 // Base Server API URL Configuration
-const API_URL = 'https://music-backend-iyni.onrender.com';
+const DEFAULT_API_URL = 'https://music-backend-iyni.onrender.com';
+const API_URL = localStorage.getItem('gp_backend_url') || DEFAULT_API_URL;
 const BACKEND_URL = `${API_URL}/api`;
 
 // Default Base64-encoded SVG avatars to prevent HTML template quote clash
@@ -409,9 +410,7 @@ function renderTracks(tracks, container = null, append = false) {
       `;
     }
 
-    const artistHTML = track.artistId && track.source === 'soundcloud'
-      ? `<span class="artist-link" data-artist-id="${track.artistId}">${trackArtist}</span>`
-      : `<span>${trackArtist}</span>`;
+    const artistHTML = `<span class="artist-link">${trackArtist}</span>`;
 
     const isCurrentPlaying = isActive && !audioPlayer.paused;
     const coverPlayIcon = isCurrentPlaying
@@ -474,7 +473,14 @@ function renderTracks(tracks, container = null, append = false) {
     if (artistLink) {
       artistLink.addEventListener('click', (e) => {
         e.stopPropagation();
-        loadArtistView(track.artistId);
+        if (track.source === 'soundcloud' && track.artistId) {
+          loadArtistView(track.artistId);
+        } else {
+          if (searchInput) {
+            searchInput.value = trackArtist;
+            performSearch();
+          }
+        }
       });
     }
 
@@ -548,17 +554,20 @@ function playTrack(index) {
   currentTitle.textContent = track.title;
   if (miniCurrentTitle) miniCurrentTitle.textContent = track.title;
 
-  if (track.artistId && track.source === 'soundcloud') {
-    currentArtist.innerHTML = `<span class="artist-link" data-artist-id="${track.artistId}">${track.artist}</span>`;
-    const artistLink = currentArtist.querySelector('.artist-link');
-    if (artistLink) {
-      artistLink.addEventListener('click', (e) => {
-        e.stopPropagation();
+  currentArtist.innerHTML = `<span class="artist-link">${track.artist}</span>`;
+  const artistLink = currentArtist.querySelector('.artist-link');
+  if (artistLink) {
+    artistLink.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (track.source === 'soundcloud' && track.artistId) {
         loadArtistView(track.artistId);
-      });
-    }
-  } else {
-    currentArtist.textContent = track.artist;
+      } else {
+        if (searchInput) {
+          searchInput.value = track.artist;
+          performSearch();
+        }
+      }
+    });
   }
   if (miniCurrentArtist) miniCurrentArtist.textContent = track.artist;
 

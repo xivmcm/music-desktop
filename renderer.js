@@ -633,7 +633,7 @@ function playTrack(index) {
     });
 }
 
-function handleTrackLoadError(reason) {
+async function handleTrackLoadError(reason) {
   console.warn('[Track Load Error]:', reason);
   clearTimeout(trackLoadTimeout);
 
@@ -641,8 +641,30 @@ function handleTrackLoadError(reason) {
   audioPlayer.pause();
   setPlayState(false);
 
+  let detailedMessage = "Этот трек недоступен";
+
+  // If the error was a media error or timeout, fetch the stream URL to read the detailed error JSON
+  if (audioPlayer.src) {
+    try {
+      const response = await fetch(audioPlayer.src, {
+        headers: { 'Range': 'bytes=0-0' } // fetch just 1 byte to check status/headers quickly
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => null);
+        if (errData && errData.message) {
+          detailedMessage = `Ошибка загрузки: ${errData.message}`;
+        } else {
+          detailedMessage = `Ошибка сервера (HTTP ${response.status})`;
+        }
+      }
+    } catch (e) {
+      console.error('[Error Resolver] Failed to fetch error details:', e);
+      detailedMessage = `Сетевая ошибка: ${reason}`;
+    }
+  }
+
   // Display toast notification
-  showToastNotification("Этот трек недоступен");
+  showToastNotification(detailedMessage);
 }
 
 function showToastNotification(message) {

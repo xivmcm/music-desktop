@@ -708,6 +708,22 @@ body:not(.window-maximized) {
   z-index: 50;
   transform: translateY(100%);
   transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+  overflow: hidden;
+}
+
+#player-visualizer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.player-bar > * {
+  position: relative;
+  z-index: 2;
 }
 
 .container.player-active .player-bar {

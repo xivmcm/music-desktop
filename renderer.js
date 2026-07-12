@@ -592,7 +592,7 @@ function playTrack(index) {
   currentSeekOffset = 0;
 
   // Load stream
-  audioPlayer.src = `${BACKEND_URL}/stream?id=${encodeURIComponent(track.id)}&source=${track.source}`;
+  audioPlayer.src = `${BACKEND_URL}/stream?id=${encodeURIComponent(track.id)}&source=${track.source}&artist=${encodeURIComponent(track.artist)}&title=${encodeURIComponent(track.title)}`;
 
   // Initialize and apply Audio Effects
   initAudioEffects();
@@ -912,7 +912,7 @@ audioPlayer.addEventListener('ended', () => {
   if (isRepeat) {
     currentSeekOffset = 0;
     const track = playlist[currentTrackIndex];
-    audioPlayer.src = `${BACKEND_URL}/stream?id=${encodeURIComponent(track.id)}&source=${track.source}`;
+    audioPlayer.src = `${BACKEND_URL}/stream?id=${encodeURIComponent(track.id)}&source=${track.source}&artist=${encodeURIComponent(track.artist)}&title=${encodeURIComponent(track.title)}`;
     const playPromise = audioPlayer.play();
     currentPlayPromise = playPromise;
     playPromise
@@ -946,7 +946,7 @@ progressSlider.addEventListener('change', () => {
     currentSeekOffset = seekTime;
 
     // Set src with seek parameter to play from the new position
-    audioPlayer.src = `${BACKEND_URL}/stream?id=${encodeURIComponent(track.id)}&source=${track.source}&seek=${seekTime}`;
+    audioPlayer.src = `${BACKEND_URL}/stream?id=${encodeURIComponent(track.id)}&source=${track.source}&seek=${seekTime}&artist=${encodeURIComponent(track.artist)}&title=${encodeURIComponent(track.title)}`;
     const playPromise = audioPlayer.play();
     currentPlayPromise = playPromise;
     playPromise
@@ -3597,9 +3597,11 @@ currentCover.addEventListener('load', () => {
   }
 });
 
-// --- Audio Visualizer Loop ---
+// --- Audio Visualizer Loop (Liquid Wave inside Player Bar) ---
 let visualizerAnimationId = null;
-const visualizerCanvas = document.getElementById('visualizer-canvas');
+const visualizerCanvas = document.getElementById('player-visualizer');
+let smoothBass = 0;
+let currentAmp = 0;
 
 function resizeCanvas() {
   if (!visualizerCanvas) return;
@@ -3615,10 +3617,10 @@ function startVisualizer() {
   if (!visualizerCanvas) return;
   if (visualizerAnimationId) return;
 
-  visualizerCanvas.classList.remove('hidden');
   resizeCanvas();
 
   const ctx = visualizerCanvas.getContext('2d');
+  let time = 0;
 
   function draw() {
     if (localStorage.getItem('gp_visualizer') !== 'true') {
@@ -3630,68 +3632,103 @@ function startVisualizer() {
 
     const width = visualizerCanvas.width;
     const height = visualizerCanvas.height;
-
     ctx.clearRect(0, 0, width, height);
 
-    if (!analyser || audioPlayer.paused) {
-      const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent-color').trim() || '#ffffff';
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = accentColor;
-      ctx.globalAlpha = 0.15;
-
-      const numBars = 30;
-      const barSpacing = width / numBars;
-      const barWidth = barSpacing * 0.4;
-
-      for (let i = 0; i < numBars; i++) {
-        const x = i * barSpacing + (barSpacing - barWidth) / 2;
-        drawRoundedRect(ctx, x, height - 2, barWidth, 2, 1);
+    // Compute bass value from lower frequencies
+    let bassSum = 0;
+    const numBassBins = 8;
+    
+    if (analyser && !audioPlayer.paused) {
+      analyser.getByteFrequencyData(dataArray);
+      for (let i = 0; i < numBassBins; i++) {
+        bassSum += dataArray[i];
       }
-      return;
+    }
+    
+    const avgBass = bassSum / numBassBins;
+    const bassNormalized = avgBass / 255;
+    smoothBass = smoothBass * 0.85 + bassNormalized * 0.15;
+
+    // Determine target amplitude
+    let targetAmp = 0;
+    if (!audioPlayer.paused && analyser) {
+      targetAmp = 3 + smoothBass * height * 0.5; // oscillate slightly when playing even during quiet parts
+    }
+    currentAmp = currentAmp * 0.9 + targetAmp * 0.1;
+
+    time += 0.04;
+
+    const styles = getComputedStyle(document.documentElement);
+    const accentColor = styles.getPropertyValue('--accent-color').trim() || '#1db954';
+    
+    // Wave 1: Underlay wave (slightly out of phase, less opaque, slower)
+    if (currentAmp > 0.1) {
+      const grad1 = ctx.createLinearGradient(0, 0, 0, height);
+      grad1.addColorStop(0, accentColor);
+      grad1.addColorStop(1, 'transparent');
+      drawSingleWave(ctx, time * 0.8, currentAmp * 0.7, 1.5, width, height, grad1, accentColor, 0.15, 0.15);
     }
 
-    analyser.getByteFrequencyData(dataArray);
-
-    const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent-color').trim() || '#ffffff';
-
-    const numBars = 30;
-    const barSpacing = width / numBars;
-    const barWidth = barSpacing * 0.4;
-
-    ctx.shadowBlur = 8;
-    ctx.shadowColor = accentColor;
-    ctx.fillStyle = accentColor;
-
-    for (let i = 0; i < numBars; i++) {
-      const dataIndex = Math.floor((i / numBars) * (bufferLength * 0.6));
-      const value = dataArray[dataIndex] || 0;
-
-      const percent = value / 255;
-      const barHeight = Math.max(2, percent * height * 0.95);
-
-      const x = i * barSpacing + (barSpacing - barWidth) / 2;
-      const y = height - barHeight;
-
-      ctx.globalAlpha = 0.25 + percent * 0.55;
-
-      drawRoundedRect(ctx, x, y, barWidth, barHeight, barWidth / 2);
-    }
+    // Wave 2: Foreground wave (main bass reactive wave)
+    const grad2 = ctx.createLinearGradient(0, 0, 0, height);
+    grad2.addColorStop(0, accentColor);
+    grad2.addColorStop(1, 'transparent');
+    drawSingleWave(ctx, time, currentAmp, 0, width, height, grad2, accentColor, 0.3, 0.6);
   }
 
   visualizerAnimationId = requestAnimationFrame(draw);
 }
 
-function drawRoundedRect(ctx, x, y, width, height, radius) {
+function drawSingleWave(ctx, time, amp, phaseOffset, width, height, fillGradient, strokeColor, fillOpacity, strokeOpacity) {
+  const points = [];
+  const N = 8;
+  const segmentWidth = width / N;
+
+  for (let i = 0; i <= N; i++) {
+    const x = i * segmentWidth;
+    const waveFreq = 0.5;
+    const wavePhase = i * 0.45 + phaseOffset;
+    const y = amp * Math.sin(time * waveFreq + wavePhase);
+    points.push({ x, y: Math.max(1, y + amp + 1) });
+  }
+
+  // Draw fill
   ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + width - radius, y);
-  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-  ctx.lineTo(x + width, y + height);
-  ctx.lineTo(x, y + height);
-  ctx.lineTo(x, y + radius);
-  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.moveTo(0, points[0].y);
+  for (let i = 0; i < points.length - 1; i++) {
+    const xc = (points[i].x + points[i+1].x) / 2;
+    const yc = (points[i].y + points[i+1].y) / 2;
+    ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+  }
+  ctx.lineTo(width, points[points.length - 1].y);
+  ctx.lineTo(width, height);
+  ctx.lineTo(0, height);
   ctx.closePath();
+
+  ctx.globalAlpha = fillOpacity;
+  ctx.fillStyle = fillGradient;
   ctx.fill();
+
+  // Draw stroke
+  ctx.beginPath();
+  ctx.moveTo(0, points[0].y);
+  for (let i = 0; i < points.length - 1; i++) {
+    const xc = (points[i].x + points[i+1].x) / 2;
+    const yc = (points[i].y + points[i+1].y) / 2;
+    ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+  }
+  ctx.lineTo(width, points[points.length - 1].y);
+
+  ctx.shadowBlur = amp > 2 ? 8 : 0;
+  ctx.shadowColor = strokeColor;
+  ctx.globalAlpha = strokeOpacity;
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Reset values
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1.0;
 }
 
 function stopVisualizer() {
@@ -3700,7 +3737,6 @@ function stopVisualizer() {
     visualizerAnimationId = null;
   }
   if (visualizerCanvas) {
-    visualizerCanvas.classList.add('hidden');
     const ctx = visualizerCanvas.getContext('2d');
     ctx.clearRect(0, 0, visualizerCanvas.width, visualizerCanvas.height);
   }

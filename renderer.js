@@ -140,6 +140,21 @@ const DEFAULT_API_URL = 'https://music-backend-iyni.onrender.com';
 const API_URL = localStorage.getItem('gp_backend_url') || DEFAULT_API_URL;
 const BACKEND_URL = `${API_URL}/api`;
 
+// ── Keep-Alive ping ──────────────────────────────────────────────────────────
+// Pings the backend every 10 minutes so Render Free Tier never sleeps.
+// Eliminates 30-90 second cold-start 502 errors after periods of inactivity.
+(function startKeepAlivePing() {
+  const PING_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+  const ping = () => {
+    fetch(`${BACKEND_URL}/health`)
+      .then(r => r.json())
+      .then(d => console.log(`[Keep-Alive] Server awake. Uptime: ${d.uptime}s`))
+      .catch(e => console.warn('[Keep-Alive] Ping failed:', e.message));
+  };
+  ping(); // immediate ping on app launch
+  setInterval(ping, PING_INTERVAL_MS);
+})();
+
 // Default Base64-encoded SVG avatars to prevent HTML template quote clash
 const DEFAULT_AVATAR_54 = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54"><circle cx="27" cy="27" r="25" fill="#333"/><path d="M27 24a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 4c-8 0-11 5-11 9v2h22v-2c0-4-3-9-11-9z" fill="#666"/></svg>');
 const DEFAULT_AVATAR_90 = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="90" height="90" viewBox="0 0 90 90"><circle cx="45" cy="45" r="43" fill="#333"/><path d="M45 40a10 10 0 1 0 0-20 10 10 0 0 0 0 20zm0 8c-14 0-20 8-20 16v3h40v-3c0-8-6-16-20-16z" fill="#666"/></svg>');

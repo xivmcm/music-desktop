@@ -2336,13 +2336,32 @@ function renderGenreTracks(tracks, tagName) {
 // --- Step 3 Artist Profile View Loader ---
 
 async function loadArtistView(artistId) {
+  // Guard: don't attempt load if artistId is missing or invalid
+  if (!artistId || artistId === 'undefined' || artistId === 'null' || artistId === '') {
+    console.warn('[Renderer] loadArtistView called with invalid artistId:', artistId);
+    // Fall back to searching by artist name instead
+    const track = playlist[currentTrackIndex];
+    if (track && searchInput) {
+      searchInput.value = track.artist;
+      performSearch();
+    }
+    return;
+  }
+
   activeView = 'artist';
   welcomeScreen.classList.add('hidden');
   tracksContainer.classList.add('hidden');
   loadingIndicator.classList.remove('hidden');
 
   try {
-    const response = await fetch(`${BACKEND_URL}/search/artist/${artistId}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    const response = await fetch(`${BACKEND_URL}/search/artist/${artistId}`, {
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
     const data = await response.json();
     loadingIndicator.classList.add('hidden');
 
@@ -2357,7 +2376,11 @@ async function loadArtistView(artistId) {
   } catch (error) {
     console.error('[Renderer] Failed to load artist view:', error);
     loadingIndicator.classList.add('hidden');
-    tracksContainer.innerHTML = '<div class="welcome-state"><h2>Ошибка сети</h2><p>Не удалось подключиться к серверу</p></div>';
+    const isTimeout = error.name === 'AbortError';
+    const msg = isTimeout
+      ? 'Сервер не ответил вовремя. Попробуйте ещё раз.'
+      : 'Не удалось загрузить профиль артиста. Проверьте соединение.';
+    tracksContainer.innerHTML = `<div class="welcome-state"><h2>${isTimeout ? 'Таймаут' : 'Ошибка загрузки'}</h2><p>${msg}</p></div>`;
     tracksContainer.classList.remove('hidden');
     updateActiveTab('artist');
   }

@@ -7,6 +7,7 @@ const favoritesButton = document.getElementById('favorites-button');
 let activeSources = { soundcloud: true, spotify: false, youtube: true };
 let activeHomeSource = 'soundcloud';
 let activeSpotifyMood = null; // Currently active mood card in Spotify tab
+let cachedSpotifyTracks = null; // Cached tracks of the active Spotify mood
 
 // Genre chip render version — prevents stale async responses from corrupting state
 let genreRenderVersion = 0;
@@ -196,6 +197,7 @@ async function performSearch() {
   const sources = [];
   if (activeSources.soundcloud) sources.push('soundcloud');
   if (activeSources.youtube) sources.push('youtube');
+  if (activeSources.spotify) sources.push('spotify');
   const sourcesStr = sources.join(',');
 
   try {
@@ -307,6 +309,7 @@ async function loadMoreTracks() {
   const sources = [];
   if (activeSources.soundcloud) sources.push('soundcloud');
   if (activeSources.youtube) sources.push('youtube');
+  if (activeSources.spotify) sources.push('spotify');
   const sourcesStr = sources.join(',');
 
   try {
@@ -1963,143 +1966,9 @@ function renderHome(sectionsData, forYouData) {
   };
 
   const carouselTracks = getFilteredCarousel();
-
-  if (carouselTracks.length > 0) {
-    const carouselSection = document.createElement('div');
-    carouselSection.className = 'carousel-banner-section';
-
-    let slidesHTML = '';
-    let dotsHTML = '';
-
-    carouselTracks.forEach((track, idx) => {
-      const trackTitle = track.title ? track.title.trim() : "Unknown Track";
-      const trackArtist = track.artist ? track.artist.trim() : "Unknown Artist";
-      const coverUrl = track.thumbnail
-        ? `${BACKEND_URL}/cover?url=${encodeURIComponent(track.thumbnail)}`
-        : 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'><rect width=\'100\' height=\'100\' fill=\'%23222\'/><path d=\'M30 30 L70 50 L30 70 Z\' fill=\'%23444\'/></svg>';
-      const isLiked = likedTrackIds.has(track.id);
-
-      const playsText = track.source === 'soundcloud' && (track.playbackCount !== undefined || track.playback_count !== undefined)
-        ? `▷ ${formatPlaybackCount(track.playbackCount || track.playback_count)}`
-        : '';
-
-      slidesHTML += `
-        <div class="carousel-slide">
-          <div class="carousel-slide-content">
-            <img class="carousel-cover" src="${coverUrl}" alt="${trackTitle}">
-            <div class="carousel-details">
-              <span class="carousel-tag">✦ FOR YOU</span>
-              <h3 class="carousel-title">${trackTitle}</h3>
-              <p class="carousel-artist">${trackArtist}</p>
-              <div class="carousel-meta">
-                <span class="badge ${track.source}">${track.source}</span>
-                ${playsText ? `<span>${playsText}</span><span>•</span>` : ''}
-                <span>${track.duration}</span>
-              </div>
-              <div class="carousel-actions">
-                <button class="carousel-play-now-btn" data-index="${idx}">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="margin-left:2px;"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                  <span>Play Now</span>
-                </button>
-                <button class="carousel-icon-btn add-btn" data-index="${idx}" title="Add to Playlist">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                </button>
-                <button class="carousel-icon-btn like-btn ${isLiked ? 'liked' : ''}" data-index="${idx}" title="Like">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-
-      dotsHTML += `<div class="carousel-dot ${idx === 0 ? 'active' : ''}" data-index="${idx}"></div>`;
-    });
-
-    carouselSection.innerHTML = `
-      <div class="carousel-container">
-        <div class="carousel-wrapper" id="carousel-wrapper">
-          ${slidesHTML}
-        </div>
-      </div>
-      <button class="carousel-nav-btn prev" id="carousel-prev">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-      </button>
-      <button class="carousel-nav-btn next" id="carousel-next">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-      </button>
-      <div class="carousel-dots" id="carousel-dots">
-        ${dotsHTML}
-      </div>
-    `;
-
+  const carouselSection = renderCarousel(carouselTracks);
+  if (carouselSection) {
     tracksContainer.appendChild(carouselSection);
-
-    const wrapper = carouselSection.querySelector('#carousel-wrapper');
-    const dots = carouselSection.querySelectorAll('.carousel-dot');
-
-    const updateCarousel = (newIdx) => {
-      homeCarouselIndex = (newIdx + carouselTracks.length) % carouselTracks.length;
-      wrapper.style.transform = `translateX(-${homeCarouselIndex * 100}%)`;
-      dots.forEach((dot, dIdx) => {
-        dot.classList.toggle('active', dIdx === homeCarouselIndex);
-      });
-    };
-
-    // Auto sliding interval
-    const startAutoSlide = () => {
-      clearInterval(carouselTimer);
-      carouselTimer = setInterval(() => {
-        updateCarousel(homeCarouselIndex + 1);
-      }, 5000);
-    };
-
-    startAutoSlide();
-
-    // Pause auto slide on hover
-    carouselSection.addEventListener('mouseenter', () => clearInterval(carouselTimer));
-    carouselSection.addEventListener('mouseleave', startAutoSlide);
-
-    carouselSection.querySelector('#carousel-prev').addEventListener('click', () => {
-      updateCarousel(homeCarouselIndex - 1);
-    });
-
-    carouselSection.querySelector('#carousel-next').addEventListener('click', () => {
-      updateCarousel(homeCarouselIndex + 1);
-    });
-
-    dots.forEach(dot => {
-      dot.addEventListener('click', () => {
-        updateCarousel(parseInt(dot.dataset.index));
-      });
-    });
-
-    // Actions binding
-    carouselSection.querySelectorAll('.carousel-play-now-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const idx = parseInt(btn.dataset.index);
-        playlist = carouselTracks;
-        playTrack(idx);
-      });
-    });
-
-    carouselSection.querySelectorAll('.carousel-icon-btn.add-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const idx = parseInt(btn.dataset.index);
-        showPlaylistMenu(e, carouselTracks[idx]);
-      });
-    });
-
-    carouselSection.querySelectorAll('.carousel-icon-btn.like-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const idx = parseInt(btn.dataset.index);
-        const track = carouselTracks[idx];
-        toggleLike(e, track);
-        const isLiked = likedTrackIds.has(track.id);
-        btn.classList.toggle('liked', isLiked);
-        btn.querySelector('svg').setAttribute('fill', isLiked ? 'currentColor' : 'none');
-      });
-    });
   }
 
   // 3. Render Genre Chips Scroll-bar
@@ -2656,6 +2525,9 @@ function showSearchHistory() {
       <button id="source-sc" class="source-pill ${activeSources.soundcloud ? 'active' : ''}" title="SoundCloud">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M23.95 14.47c0-2.45-1.92-4.44-4.29-4.44h-.35c-.48-2.61-2.73-4.6-5.46-4.6-2.58 0-4.73 1.83-5.32 4.26-.26-.06-.53-.09-.81-.09-2.58 0-4.67 2.09-4.67 4.67 0 .16.01.32.02.48C1.29 14.53 0 16.03 0 17.84c0 2.08 1.68 3.76 3.76 3.76h16.5c1.96 0 3.69-1.55 3.69-3.51 0-1.74-1.28-3.18-2.97-3.52z"/></svg>
       </button>
+      <button id="source-sp" class="source-pill ${activeSources.spotify ? 'active' : ''}" title="Spotify">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.377-1.454-5.37-1.783-8.894-.978-.335.077-.67-.134-.746-.47-.077-.335.134-.67.47-.746 3.847-.88 7.143-.51 9.814 1.127.294.18.387.563.207.857s-.563.387-.857.207zm1.225-2.72c-.227.367-.707.487-1.074.26-2.72-1.672-6.87-2.157-10.082-1.182-.413.125-.847-.107-.972-.52-.125-.413.107-.847.52-.972 3.676-1.116 8.243-.57 11.348 1.337.367.227.487.707.26 1.074zm.107-2.834C14.484 8.7 8.012 8.483 4.262 9.622c-.573.173-1.182-.154-1.355-.727-.173-.573.154-1.182.727-1.355 4.3-1.305 11.442-1.055 15.534 1.373.515.305.683.97.378 1.485-.305.515-.97.683-1.485.378z"/></svg>
+      </button>
       <button id="source-yt" class="source-pill ${activeSources.youtube ? 'active' : ''}" title="YouTube">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
       </button>
@@ -2664,24 +2536,26 @@ function showSearchHistory() {
 
   searchHistoryDropdown.appendChild(sourcesContainer);
 
-  // Bind click events on the dynamic source pills
   const newSourceScBtn = sourcesContainer.querySelector('#source-sc');
+  const newSourceSpBtn = sourcesContainer.querySelector('#source-sp');
   const newSourceYtBtn = sourcesContainer.querySelector('#source-yt');
 
-  [newSourceScBtn, newSourceYtBtn].forEach(btn => {
+  [
+    { btn: newSourceScBtn, name: 'soundcloud' },
+    { btn: newSourceSpBtn, name: 'spotify' },
+    { btn: newSourceYtBtn, name: 'youtube' }
+  ].forEach(({ btn, name }) => {
     if (btn) {
       btn.addEventListener('click', (e) => {
-        e.stopPropagation(); // Keep dropdown open
+        e.stopPropagation();
 
-        const sourceName = btn.id === 'source-sc' ? 'soundcloud' : 'youtube';
         const activeCount = Object.values(activeSources).filter(Boolean).length;
-
-        if (activeCount === 1 && activeSources[sourceName]) {
-          return; // Prevent deselecting last active source
+        if (activeCount === 1 && activeSources[name]) {
+          return; // Prevent deselecting last source
         }
 
-        activeSources[sourceName] = !activeSources[sourceName];
-        btn.classList.toggle('active', activeSources[sourceName]);
+        activeSources[name] = !activeSources[name];
+        btn.classList.toggle('active', activeSources[name]);
       });
     }
   });
@@ -4708,6 +4582,159 @@ async function loadMutualFriends() {
   }
 }
 
+// Helper to render a horizontal carousel banner
+function renderCarousel(carouselTracks, container = null) {
+  // Clear any old auto-slide interval
+  clearInterval(carouselTimer);
+  homeCarouselIndex = 0;
+
+  if (!carouselTracks || carouselTracks.length === 0) return null;
+
+  const carouselSection = document.createElement('div');
+  carouselSection.className = 'carousel-banner-section';
+
+  let slidesHTML = '';
+  let dotsHTML = '';
+
+  carouselTracks.forEach((track, idx) => {
+    const trackTitle = track.title ? track.title.trim() : "Unknown Track";
+    const trackArtist = track.artist ? track.artist.trim() : "Unknown Artist";
+    const coverUrl = track.thumbnail
+      ? `${BACKEND_URL}/cover?url=${encodeURIComponent(track.thumbnail)}`
+      : 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'><rect width=\'100\' height=\'100\' fill=\'%23222\'/><path d=\'M30 30 L70 50 L30 70 Z\' fill=\'%23444\'/></svg>';
+    const isLiked = likedTrackIds.has(track.id);
+
+    const playsText = track.source === 'soundcloud' && (track.playbackCount !== undefined || track.playback_count !== undefined)
+      ? `▷ ${formatPlaybackCount(track.playbackCount || track.playback_count)}`
+      : '';
+
+    slidesHTML += `
+      <div class="carousel-slide">
+        <div class="carousel-slide-content">
+          <img class="carousel-cover" src="${coverUrl}" alt="${trackTitle}">
+          <div class="carousel-details">
+            <span class="carousel-tag">✦ FOR YOU</span>
+            <h3 class="carousel-title">${trackTitle}</h3>
+            <p class="carousel-artist">${trackArtist}</p>
+            <div class="carousel-meta">
+              <span class="badge ${track.source}">
+                ${track.source === 'soundcloud'
+                  ? `<svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" style="margin-right:3px"><path d="M23.95 14.47c0-2.45-1.92-4.44-4.29-4.44h-.35c-.48-2.61-2.73-4.6-5.46-4.6-2.58 0-4.73 1.83-5.32 4.26-.26-.06-.53-.09-.81-.09-2.58 0-4.67 2.09-4.67 4.67 0 .16.01.32.02.48C1.29 14.53 0 16.03 0 17.84c0 2.08 1.68 3.76 3.76 3.76h16.5c1.96 0 3.69-1.55 3.69-3.51 0-1.74-1.28-3.18-2.97-3.52z"/></svg>SC`
+                  : track.source === 'spotify'
+                  ? `<svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" style="margin-right:3px"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.377-1.454-5.37-1.783-8.894-.978-.335.077-.67-.134-.746-.47-.077-.335.134-.67.47-.746 3.847-.88 7.143-.51 9.814 1.127.294.18.387.563.207.857s-.563.387-.857.207zm1.225-2.72c-.227.367-.707.487-1.074.26-2.72-1.672-6.87-2.157-10.082-1.182-.413.125-.847-.107-.972-.52-.125-.413.107-.847.52-.972 3.676-1.116 8.243-.57 11.348 1.337.367.227.487.707.26 1.074zm.107-2.834C14.484 8.7 8.012 8.483 4.262 9.622c-.573.173-1.182-.154-1.355-.727-.173-.573.154-1.182.727-1.355 4.3-1.305 11.442-1.055 15.534 1.373.515.305.683.97.378 1.485-.305.515-.97.683-1.485.378z"/></svg>SP`
+                  : `<svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" style="margin-right:3px"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>YT`}
+              </span>
+              ${playsText ? `<span>${playsText}</span><span>•</span>` : ''}
+              <span>${track.duration}</span>
+            </div>
+            <div class="carousel-actions">
+              <button class="carousel-play-now-btn" data-index="${idx}">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="margin-left:2px;"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span>Play Now</span>
+              </button>
+              <button class="carousel-icon-btn add-btn" data-index="${idx}" title="Add to Playlist">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              </button>
+              <button class="carousel-icon-btn like-btn ${isLiked ? 'liked' : ''}" data-index="${idx}" title="Like">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    dotsHTML += `<div class="carousel-dot ${idx === 0 ? 'active' : ''}" data-index="${idx}"></div>`;
+  });
+
+  carouselSection.innerHTML = `
+    <div class="carousel-container">
+      <div class="carousel-wrapper" id="carousel-wrapper" style="display:flex; transition: transform 0.5s ease-in-out; width: 100%;">
+        ${slidesHTML}
+      </div>
+    </div>
+    <button class="carousel-nav-btn prev" id="carousel-prev">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <button class="carousel-nav-btn next" id="carousel-next">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+    <div class="carousel-dots" id="carousel-dots">
+      ${dotsHTML}
+    </div>
+  `;
+
+  if (container) {
+    container.appendChild(carouselSection);
+  }
+
+  const wrapper = carouselSection.querySelector('#carousel-wrapper');
+  const dots = carouselSection.querySelectorAll('.carousel-dot');
+
+  const updateCarousel = (newIdx) => {
+    if (!carouselTracks.length) return;
+    homeCarouselIndex = (newIdx + carouselTracks.length) % carouselTracks.length;
+    wrapper.style.transform = `translateX(-${homeCarouselIndex * 100}%)`;
+    dots.forEach((dot, dIdx) => {
+      dot.classList.toggle('active', dIdx === homeCarouselIndex);
+    });
+  };
+
+  const startAutoSlide = () => {
+    clearInterval(carouselTimer);
+    carouselTimer = setInterval(() => {
+      updateCarousel(homeCarouselIndex + 1);
+    }, 5000);
+  };
+
+  startAutoSlide();
+
+  carouselSection.addEventListener('mouseenter', () => clearInterval(carouselTimer));
+  carouselSection.addEventListener('mouseleave', startAutoSlide);
+
+  carouselSection.querySelector('#carousel-prev').addEventListener('click', () => {
+    updateCarousel(homeCarouselIndex - 1);
+  });
+
+  carouselSection.querySelector('#carousel-next').addEventListener('click', () => {
+    updateCarousel(homeCarouselIndex + 1);
+  });
+
+  dots.forEach(dot => {
+    dot.addEventListener('click', () => {
+      updateCarousel(parseInt(dot.dataset.index));
+    });
+  });
+
+  carouselSection.querySelectorAll('.carousel-play-now-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.index);
+      playlist = carouselTracks;
+      playTrack(idx);
+    });
+  });
+
+  carouselSection.querySelectorAll('.carousel-icon-btn.add-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt(btn.dataset.index);
+      showPlaylistMenu(e, carouselTracks[idx]);
+    });
+  });
+
+  carouselSection.querySelectorAll('.carousel-icon-btn.like-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt(btn.dataset.index);
+      const track = carouselTracks[idx];
+      toggleLike(e, track);
+      const isLiked = likedTrackIds.has(track.id);
+      btn.classList.toggle('liked', isLiked);
+      btn.querySelector('svg').setAttribute('fill', isLiked ? 'currentColor' : 'none');
+    });
+  });
+
+  return carouselSection;
+}
+
 // Render Friend Activity sidebar panel
 function renderFriendActivity() {
   const containerEl = document.getElementById('friend-activity-list');
@@ -5022,7 +5049,12 @@ function renderSpotifyHome() {
   const container = document.createElement('div');
   container.className = 'spotify-home-container';
 
-  // ── Mood Grid ──────────────────────────────────────────────────
+  // 1. Render Carousel Placeholder at the very top of Spotify view
+  const carouselPlaceholder = document.createElement('div');
+  carouselPlaceholder.id = 'spotify-carousel-container';
+  container.appendChild(carouselPlaceholder);
+
+  // 2. Choose a vibe grid
   const gridLabel = document.createElement('div');
   gridLabel.className = 'spotify-home-greeting';
   gridLabel.textContent = 'Choose a vibe to explore';
@@ -5058,12 +5090,17 @@ function renderSpotifyHome() {
 
   container.appendChild(grid);
 
-  // ── Results area ───────────────────────────────────────────────
+  // 3. Results area
   const resultsArea = document.createElement('div');
   resultsArea.id = 'spotify-results-area';
   container.appendChild(resultsArea);
 
   tracksContainer.appendChild(container);
+
+  // If we already have cached tracks for the active mood, draw carousel immediately
+  if (cachedSpotifyTracks && cachedSpotifyTracks.length > 0) {
+    renderCarousel(cachedSpotifyTracks.slice(0, 5), carouselPlaceholder);
+  }
 
   // Auto-load the previously selected mood (or default to first)
   const defaultMood = activeSpotifyMood || MOOD_CARDS[0].key;
@@ -5072,98 +5109,151 @@ function renderSpotifyHome() {
   ];
   if (defaultCard) {
     defaultCard.classList.add('active');
-    defaultCard.classList.add('loading');
-    const moodDef = MOOD_CARDS.find(m => m.key === defaultMood);
-    loadSpotifyMoodTracks(defaultMood, moodDef ? moodDef.title : defaultMood, container)
-      .finally(() => defaultCard.classList.remove('loading'));
+    // If no cache or active mood is different, fetch from server
+    if (!cachedSpotifyTracks || activeSpotifyMood !== defaultMood) {
+      defaultCard.classList.add('loading');
+      const moodDef = MOOD_CARDS.find(m => m.key === defaultMood);
+      loadSpotifyMoodTracks(defaultMood, moodDef ? moodDef.title : defaultMood, container)
+        .finally(() => defaultCard.classList.remove('loading'));
+    } else {
+      const moodDef = MOOD_CARDS.find(m => m.key === defaultMood);
+      loadSpotifyMoodTracks(defaultMood, moodDef ? moodDef.title : defaultMood, container, true);
+    }
   }
 }
 
 /**
  * Fetches tracks for a given mood from the backend and renders them into the container.
+ * Aligns Spotify recommended & trending widgets to SoundCloud's scroll layout.
  */
-async function loadSpotifyMoodTracks(moodKey, moodTitle, containerEl) {
+async function loadSpotifyMoodTracks(moodKey, moodTitle, containerEl, useCacheOnly = false) {
   const resultsArea = containerEl.querySelector('#spotify-results-area') ||
     document.getElementById('spotify-results-area');
   if (!resultsArea) return;
 
-  resultsArea.innerHTML = `
-    <div style="display: flex; justify-content: center; padding: 40px;">
-      <div class="spinner"></div>
-    </div>
-  `;
+  let tracks = [];
+  if (useCacheOnly && cachedSpotifyTracks) {
+    tracks = cachedSpotifyTracks;
+  } else {
+    resultsArea.innerHTML = `
+      <div style="display: flex; justify-content: center; padding: 40px;">
+        <div class="spinner"></div>
+      </div>
+    `;
 
-  try {
-    const res = await fetch(`${BACKEND_URL}/spotify/recommendations?mood=${encodeURIComponent(moodKey)}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const tracks = data.results || [];
+    try {
+      const res = await fetch(`${BACKEND_URL}/spotify/recommendations?mood=${encodeURIComponent(moodKey)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      tracks = data.results || [];
+      cachedSpotifyTracks = tracks;
 
-    resultsArea.innerHTML = '';
-
-    if (tracks.length === 0) {
-      resultsArea.innerHTML = '<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);">No tracks found for this mood</div>';
+      // Update Carousel dynamically with loaded mood tracks
+      const carouselPlaceholder = document.getElementById('spotify-carousel-container');
+      if (carouselPlaceholder) {
+        carouselPlaceholder.innerHTML = '';
+        renderCarousel(tracks.slice(0, 5), carouselPlaceholder);
+      }
+    } catch (err) {
+      console.error('[Spotify Mood] Failed to load tracks:', err.message);
+      resultsArea.innerHTML = `
+        <div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);">
+          Failed to load tracks. Please try again.
+        </div>
+      `;
       return;
     }
+  }
 
-    // Section header
-    const header = document.createElement('div');
-    header.className = 'spotify-section-header';
-    header.innerHTML = `
-      <div class="spotify-section-title">${moodTitle}</div>
-      <div class="spotify-section-badge">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.377-1.454-5.37-1.783-8.894-.978-.335.077-.67-.134-.746-.47-.077-.335.134-.67.47-.746 3.847-.88 7.143-.51 9.814 1.127.294.18.387.563.207.857zm1.225-2.72c-.227.367-.707.487-1.074.26-2.72-1.672-6.87-2.157-10.082-1.182-.413.125-.847-.107-.972-.52-.125-.413.107-.847.52-.972 3.676-1.116 8.243-.57 11.348 1.337.367.227.487.707.26 1.074zm.107-2.834C14.484 8.7 8.012 8.483 4.262 9.622c-.573.173-1.182-.154-1.355-.727-.173-.573.154-1.182.727-1.355 4.3-1.305 11.442-1.055 15.534 1.373.515.305.683.97.378 1.485-.305.515-.97.683-1.485.378z"/>
-        </svg>
-        Spotify
+  resultsArea.innerHTML = '';
+
+  if (tracks.length === 0) {
+    resultsArea.innerHTML = '<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);">No tracks found for this mood</div>';
+    return;
+  }
+
+  // Section header
+  const header = document.createElement('div');
+  header.className = 'spotify-section-header';
+  header.innerHTML = `
+    <div class="spotify-section-title">${moodTitle}</div>
+    <div class="spotify-section-badge">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.377-1.454-5.37-1.783-8.894-.978-.335.077-.67-.134-.746-.47-.077-.335.134-.67.47-.746 3.847-.88 7.143-.51 9.814 1.127.294.18.387.563.207.857zm1.225-2.72c-.227.367-.707.487-1.074.26-2.72-1.672-6.87-2.157-10.082-1.182-.413.125-.847-.107-.972-.52-.125-.413.107-.847.52-.972 3.676-1.116 8.243-.57 11.348 1.337.367.227.487.707.26 1.074zm.107-2.834C14.484 8.7 8.012 8.483 4.262 9.622c-.573.173-1.182-.154-1.355-.727-.173-.573.154-1.182.727-1.355 4.3-1.305 11.442-1.055 15.534 1.373.515.305.683.97.378 1.485-.305.515-.97.683-1.485.378z"/>
+      </svg>
+      Spotify
+    </div>
+  `;
+  resultsArea.appendChild(header);
+
+  // Recommended section (first 8 tracks)
+  const recSection = document.createElement('div');
+  recSection.className = 'home-section scrollable';
+  recSection.innerHTML = `
+    <div class="home-section-header">
+      <h3>Recommended</h3>
+      <a href="#" class="see-all-link" id="see-all-spotify-rec">See all <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg></a>
+    </div>
+    <div class="scroller-container-outer">
+      <div class="scroller-container" id="spotify-rec-scroller"></div>
+      <button class="scroll-chevron next" id="spotify-rec-scroll-chevron">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+      </button>
+    </div>
+  `;
+  resultsArea.appendChild(recSection);
+
+  const recScroller = recSection.querySelector('#spotify-rec-scroller');
+  const recTracks = tracks.slice(0, 8);
+  recTracks.forEach((track, idx) => {
+    const card = renderTrackCardHorizontal(track, idx, recTracks);
+    recScroller.appendChild(card);
+  });
+
+  recSection.querySelector('#spotify-rec-scroll-chevron').addEventListener('click', () => {
+    recScroller.scrollBy({ left: 300, behavior: 'smooth' });
+  });
+
+  recSection.querySelector('#see-all-spotify-rec').addEventListener('click', (e) => {
+    e.preventDefault();
+    playlist = recTracks;
+    renderTracks(playlist);
+  });
+
+  // Trending section (next 8 tracks)
+  if (tracks.length > 8) {
+    const trendSection = document.createElement('div');
+    trendSection.className = 'home-section scrollable';
+    trendSection.innerHTML = `
+      <div class="home-section-header">
+        <h3>Trending</h3>
+        <a href="#" class="see-all-link" id="see-all-spotify-trend">See all <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg></a>
+      </div>
+      <div class="scroller-container-outer">
+        <div class="scroller-container" id="spotify-trend-scroller"></div>
+        <button class="scroll-chevron next" id="spotify-trend-scroll-chevron">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
       </div>
     `;
-    resultsArea.appendChild(header);
+    resultsArea.appendChild(trendSection);
 
-    // Recommended section (first 8)
-    const recSection = document.createElement('div');
-    recSection.className = 'home-section';
-    const recTitle = document.createElement('div');
-    recTitle.className = 'home-section-title';
-    recTitle.textContent = 'Recommended';
-    recSection.appendChild(recTitle);
-
-    const recGrid = document.createElement('div');
-    recGrid.className = 'tracks-horizontal-scroll';
-    const recTracks = tracks.slice(0, 8);
-    recTracks.forEach((track, idx) => {
-      const card = renderTrackCardHorizontal(track, idx, recTracks);
-      recGrid.appendChild(card);
+    const trendScroller = trendSection.querySelector('#spotify-trend-scroller');
+    const trendTracks = tracks.slice(8, 16);
+    trendTracks.forEach((track, idx) => {
+      const card = renderTrackCardHorizontal(track, idx, trendTracks);
+      trendScroller.appendChild(card);
     });
-    recSection.appendChild(recGrid);
-    resultsArea.appendChild(recSection);
 
-    // Trending section (next 8)
-    if (tracks.length > 8) {
-      const trendSection = document.createElement('div');
-      trendSection.className = 'home-section';
-      const trendTitle = document.createElement('div');
-      trendTitle.className = 'home-section-title';
-      trendTitle.textContent = 'Trending';
-      trendSection.appendChild(trendTitle);
+    trendSection.querySelector('#spotify-trend-scroll-chevron').addEventListener('click', () => {
+      trendScroller.scrollBy({ left: 300, behavior: 'smooth' });
+    });
 
-      const trendGrid = document.createElement('div');
-      trendGrid.className = 'tracks-horizontal-scroll';
-      const trendTracks = tracks.slice(8, 16);
-      trendTracks.forEach((track, idx) => {
-        const card = renderTrackCardHorizontal(track, idx, trendTracks);
-        trendGrid.appendChild(card);
-      });
-      trendSection.appendChild(trendGrid);
-      resultsArea.appendChild(trendSection);
-    }
-  } catch (err) {
-    console.error('[Spotify Mood] Failed to load tracks:', err.message);
-    resultsArea.innerHTML = `
-      <div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);">
-        Failed to load tracks. Please try again.
-      </div>
-    `;
+    trendSection.querySelector('#see-all-spotify-trend').addEventListener('click', (e) => {
+      e.preventDefault();
+      playlist = trendTracks;
+      renderTracks(playlist);
+    });
   }
 }
 

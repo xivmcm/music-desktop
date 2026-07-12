@@ -4,7 +4,7 @@ const tracksContainer = document.getElementById('tracks-container');
 const welcomeScreen = document.getElementById('welcome-screen');
 const loadingIndicator = document.getElementById('loading-indicator');
 const favoritesButton = document.getElementById('favorites-button');
-let activeSources = { soundcloud: true, spotify: false, youtube: true };
+let activeSources = { soundcloud: true, spotify: false };
 let activeHomeSource = 'soundcloud';
 let activeSpotifyMood = null; // Currently active mood card in Spotify tab
 let cachedSpotifyTracks = null; // Cached tracks of the active Spotify mood
@@ -212,7 +212,6 @@ async function performSearch() {
   // Determine active sources
   const sources = [];
   if (activeSources.soundcloud) sources.push('soundcloud');
-  if (activeSources.youtube) sources.push('youtube');
   if (activeSources.spotify) sources.push('spotify');
   const sourcesStr = sources.join(',');
 
@@ -324,7 +323,6 @@ async function loadMoreTracks() {
 
   const sources = [];
   if (activeSources.soundcloud) sources.push('soundcloud');
-  if (activeSources.youtube) sources.push('youtube');
   if (activeSources.spotify) sources.push('spotify');
   const sourcesStr = sources.join(',');
 
@@ -666,6 +664,7 @@ async function handleTrackLoadError(reason) {
   setPlayState(false);
 
   let detailedMessage = "Этот трек недоступен";
+  let is404Error = false;
 
   // If the error was a media error or timeout, fetch the stream URL to read the detailed error JSON
   if (audioPlayer.src) {
@@ -673,9 +672,15 @@ async function handleTrackLoadError(reason) {
       const response = await fetch(audioPlayer.src, {
         headers: { 'Range': 'bytes=0-0' } // fetch just 1 byte to check status/headers quickly
       });
+      if (response.status === 404) {
+        is404Error = true;
+      }
       if (!response.ok) {
         const errData = await response.json().catch(() => null);
         if (errData && errData.message) {
+          if (errData.message.includes('not found') || response.status === 404) {
+            is404Error = true;
+          }
           detailedMessage = `Ошибка загрузки: ${errData.message}`;
         } else {
           detailedMessage = `Ошибка сервера (HTTP ${response.status})`;
@@ -687,8 +692,22 @@ async function handleTrackLoadError(reason) {
     }
   }
 
+  if (is404Error) {
+    detailedMessage = "Аудиопоток не найден в базе SoundCloud";
+  }
+
   // Display toast notification
   showToastNotification(detailedMessage);
+
+  // Skip to the next track after a short delay if the track wasn't found in SoundCloud
+  if (is404Error) {
+    setTimeout(() => {
+      // Play next track if player is still paused and current playlist has items
+      if (playlist.length > 0 && audioPlayer.paused) {
+        playNext();
+      }
+    }, 1800);
+  }
 }
 
 function showToastNotification(message) {
@@ -1943,15 +1962,12 @@ function renderHome(sectionsData, forYouData) {
       <p class="welcome-subtitle">Play what you love.</p>
     </div>
     <div class="sources-pill-capsule" style="position: relative;">
-      <div class="capsule-active-indicator" style="left: ${activeHomeSource === 'soundcloud' ? '4' : (activeHomeSource === 'spotify' ? '44' : '84')}px;"></div>
+      <div class="capsule-active-indicator" style="left: ${activeHomeSource === 'soundcloud' ? '4' : '44'}px;"></div>
       <button class="source-capsule-btn ${activeHomeSource === 'soundcloud' ? 'active' : ''}" data-source="soundcloud" title="SoundCloud">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M23.95 14.47c0-2.45-1.92-4.44-4.29-4.44h-.35c-.48-2.61-2.73-4.6-5.46-4.6-2.58 0-4.73 1.83-5.32 4.26-.26-.06-.53-.09-.81-.09-2.58 0-4.67 2.09-4.67 4.67 0 .16.01.32.02.48C1.29 14.53 0 16.03 0 17.84c0 2.08 1.68 3.76 3.76 3.76h16.5c1.96 0 3.69-1.55 3.69-3.51 0-1.74-1.28-3.18-2.97-3.52z"/></svg>
       </button>
       <button class="source-capsule-btn ${activeHomeSource === 'spotify' ? 'active' : ''}" data-source="spotify" title="Spotify">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.377-1.454-5.37-1.783-8.894-.978-.335.077-.67-.134-.746-.47-.077-.335.134-.67.47-.746 3.847-.88 7.143-.51 9.814 1.127.294.18.387.563.207.857s-.563.387-.857.207zm1.225-2.72c-.227.367-.707.487-1.074.26-2.72-1.672-6.87-2.157-10.082-1.182-.413.125-.847-.107-.972-.52-.125-.413.107-.847.52-.972 3.676-1.116 8.243-.57 11.348 1.337.367.227.487.707.26 1.074zm.107-2.834C14.484 8.7 8.012 8.483 4.262 9.622c-.573.173-1.182-.154-1.355-.727-.173-.573.154-1.182.727-1.355 4.3-1.305 11.442-1.055 15.534 1.373.515.305.683.97.378 1.485-.305.515-.97.683-1.485.378z"/></svg>
-      </button>
-      <button class="source-capsule-btn ${activeHomeSource === 'youtube' ? 'active' : ''}" data-source="youtube" title="YouTube">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
       </button>
     </div>
   `;
@@ -1973,7 +1989,7 @@ function renderHome(sectionsData, forYouData) {
       // Slide active indicator instantly
       const indicator = welcomeHeader.querySelector('.capsule-active-indicator');
       if (indicator) {
-        indicator.style.left = `${activeHomeSource === 'soundcloud' ? '4' : (activeHomeSource === 'spotify' ? '44' : '84')}px`;
+        indicator.style.left = `${activeHomeSource === 'soundcloud' ? '4' : '44'}px`;
       }
 
       // Smooth switch transition delay
@@ -2597,9 +2613,6 @@ function showSearchHistory() {
       <button id="source-sp" class="source-pill ${activeSources.spotify ? 'active' : ''}" title="Spotify">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.377-1.454-5.37-1.783-8.894-.978-.335.077-.67-.134-.746-.47-.077-.335.134-.67.47-.746 3.847-.88 7.143-.51 9.814 1.127.294.18.387.563.207.857s-.563.387-.857.207zm1.225-2.72c-.227.367-.707.487-1.074.26-2.72-1.672-6.87-2.157-10.082-1.182-.413.125-.847-.107-.972-.52-.125-.413.107-.847.52-.972 3.676-1.116 8.243-.57 11.348 1.337.367.227.487.707.26 1.074zm.107-2.834C14.484 8.7 8.012 8.483 4.262 9.622c-.573.173-1.182-.154-1.355-.727-.173-.573.154-1.182.727-1.355 4.3-1.305 11.442-1.055 15.534 1.373.515.305.683.97.378 1.485-.305.515-.97.683-1.485.378z"/></svg>
       </button>
-      <button id="source-yt" class="source-pill ${activeSources.youtube ? 'active' : ''}" title="YouTube">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-      </button>
     </div>
   `;
 
@@ -2607,12 +2620,10 @@ function showSearchHistory() {
 
   const newSourceScBtn = sourcesContainer.querySelector('#source-sc');
   const newSourceSpBtn = sourcesContainer.querySelector('#source-sp');
-  const newSourceYtBtn = sourcesContainer.querySelector('#source-yt');
 
   [
     { btn: newSourceScBtn, name: 'soundcloud' },
-    { btn: newSourceSpBtn, name: 'spotify' },
-    { btn: newSourceYtBtn, name: 'youtube' }
+    { btn: newSourceSpBtn, name: 'spotify' }
   ].forEach(({ btn, name }) => {
     if (btn) {
       btn.addEventListener('click', (e) => {

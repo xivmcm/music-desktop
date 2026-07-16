@@ -23,7 +23,6 @@ const lyricsState = {
   syncTimer: null,
   currentTrackId: null,
   format: null,        // 'lrc' | 'plain' | null
-  lastActiveIdx: -1,
 };
 
 // Audio Element
@@ -1115,13 +1114,8 @@ audioPlayer.onerror = () => {
   handleTrackLoadError("Audio element fired onerror event");
 };
 
-let lastProgressUpdateTime = 0;
 audioPlayer.addEventListener('timeupdate', () => {
   if (isSeeking) return;
-  const now = Date.now();
-  if (now - lastProgressUpdateTime < 250) return;
-  lastProgressUpdateTime = now;
-
   const current = currentSeekOffset + audioPlayer.currentTime;
   const duration = currentTrackDuration || audioPlayer.duration || 0;
 
@@ -4037,18 +4031,12 @@ audioPlayer.addEventListener('play', () => {
   sendDiscordPresence();
   startPresenceInterval();
   broadcastPlayerStatus();
-  startVisualizer();
 });
 
 audioPlayer.addEventListener('pause', () => {
   playCountSession.continuousSeconds = 0;
-  if (rpcInterval) {
-    clearInterval(rpcInterval);
-    rpcInterval = null;
-  }
   sendDiscordPresence();
   broadcastPlayerStatus();
-  stopVisualizer();
 });
 
 // --- Mini-Player Window Mode listener ---
@@ -4187,16 +4175,13 @@ function startVisualizer() {
   if (!visualizerCanvas) return;
   if (visualizerAnimationId) return;
 
-  if (localStorage.getItem('gp_visualizer') !== 'true') return;
-  if (audioPlayer.paused) return;
-
   resizeCanvas();
 
   const ctx = visualizerCanvas.getContext('2d');
   let time = 0;
 
   function draw() {
-    if (localStorage.getItem('gp_visualizer') !== 'true' || audioPlayer.paused) {
+    if (localStorage.getItem('gp_visualizer') !== 'true') {
       stopVisualizer();
       return;
     }
@@ -4211,7 +4196,7 @@ function startVisualizer() {
     let bassSum = 0;
     let bassBins = 0;
     
-    if (analyser) {
+    if (analyser && !audioPlayer.paused) {
       analyser.getByteFrequencyData(dataArray);
       const nyquist = audioCtx ? audioCtx.sampleRate / 2 : 24000;
       const binHz = nyquist / bufferLength;
@@ -4234,7 +4219,7 @@ function startVisualizer() {
 
     // Determine target amplitude
     let targetAmp = 0;
-    if (analyser) {
+    if (!audioPlayer.paused && analyser) {
       const bassMultiplier = bassKick ? 1.65 : 1 + smoothBass * 0.45;
       targetAmp = (3 + smoothBass * height * 0.5) * bassMultiplier;
     }
@@ -4337,12 +4322,6 @@ if (localStorage.getItem('gp_dynamic_cover') === 'true') {
 }
 
 function updateActiveTab(viewName) {
-  // Clear home carousel timer if switching away from home
-  if (viewName !== 'home' && carouselTimer) {
-    clearInterval(carouselTimer);
-    carouselTimer = null;
-  }
-
   // Hide user search results if we switch away from search view
   const usersContainer = document.getElementById('users-search-results');
   if (usersContainer && viewName !== 'search') {
@@ -5962,6 +5941,9 @@ function renderLRCLines(lines) {
  * Called on timeupdate.
  */
 function syncLyricsToTime(currentTime) {
+  const linEls = lyricsContent.querySelectorAll('.lyrics-line');
+  if (!linEls.length) return;
+
   let activeIdx = -1;
   for (let i = 0; i < lyricsState.lrcLines.length; i++) {
     if (lyricsState.lrcLines[i].time <= currentTime) {
@@ -5970,14 +5952,6 @@ function syncLyricsToTime(currentTime) {
       break;
     }
   }
-
-  if (activeIdx === lyricsState.lastActiveIdx) {
-    return;
-  }
-  lyricsState.lastActiveIdx = activeIdx;
-
-  const linEls = lyricsContent.querySelectorAll('.lyrics-line');
-  if (!linEls.length) return;
 
   linEls.forEach((el, i) => {
     el.classList.remove('active', 'past', 'upcoming');
@@ -6030,7 +6004,6 @@ async function openLyricsOverlay() {
   lyricsState.lrcLines = [];
   lyricsState.format = null;
   lyricsState.currentTrackId = currentTrack.id;
-  lyricsState.lastActiveIdx = -1;
 
   try {
     const data = await fetchLyrics(currentTrack.title, currentTrack.artist);
@@ -6083,7 +6056,6 @@ function closeLyricsOverlay() {
     audioPlayer.removeEventListener('timeupdate', lyricsState.syncTimer);
     lyricsState.syncTimer = null;
   }
-  lyricsState.lastActiveIdx = -1;
 }
 
 // ── Lyrics button click ───────────────────────────────────────────

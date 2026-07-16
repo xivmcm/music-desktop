@@ -4422,30 +4422,3 @@ body.mini-player-active .mini-player-block {
   border-radius: 20px;
   border: 1px solid rgba(29,185,84,0.2);
 }
-
-/* GPU Hardware Acceleration for Glassmorphic elements and backdrop-filters */
-.sidebar,
-.search-header,
-.track-card,
-.track-card-horizontal,
-.friend-activity-panel,
-.player-bar,
-.update-banner,
-.artist-header,
-.search-history-dropdown,
-.settings-section,
-.studio-tabs,
-.mini-player-block,
-.load-more-btn,
-#users-search-results,
-.glass-auth-container,
-.carousel-nav-btn,
-.scroll-chevron,
-.spotify-placeholder-card,
-.lyrics-overlay,
-.mobile-tab-bar,
-.mood-card,
-.liquid-sphere {
-  transform: translateZ(0);
-  will-change: transform, filter;
-}

@@ -1,6 +1,6 @@
 {
   "name": "music-desktop",
-  "version": "1.9.2",
+  "version": "1.10.0",
   "description": "Cross-platform music player aggregator desktop application",
   "main": "main.js",
   "scripts": {
@@ -37,6 +37,9 @@
     ]
   },
   "dependencies": {
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/cli": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
     "discord-rpc": "^4.0.1",
     "electron-updater": "^6.8.9"
   }

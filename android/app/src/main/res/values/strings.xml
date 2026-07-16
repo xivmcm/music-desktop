@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">GlassPlayer</string>
+    <string name="title_activity_main">GlassPlayer</string>
+    <string name="package_name">com.xivmcm.glassplayer</string>
+    <string name="custom_url_scheme">com.xivmcm.glassplayer</string>
+</resources>

@@ -13,6 +13,7 @@ let activeHomeSource = 'soundcloud';
 let activeSpotifyMood = null; // Currently active mood card in Spotify tab
 let cachedSpotifyTracks = null; // Cached tracks of the active Spotify mood
 let cachedSpotifyDynamicTracks = null; // Cached time-of-day tracks
+let cachedSoundCloudDynamicTracks = null; // Cached SoundCloud time-of-day tracks
 
 // Genre chip render version — prevents stale async responses from corrupting state
 let genreRenderVersion = 0;
@@ -2244,6 +2245,12 @@ function renderHome(sectionsData, forYouData) {
   if (carouselSection) {
     tracksContainer.appendChild(carouselSection);
   }
+
+  // --- Vibe Engine 2.0: SoundCloud Dynamic Time-of-Day Section ---
+  const dynamicRecsContainer = document.createElement('div');
+  dynamicRecsContainer.id = 'soundcloud-dynamic-recs-container';
+  tracksContainer.appendChild(dynamicRecsContainer);
+  loadSoundCloudDynamicRecommendations(dynamicRecsContainer);
 
   // 3. Render Genre Chips Scroll-bar
   const genreSection = document.createElement('div');
@@ -6187,3 +6194,112 @@ audioPlayer.addEventListener('playing', () => {
     }
   }
 });
+
+// --- Vibe Engine 2.0: SoundCloud Dynamic recommendations helpers ---
+async function loadSoundCloudDynamicRecommendations(containerEl, forceRefresh = false) {
+  if (!containerEl) return;
+
+  if (!forceRefresh && cachedSoundCloudDynamicTracks) {
+    renderSoundCloudDynamicSection(containerEl, cachedSoundCloudDynamicTracks);
+    return;
+  }
+
+  containerEl.innerHTML = `
+    <div style="display: flex; justify-content: center; padding: 20px 0;">
+      <div class="spinner"></div>
+    </div>
+  `;
+
+  try {
+    const hour = new Date().getHours();
+    const res = await fetch(`${BACKEND_URL}/spotify/recommendations?mood=dynamic&hour=${hour}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    
+    // Tag results as source: 'soundcloud' instead of 'spotify'
+    const tracks = (data.results || []).map(t => {
+      // If the ID contains the spotify composite prefix, extract the raw SoundCloud ID
+      const rawId = t.id.startsWith('spotify_track:') ? t.id.split(':').slice(3).join(':') : t.id;
+      return {
+        ...t,
+        id: rawId,
+        source: 'soundcloud'
+      };
+    });
+
+    cachedSoundCloudDynamicTracks = tracks;
+    renderSoundCloudDynamicSection(containerEl, tracks);
+  } catch (err) {
+    console.error('[SoundCloud Dynamic Recs] Failed to load:', err.message);
+    containerEl.innerHTML = ''; // Hide silently on error to not disrupt main UI
+  }
+}
+
+function renderSoundCloudDynamicSection(containerEl, tracks) {
+  containerEl.innerHTML = '';
+  if (tracks.length === 0) return;
+
+  const currentHour = new Date().getHours();
+  let greeting = "Твой микс под настроение";
+  if (currentHour >= 6 && currentHour < 12) {
+    greeting = "Доброе утро! Твой утренний микс ☕";
+  } else if (currentHour >= 12 && currentHour < 18) {
+    greeting = "Добрый день! Дневной заряд энергии ☀️";
+  } else if (currentHour >= 18 && currentHour < 24) {
+    greeting = "Добрый вечер! Время раскачаться 🌙";
+  } else {
+    greeting = "Доброй ночи! Ночной подземный вайб 🌌";
+  }
+
+  const header = document.createElement('div');
+  header.className = 'spotify-section-header';
+  header.style.marginTop = '16px';
+  header.innerHTML = `
+    <div class="spotify-section-title">${greeting}</div>
+    <button class="spotify-refresh-btn" id="soundcloud-refresh-btn" title="Обновить рекомендации">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+      <span>Обновить реки</span>
+    </button>
+  `;
+  containerEl.appendChild(header);
+
+  // Bind refresh button click handler
+  const refreshBtn = header.querySelector('#soundcloud-refresh-btn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+      refreshBtn.classList.add('loading');
+      refreshBtn.style.pointerEvents = 'none';
+      loadSoundCloudDynamicRecommendations(containerEl, true)
+        .finally(() => {
+          const btn = document.getElementById('soundcloud-refresh-btn');
+          if (btn) {
+            btn.classList.remove('loading');
+            btn.style.pointerEvents = 'auto';
+          }
+        });
+    });
+  }
+
+  const section = document.createElement('div');
+  section.className = 'home-section scrollable';
+  section.style.marginBottom = '16px';
+  section.innerHTML = `
+    <div class="scroller-container-outer">
+      <div class="scroller-container" id="soundcloud-dynamic-scroller"></div>
+      <button class="scroll-chevron next" id="soundcloud-dynamic-scroll-chevron">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+      </button>
+    </div>
+  `;
+  containerEl.appendChild(section);
+
+  const scroller = section.querySelector('#soundcloud-dynamic-scroller');
+  tracks.forEach((track, idx) => {
+    const card = renderTrackCardHorizontal(track, idx, tracks);
+    scroller.appendChild(card);
+  });
+
+  section.querySelector('#soundcloud-dynamic-scroll-chevron').addEventListener('click', () => {
+    scroller.scrollBy({ left: 300, behavior: 'smooth' });
+  });
+}

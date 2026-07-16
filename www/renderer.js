@@ -81,6 +81,7 @@ if ('serviceWorker' in navigator && !isElectron) {
 // App state variables
 let playlist = [];
 let currentTrackIndex = -1;
+let activePlayingTrack = null;
 let isSeeking = false;
 let likedTrackIds = new Set();
 let currentProfile = 'Default';
@@ -517,10 +518,16 @@ function renderTracks(tracks, container = null, append = false) {
     }
   }
 
+  // Sync currentTrackIndex with activePlayingTrack in the current playlist
+  if (activePlayingTrack) {
+    currentTrackIndex = playlist.findIndex(t => t.id === activePlayingTrack.id);
+  } else {
+    currentTrackIndex = -1;
+  }
+
   tracks.forEach((track, index) => {
     const card = document.createElement('div');
-    const currentTrack = playlist[currentTrackIndex];
-    const isActive = currentTrack && track.id === currentTrack.id;
+    const isActive = activePlayingTrack && track.id === activePlayingTrack.id;
     card.className = `track-card ${isActive ? 'active' : ''}`;
 
     // Correct playlist index so click events play the correct track!
@@ -601,8 +608,7 @@ function renderTracks(tracks, container = null, append = false) {
       // Don't play if clicking the like, playlist or artist link button itself
       if (e.target.closest('.like-btn') || e.target.closest('.playlist-add-btn') || e.target.closest('.playlist-remove-track-btn') || e.target.closest('.artist-link')) return;
 
-      const currentTrack = playlist[currentTrackIndex];
-      const isCurrent = currentTrack && track.id === currentTrack.id;
+      const isCurrent = activePlayingTrack && track.id === activePlayingTrack.id;
       if (isCurrent) {
         togglePlay();
       } else {
@@ -715,6 +721,7 @@ function playTrack(index) {
 
   currentTrackIndex = index;
   const track = playlist[index];
+  activePlayingTrack = track;
 
   // Slide up bottom player bar
   const mainContainer = document.querySelector('.container');
@@ -2446,8 +2453,7 @@ function renderHomeContent(sectionsData, forYouData) {
 // Redesigned Track Card Horizontal builder
 function renderTrackCardHorizontal(track, index, sectionTracks) {
   const card = document.createElement('div');
-  const currentTrack = playlist[currentTrackIndex];
-  const isActive = currentTrack && track.id === currentTrack.id;
+  const isActive = activePlayingTrack && track.id === activePlayingTrack.id;
   card.className = `track-card-horizontal ${isActive ? 'active' : ''}`;
   card.dataset.index = index;
   card.dataset.trackId = track.id;
@@ -2516,8 +2522,7 @@ function renderTrackCardHorizontal(track, index, sectionTracks) {
 }
 
 function playOrToggle(track, index, sectionTracks) {
-  const currentTrack = playlist[currentTrackIndex];
-  const isCurrent = currentTrack && track.id === currentTrack.id;
+  const isCurrent = activePlayingTrack && track.id === activePlayingTrack.id;
   if (isCurrent) {
     togglePlay();
   } else {

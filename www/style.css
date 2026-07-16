@@ -2115,7 +2115,8 @@ body.mini-player-active {
 
 /* Hide standard UI fully */
 body.mini-player-active .titlebar,
-body.mini-player-active .container {
+body.mini-player-active .container,
+body.mini-player-active .mobile-tab-bar {
   display: none !important;
 }
 

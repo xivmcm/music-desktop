@@ -2109,8 +2109,13 @@ body.mini-player-active {
   min-height: 100px !important;
   height: 100px !important;
   background: transparent !important;
+  background-color: transparent !important;
   border: none !important;
   box-shadow: none !important;
+}
+
+body.mini-player-active::before {
+  display: none !important;
 }
 
 /* Hide standard UI fully */

@@ -2112,10 +2112,15 @@ body.mini-player-active {
   background-color: transparent !important;
   border: none !important;
   box-shadow: none !important;
+  border-radius: 16px !important;
+  overflow: hidden !important;
+  clip-path: inset(0 round 16px) !important;
+  -webkit-clip-path: inset(0 round 16px) !important;
 }
 
 body.mini-player-active::before {
-  display: none !important;
+  display: block !important;
+  border-radius: 16px !important;
 }
 
 /* Hide standard UI fully */
@@ -3917,20 +3922,20 @@ body.mini-player-active .mini-player-block {
 
 @media (max-width: 480px) {
   html,
-  body {
+  body:not(.mini-player-active) {
     width: 100%;
     min-width: 0;
     height: 100%;
     border-radius: 0 !important;
   }
 
-  body {
+  body:not(.mini-player-active) {
     border: none;
     box-shadow: none;
     overflow: hidden;
   }
 
-  body:not(.window-maximized) {
+  body:not(.window-maximized):not(.mini-player-active) {
     border-radius: 0 !important;
     clip-path: none !important;
     -webkit-clip-path: none !important;

@@ -12,6 +12,7 @@ let activeSources = { soundcloud: true, spotify: false };
 let activeHomeSource = 'soundcloud';
 let activeSpotifyMood = null; // Currently active mood card in Spotify tab
 let cachedSpotifyTracks = null; // Cached tracks of the active Spotify mood
+let cachedSpotifyDynamicTracks = null; // Cached time-of-day tracks
 
 // Genre chip render version — prevents stale async responses from corrupting state
 let genreRenderVersion = 0;
@@ -5681,6 +5682,11 @@ const MOOD_CARDS = [
   { key: 'underground', title: 'Underground Raw',  sub: 'Street certified'   },
   { key: 'electronic',  title: 'Electronic Zone',  sub: 'Synth & bass'       },
   { key: 'latenight',   title: 'Late Night R&B',   sub: 'Midnight sessions'  },
+  { key: 'phonk',       title: 'Phonk Drift',      sub: 'Bass boost & speed' },
+  { key: 'jerk',        title: 'Jerk / Jerk-Trap', sub: 'Hypnotic jerky rap' },
+  { key: 'lofi',        title: 'Lofi Relax',       sub: 'Study & sleep vibes'},
+  { key: 'cyber',       title: 'Cyber Synth',      sub: 'Cyberpunk beats'    },
+  { key: 'ambient',     title: 'Ambient Space',    sub: 'Atmospheric relax'  },
 ];
 
 /**
@@ -5773,9 +5779,12 @@ async function loadSpotifyMoodTracks(moodKey, moodTitle, containerEl, useCacheOn
     document.getElementById('spotify-results-area');
   if (!resultsArea) return;
 
-  let tracks = [];
-  if (useCacheOnly && cachedSpotifyTracks) {
-    tracks = cachedSpotifyTracks;
+  let moodTracks = [];
+  let dynamicTracks = [];
+
+  if (useCacheOnly && cachedSpotifyTracks && cachedSpotifyDynamicTracks) {
+    moodTracks = cachedSpotifyTracks;
+    dynamicTracks = cachedSpotifyDynamicTracks;
   } else {
     resultsArea.innerHTML = `
       <div style="display: flex; justify-content: center; padding: 40px;">
@@ -5784,23 +5793,38 @@ async function loadSpotifyMoodTracks(moodKey, moodTitle, containerEl, useCacheOn
     `;
 
     try {
-      const res = await fetch(`${BACKEND_URL}/spotify/recommendations?mood=${encodeURIComponent(moodKey)}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      tracks = data.results || [];
-      cachedSpotifyTracks = tracks;
+      const hour = new Date().getHours();
+      
+      // Fetch both requests in parallel
+      const [moodRes, dynamicRes] = await Promise.all([
+        fetch(`${BACKEND_URL}/spotify/recommendations?mood=${encodeURIComponent(moodKey)}`),
+        fetch(`${BACKEND_URL}/spotify/recommendations?mood=dynamic&hour=${hour}`)
+      ]);
+
+      if (!moodRes.ok || !dynamicRes.ok) {
+        throw new Error('Failed to fetch recommendation APIs');
+      }
+
+      const moodData = await moodRes.json();
+      const dynamicData = await dynamicRes.json();
+
+      moodTracks = moodData.results || [];
+      dynamicTracks = dynamicData.results || [];
+
+      cachedSpotifyTracks = moodTracks;
+      cachedSpotifyDynamicTracks = dynamicTracks;
 
       // Update Carousel dynamically with loaded mood tracks
       const carouselPlaceholder = document.getElementById('spotify-carousel-container');
       if (carouselPlaceholder) {
         carouselPlaceholder.innerHTML = '';
-        renderCarousel(tracks.slice(0, 5), carouselPlaceholder);
+        renderCarousel(moodTracks.slice(0, 5), carouselPlaceholder);
       }
     } catch (err) {
-      console.error('[Spotify Mood] Failed to load tracks:', err.message);
+      console.error('[Spotify Recommendations] Failed to load tracks:', err.message);
       resultsArea.innerHTML = `
         <div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);">
-          Failed to load tracks. Please try again.
+          Не удалось загрузить рекомендации. Попробуйте еще раз.
         </div>
       `;
       return;
@@ -5809,93 +5833,161 @@ async function loadSpotifyMoodTracks(moodKey, moodTitle, containerEl, useCacheOn
 
   resultsArea.innerHTML = '';
 
-  if (tracks.length === 0) {
-    resultsArea.innerHTML = '<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);">No tracks found for this mood</div>';
-    return;
+  // 1. Determine dynamic time-of-day greeting text
+  const currentHour = new Date().getHours();
+  let dynamicGreeting = "Музыка под настроение";
+  if (currentHour >= 6 && currentHour < 12) {
+    dynamicGreeting = "Доброе утро! Твой утренний микс ☕";
+  } else if (currentHour >= 12 && currentHour < 18) {
+    dynamicGreeting = "Добрый день! Дневной заряд энергии ☀️";
+  } else if (currentHour >= 18 && currentHour < 24) {
+    dynamicGreeting = "Добрый вечер! Время раскачаться 🌙";
+  } else {
+    dynamicGreeting = "Доброй ночи! Ночной подземный вайб 🌌";
   }
 
-  // Section header
-  const header = document.createElement('div');
-  header.className = 'spotify-section-header';
-  header.innerHTML = `
-    <div class="spotify-section-title">${moodTitle}</div>
-    <div class="spotify-section-badge">
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.377-1.454-5.37-1.783-8.894-.978-.335.077-.67-.134-.746-.47-.077-.335.134-.67.47-.746 3.847-.88 7.143-.51 9.814 1.127.294.18.387.563.207.857zm1.225-2.72c-.227.367-.707.487-1.074.26-2.72-1.672-6.87-2.157-10.082-1.182-.413.125-.847-.107-.972-.52-.125-.413.107-.847.52-.972 3.676-1.116 8.243-.57 11.348 1.337.367.227.487.707.26 1.074zm.107-2.834C14.484 8.7 8.012 8.483 4.262 9.622c-.573.173-1.182-.154-1.355-.727-.173-.573.154-1.182.727-1.355 4.3-1.305 11.442-1.055 15.534 1.373.515.305.683.97.378 1.485-.305.515-.97.683-1.485.378z"/>
-      </svg>
-      Spotify
-    </div>
-  `;
-  resultsArea.appendChild(header);
-
-  // Recommended section (first 8 tracks)
-  const recSection = document.createElement('div');
-  recSection.className = 'home-section scrollable';
-  recSection.innerHTML = `
-    <div class="home-section-header">
-      <h3>Recommended</h3>
-      <a href="#" class="see-all-link" id="see-all-spotify-rec">See all <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg></a>
-    </div>
-    <div class="scroller-container-outer">
-      <div class="scroller-container" id="spotify-rec-scroller"></div>
-      <button class="scroll-chevron next" id="spotify-rec-scroll-chevron">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
-      </button>
-    </div>
-  `;
-  resultsArea.appendChild(recSection);
-
-  const recScroller = recSection.querySelector('#spotify-rec-scroller');
-  const recTracks = tracks.slice(0, 8);
-  recTracks.forEach((track, idx) => {
-    const card = renderTrackCardHorizontal(track, idx, recTracks);
-    recScroller.appendChild(card);
-  });
-
-  recSection.querySelector('#spotify-rec-scroll-chevron').addEventListener('click', () => {
-    recScroller.scrollBy({ left: 300, behavior: 'smooth' });
-  });
-
-  recSection.querySelector('#see-all-spotify-rec').addEventListener('click', (e) => {
-    e.preventDefault();
-    playlist = recTracks;
-    renderTracks(playlist);
-  });
-
-  // Trending section (next 8 tracks)
-  if (tracks.length > 8) {
-    const trendSection = document.createElement('div');
-    trendSection.className = 'home-section scrollable';
-    trendSection.innerHTML = `
-      <div class="home-section-header">
-        <h3>Trending</h3>
-        <a href="#" class="see-all-link" id="see-all-spotify-trend">See all <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg></a>
+  // --- RENDERING DYNAMIC SECTION ---
+  if (dynamicTracks.length > 0) {
+    // Dynamic section header
+    const dynamicHeader = document.createElement('div');
+    dynamicHeader.className = 'spotify-section-header';
+    dynamicHeader.innerHTML = `
+      <div class="spotify-section-title">${dynamicGreeting}</div>
+      <div class="spotify-section-badge">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.377-1.454-5.37-1.783-8.894-.978-.335.077-.67-.134-.746-.47-.077-.335.134-.67.47-.746 3.847-.88 7.143-.51 9.814 1.127.294.18.387.563.207.857zm1.225-2.72c-.227.367-.707.487-1.074.26-2.72-1.672-6.87-2.157-10.082-1.182-.413.125-.847-.107-.972-.52-.125-.413.107-.847.52-.972 3.676-1.116 8.243-.57 11.348 1.337.367.227.487.707.26 1.074zm.107-2.834C14.484 8.7 8.012 8.483 4.262 9.622c-.573.173-1.182-.154-1.355-.727-.173-.573.154-1.182.727-1.355 4.3-1.305 11.442-1.055 15.534 1.373.515.305.683.97.378 1.485-.305.515-.97.683-1.485.378z"/>
+        </svg>
+        Spotify
       </div>
+    `;
+    resultsArea.appendChild(dynamicHeader);
+
+    const dynamicSection = document.createElement('div');
+    dynamicSection.className = 'home-section scrollable';
+    dynamicSection.style.marginBottom = '24px';
+    dynamicSection.innerHTML = `
       <div class="scroller-container-outer">
-        <div class="scroller-container" id="spotify-trend-scroller"></div>
-        <button class="scroll-chevron next" id="spotify-trend-scroll-chevron">
+        <div class="scroller-container" id="spotify-dynamic-scroller"></div>
+        <button class="scroll-chevron next" id="spotify-dynamic-scroll-chevron">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
         </button>
       </div>
     `;
-    resultsArea.appendChild(trendSection);
+    resultsArea.appendChild(dynamicSection);
 
-    const trendScroller = trendSection.querySelector('#spotify-trend-scroller');
-    const trendTracks = tracks.slice(8, 16);
-    trendTracks.forEach((track, idx) => {
-      const card = renderTrackCardHorizontal(track, idx, trendTracks);
-      trendScroller.appendChild(card);
+    const dynamicScroller = dynamicSection.querySelector('#spotify-dynamic-scroller');
+    dynamicTracks.forEach((track, idx) => {
+      const card = renderTrackCardHorizontal(track, idx, dynamicTracks);
+      dynamicScroller.appendChild(card);
     });
 
-    trendSection.querySelector('#spotify-trend-scroll-chevron').addEventListener('click', () => {
-      trendScroller.scrollBy({ left: 300, behavior: 'smooth' });
+    dynamicSection.querySelector('#spotify-dynamic-scroll-chevron').addEventListener('click', () => {
+      dynamicScroller.scrollBy({ left: 300, behavior: 'smooth' });
+    });
+  }
+
+  // --- RENDERING SELECTED MOOD SECTION ---
+  if (moodTracks.length > 0) {
+    // Vibe section header
+    const vibeHeader = document.createElement('div');
+    vibeHeader.className = 'spotify-section-header';
+    vibeHeader.style.marginTop = '16px';
+    vibeHeader.innerHTML = `
+      <div class="spotify-section-title">${moodTitle}</div>
+      <button class="spotify-refresh-btn" id="spotify-refresh-btn" title="Обновить рекомендации">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+        <span>Обновить реки</span>
+      </button>
+    `;
+    resultsArea.appendChild(vibeHeader);
+
+    // Bind refresh button click handler
+    const refreshBtn = vibeHeader.querySelector('#spotify-refresh-btn');
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => {
+        refreshBtn.classList.add('loading');
+        // Disable click while loading
+        refreshBtn.style.pointerEvents = 'none';
+
+        loadSpotifyMoodTracks(moodKey, moodTitle, containerEl, false)
+          .finally(() => {
+            const btn = document.getElementById('spotify-refresh-btn');
+            if (btn) {
+              btn.classList.remove('loading');
+              btn.style.pointerEvents = 'auto';
+            }
+          });
+      });
+    }
+
+    const recSection = document.createElement('div');
+    recSection.className = 'home-section scrollable';
+    recSection.innerHTML = `
+      <div class="home-section-header">
+        <h3>Рекомендуемые треки</h3>
+        <a href="#" class="see-all-link" id="see-all-spotify-rec">See all <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg></a>
+      </div>
+      <div class="scroller-container-outer">
+        <div class="scroller-container" id="spotify-rec-scroller"></div>
+        <button class="scroll-chevron next" id="spotify-rec-scroll-chevron">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
+      </div>
+    `;
+    resultsArea.appendChild(recSection);
+
+    const recScroller = recSection.querySelector('#spotify-rec-scroller');
+    const recTracks = moodTracks.slice(0, 8);
+    recTracks.forEach((track, idx) => {
+      const card = renderTrackCardHorizontal(track, idx, recTracks);
+      recScroller.appendChild(card);
     });
 
-    trendSection.querySelector('#see-all-spotify-trend').addEventListener('click', (e) => {
+    recSection.querySelector('#spotify-rec-scroll-chevron').addEventListener('click', () => {
+      recScroller.scrollBy({ left: 300, behavior: 'smooth' });
+    });
+
+    recSection.querySelector('#see-all-spotify-rec').addEventListener('click', (e) => {
       e.preventDefault();
-      playlist = trendTracks;
+      playlist = recTracks;
       renderTracks(playlist);
     });
+
+    // Trending section (next 8 tracks)
+    if (moodTracks.length > 8) {
+      const trendSection = document.createElement('div');
+      trendSection.className = 'home-section scrollable';
+      trendSection.innerHTML = `
+        <div class="home-section-header">
+          <h3>В тренде</h3>
+          <a href="#" class="see-all-link" id="see-all-spotify-trend">See all <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg></a>
+        </div>
+        <div class="scroller-container-outer">
+          <div class="scroller-container" id="spotify-trend-scroller"></div>
+          <button class="scroll-chevron next" id="spotify-trend-scroll-chevron">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+        </div>
+      `;
+      resultsArea.appendChild(trendSection);
+
+      const trendScroller = trendSection.querySelector('#spotify-trend-scroller');
+      const trendTracks = moodTracks.slice(8, 16);
+      trendTracks.forEach((track, idx) => {
+        const card = renderTrackCardHorizontal(track, idx, trendTracks);
+        trendScroller.appendChild(card);
+      });
+
+      trendSection.querySelector('#spotify-trend-scroll-chevron').addEventListener('click', () => {
+        trendScroller.scrollBy({ left: 300, behavior: 'smooth' });
+      });
+
+      trendSection.querySelector('#see-all-spotify-trend').addEventListener('click', (e) => {
+        e.preventDefault();
+        playlist = trendTracks;
+        renderTracks(playlist);
+      });
+    }
   }
 }
 

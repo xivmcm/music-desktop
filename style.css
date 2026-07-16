@@ -4429,6 +4429,49 @@ body.mini-player-active .mini-player-block {
   border: 1px solid rgba(29,185,84,0.2);
 }
 
+.spotify-refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+  -webkit-app-region: no-drag;
+}
+
+.spotify-refresh-btn:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+.spotify-refresh-btn:active {
+  transform: scale(0.97);
+}
+
+.spotify-refresh-btn svg {
+  transition: transform 0.3s ease;
+}
+
+.spotify-refresh-btn.loading svg {
+  animation: spinRefresh 0.8s linear infinite;
+}
+
+@keyframes spinRefresh {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* GPU Hardware Acceleration for Glassmorphic elements and backdrop-filters */
 .sidebar,
 .search-header,

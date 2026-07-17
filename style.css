@@ -28,6 +28,7 @@ html {
   --bgColor1: #1e1e24;
   --glow: 0.05;
   --blur: 28px;
+  --window-radius: 12px;
 }
 
 .theme-dark-glass {
@@ -96,7 +97,7 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  border-radius: 12px;
+  border-radius: var(--window-radius);
   overflow: hidden;
   border: 1px solid var(--card-border);
   box-shadow: var(--glass-shadow);
@@ -123,10 +124,19 @@ body::before {
 }
 
 body:not(.window-maximized) {
-  border-radius: 12px !important;
+  border-radius: var(--window-radius) !important;
   overflow: hidden !important;
-  clip-path: inset(0 round 12px) !important;
-  -webkit-clip-path: inset(0 round 12px) !important;
+  clip-path: inset(0 round var(--window-radius)) !important;
+  -webkit-clip-path: inset(0 round var(--window-radius)) !important;
+}
+
+body:not(.window-maximized)::before {
+  border-radius: var(--window-radius) !important;
+}
+
+body:not(.window-maximized) .titlebar {
+  border-top-left-radius: var(--window-radius) !important;
+  border-top-right-radius: var(--window-radius) !important;
 }
 
 /* Custom Titlebar */
@@ -1972,6 +1982,17 @@ input[type="range"]:hover::-webkit-slider-thumb {
   background: linear-gradient(90deg, #e5e5ea, #007aff);
 }
 
+.theme-preview.custom {
+  background: linear-gradient(90deg, #ff453a, #ff9f0a, #30d158, #0a84ff, #bf5af2);
+}
+
+.disabled-customizer {
+  opacity: 0.45;
+  pointer-events: none !important;
+  user-select: none;
+  transition: opacity 0.3s ease;
+}
+
 .settings-info-row {
   display: flex;
   justify-content: space-between;
@@ -2112,15 +2133,15 @@ body.mini-player-active {
   background-color: transparent !important;
   border: none !important;
   box-shadow: none !important;
-  border-radius: 16px !important;
+  border-radius: var(--window-radius) !important;
   overflow: hidden !important;
-  clip-path: inset(0 round 16px) !important;
-  -webkit-clip-path: inset(0 round 16px) !important;
+  clip-path: inset(0 round var(--window-radius)) !important;
+  -webkit-clip-path: inset(0 round var(--window-radius)) !important;
 }
 
 body.mini-player-active::before {
   display: block !important;
-  border-radius: 16px !important;
+  border-radius: var(--window-radius) !important;
 }
 
 /* Hide standard UI fully */
@@ -2145,7 +2166,7 @@ body.mini-player-active .mini-player-block {
   backdrop-filter: var(--blur-value);
   -webkit-backdrop-filter: var(--blur-value);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
+  border-radius: var(--window-radius);
   box-shadow: var(--glass-shadow);
   overflow: hidden;
   -webkit-app-region: drag;

@@ -3117,10 +3117,14 @@ function renderSettings(options = {}) {
           <span>Silver Matrix</span>
           <div class="theme-preview silver"></div>
         </button>
+        <button class="theme-option-btn ${currentTheme === 'custom' ? 'active' : ''}" data-theme="custom">
+          <span>Custom</span>
+          <div class="theme-preview custom"></div>
+        </button>
       </div>
     </div>
 
-    <div class="settings-section" data-section="theme-constructor" style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 20px;">
+    <div class="settings-section ${currentTheme !== 'custom' ? 'disabled-customizer' : ''}" data-section="theme-constructor" id="theme-constructor-section" style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 20px;">
       <h3>Конструктор темы</h3>
       
       <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 15px;">
@@ -3181,6 +3185,14 @@ function renderSettings(options = {}) {
           </div>
           <input type="range" id="theme-opacity-slider" min="0" max="100" value="${Math.round(customTheme.opacity * 100)}" style="width: 100%; accent-color: #30d158; cursor: pointer;">
         </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="display: flex; justify-content: space-between; font-size: 12px;">
+            <span style="color: rgba(255,255,255,0.5);">Скругление углов (radius):</span>
+            <span id="radius-val-text" style="color: #fff;">${customTheme.windowRadius !== undefined ? customTheme.windowRadius : 12}px</span>
+          </div>
+          <input type="range" id="theme-radius-slider" min="0" max="30" value="${customTheme.windowRadius !== undefined ? customTheme.windowRadius : 12}" style="width: 100%; accent-color: #30d158; cursor: pointer;">
+        </div>
       </div>
 
       <div style="display: flex; gap: 10px; margin-top: 15px;">
@@ -3209,7 +3221,7 @@ function renderSettings(options = {}) {
       </div>
     </div>
 
-    <div class="settings-section" data-section="background-image">
+    <div class="settings-section ${currentTheme !== 'custom' ? 'disabled-customizer' : ''}" data-section="background-image" id="background-image-section">
       <h3>Фоновое изображение</h3>
       <div style="display: flex; flex-direction: column; gap: 12px;">
         <div style="display: flex; gap: 10px; align-items: center;">
@@ -3378,6 +3390,16 @@ function renderSettings(options = {}) {
       applyTheme(selectedTheme);
       btns.forEach(b => b.classList.remove('active'));
       e.currentTarget.classList.add('active');
+
+      const constructorSec = panel.querySelector('#theme-constructor-section');
+      const bgImageSec = panel.querySelector('#background-image-section');
+      if (selectedTheme === 'custom') {
+        constructorSec?.classList.remove('disabled-customizer');
+        bgImageSec?.classList.remove('disabled-customizer');
+      } else {
+        constructorSec?.classList.add('disabled-customizer');
+        bgImageSec?.classList.add('disabled-customizer');
+      }
     });
   });
 
@@ -3392,6 +3414,7 @@ function renderSettings(options = {}) {
   const themeBlurSlider = panel.querySelector('#theme-blur-slider');
   const themeGlowSlider = panel.querySelector('#theme-glow-slider');
   const themeOpacitySlider = panel.querySelector('#theme-opacity-slider');
+  const themeRadiusSlider = panel.querySelector('#theme-radius-slider');
 
   function updateCustomThemeFromUI() {
     const customThemeVal = {
@@ -3404,19 +3427,29 @@ function renderSettings(options = {}) {
       accentColor: themeAccentInput.value,
       blur: parseInt(themeBlurSlider.value, 10),
       glow: parseFloat(themeGlowSlider.value) / 100,
-      opacity: parseFloat(themeOpacitySlider.value) / 100
+      opacity: parseFloat(themeOpacitySlider.value) / 100,
+      windowRadius: themeRadiusSlider ? parseInt(themeRadiusSlider.value, 10) : 12
     };
 
     panel.querySelector('#angle-val-text').textContent = `${customThemeVal.bgAngle}°`;
     panel.querySelector('#blur-val-text').textContent = `${customThemeVal.blur}px`;
     panel.querySelector('#glow-val-text').textContent = `${Math.round(customThemeVal.glow * 100)}%`;
     panel.querySelector('#opacity-val-text').textContent = `${Math.round(customThemeVal.opacity * 100)}%`;
+    if (themeRadiusSlider) {
+      panel.querySelector('#radius-val-text').textContent = `${customThemeVal.windowRadius}px`;
+    }
 
     applyCustomTheme(customThemeVal);
     localStorage.setItem('gp_custom_theme', JSON.stringify(customThemeVal));
     localStorage.setItem('gp_theme', 'custom');
 
-    btns.forEach(b => b.classList.remove('active'));
+    btns.forEach(b => {
+      if (b.dataset.theme === 'custom') {
+        b.classList.add('active');
+      } else {
+        b.classList.remove('active');
+      }
+    });
   }
 
   const hasThemeConstructor = [
@@ -3443,6 +3476,9 @@ function renderSettings(options = {}) {
     themeBlurSlider.addEventListener('input', updateCustomThemeFromUI);
     themeGlowSlider.addEventListener('input', updateCustomThemeFromUI);
     themeOpacitySlider.addEventListener('input', updateCustomThemeFromUI);
+    if (themeRadiusSlider) {
+      themeRadiusSlider.addEventListener('input', updateCustomThemeFromUI);
+    }
   }
 
   // Background Image bindings
@@ -3892,6 +3928,9 @@ function applyCustomTheme(theme) {
   root.style.setProperty('--bgColor1', theme.bgColor1 || theme.bgColor || '#1e1e24');
   root.style.setProperty('--glow', theme.glow !== undefined ? theme.glow : 0.05);
   root.style.setProperty('--blur', `${theme.blur !== undefined ? theme.blur : 28}px`);
+
+  const radius = theme.windowRadius !== undefined ? theme.windowRadius : 12;
+  root.style.setProperty('--window-radius', `${radius}px`);
 }
 
 function clearCustomThemeProperties() {
@@ -3914,6 +3953,7 @@ function clearCustomThemeProperties() {
   root.style.removeProperty('--bgColor1');
   root.style.removeProperty('--glow');
   root.style.removeProperty('--blur');
+  root.style.removeProperty('--window-radius');
 }
 
 // Startup Initialization

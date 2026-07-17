@@ -734,7 +734,7 @@ body:not(.window-maximized) .titlebar {
   justify-content: space-between;
   align-items: center;
   z-index: 50;
-  transform: translateY(calc(100% + 18px));
+  transform: translateY(calc(100% + 18px)) translateZ(0);
   transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
   overflow: hidden;
   box-shadow: 0 18px 54px rgba(0, 0, 0, 0.35), var(--glass-glow, none);
@@ -757,7 +757,7 @@ body:not(.window-maximized) .titlebar {
 }
 
 .container.player-active .player-bar {
-  transform: translateY(0);
+  transform: translateY(0) translateZ(0);
 }
 
 .container.player-active .content-area {
@@ -4504,7 +4504,6 @@ body.mini-player-active .mini-player-block {
 .track-card,
 .track-card-horizontal,
 .friend-activity-panel,
-.player-bar,
 .update-banner,
 .artist-header,
 .search-history-dropdown,

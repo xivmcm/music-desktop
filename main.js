@@ -105,7 +105,7 @@ function createWindow() {
     height: 700,
     frame: false,            // Hides default OS frames for custom window layout
     transparent: true,      // Allows the desktop to show through for glassmorphism
-    hasShadow: true,
+    hasShadow: false,
     backgroundColor: '#00000000',
     icon: path.join(__dirname, 'assets/icon.png'),
     webPreferences: {

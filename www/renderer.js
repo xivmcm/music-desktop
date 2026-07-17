@@ -25,6 +25,7 @@ const lyricsState = {
   syncTimer: null,
   currentTrackId: null,
   format: null,        // 'lrc' | 'plain' | null
+  lastActiveIdx: -1,
 };
 
 // Audio Element
@@ -1123,8 +1124,13 @@ audioPlayer.onerror = () => {
   handleTrackLoadError("Audio element fired onerror event");
 };
 
+let lastProgressUpdateTime = 0;
 audioPlayer.addEventListener('timeupdate', () => {
   if (isSeeking) return;
+  const now = Date.now();
+  if (now - lastProgressUpdateTime < 250) return;
+  lastProgressUpdateTime = now;
+
   const current = currentSeekOffset + audioPlayer.currentTime;
   const duration = currentTrackDuration || audioPlayer.duration || 0;
 
@@ -3055,13 +3061,22 @@ function renderSettings(options = {}) {
 
   const savedCustom = localStorage.getItem('gp_custom_theme');
   const customTheme = savedCustom ? JSON.parse(savedCustom) : {
-    bgColor: '#1e1e24',
+    bgColor1: '#1e1e24',
+    bgColor2: '#0a0a0c',
+    bgAngle: 135,
     textColor: '#f5f5f7',
     playerBg: '#050505',
     cardBg: '#ffffff',
     accentColor: '#ffffff',
     blur: 28,
-    opacity: 0.45
+    glow: 0.05,
+    opacity: 0.45,
+    windowRadius: 12,
+    fontFamily: 'Inter',
+    borderWidth: '1px',
+    glowColor: '#ffffff',
+    cardStyle: 'default',
+    bgEffect: 'liquid'
   };
 
   const viewHeader = document.createElement('div');
@@ -3158,6 +3173,50 @@ function renderSettings(options = {}) {
         <div style="display: flex; flex-direction: column; gap: 6px;">
           <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Акцентный цвет:</span>
           <input type="color" id="theme-accent-color" value="${customTheme.accentColor || '#ffffff'}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Шрифт:</span>
+          <select id="theme-font-family" style="width: 100%; height: 36px; padding: 0 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: #fff; font-size: 13px; cursor: pointer;">
+            ${['Inter', 'Outfit', 'Montserrat', 'Fira Code', 'Playfair Display'].map(font => `
+              <option value="${font}" ${customTheme.fontFamily === font ? 'selected' : ''}>${font}</option>
+            `).join('')}
+          </select>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="display: flex; justify-content: space-between; font-size: 12px;">
+            <span style="color: rgba(255,255,255,0.5);">Толщина границ:</span>
+            <span id="border-width-val-text" style="color: #fff;">${customTheme.borderWidth !== undefined ? customTheme.borderWidth : '1px'}</span>
+          </div>
+          <input type="range" id="theme-border-width" min="0" max="4" step="0.5" value="${parseFloat(customTheme.borderWidth !== undefined ? customTheme.borderWidth : 1)}" style="width: 100%; accent-color: #30d158; cursor: pointer;">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Цвет свечения:</span>
+          <input type="color" id="theme-glow-color" value="${customTheme.glowColor || '#ffffff'}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Стиль карточек:</span>
+          <select id="theme-card-style" style="width: 100%; height: 36px; padding: 0 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: #fff; font-size: 13px; cursor: pointer;">
+            ${[
+              { val: 'default', text: 'Default' },
+              { val: 'frosted', text: 'Frosted Glass' },
+              { val: 'material', text: 'Material solid' },
+              { val: 'flat', text: 'Flat glass' }
+            ].map(opt => `
+              <option value="${opt.val}" ${customTheme.cardStyle === opt.val ? 'selected' : ''}>${opt.text}</option>
+            `).join('')}
+          </select>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px; grid-column: span 2;">
+          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Фоновый эффект:</span>
+          <select id="theme-bg-effect" style="width: 100%; height: 36px; padding: 0 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: #fff; font-size: 13px; cursor: pointer;">
+            ${[
+              { val: 'none', text: 'None' },
+              { val: 'liquid', text: 'Liquid Sphere' },
+              { val: 'particles', text: 'Ambient Particles' }
+            ].map(opt => `
+              <option value="${opt.val}" ${customTheme.bgEffect === opt.val ? 'selected' : ''}>${opt.text}</option>
+            `).join('')}
+          </select>
         </div>
       </div>
 
@@ -3400,6 +3459,7 @@ function renderSettings(options = {}) {
         constructorSec?.classList.add('disabled-customizer');
         bgImageSec?.classList.add('disabled-customizer');
       }
+      renderSettings({ scope, studioTab });
     });
   });
 
@@ -3415,6 +3475,11 @@ function renderSettings(options = {}) {
   const themeGlowSlider = panel.querySelector('#theme-glow-slider');
   const themeOpacitySlider = panel.querySelector('#theme-opacity-slider');
   const themeRadiusSlider = panel.querySelector('#theme-radius-slider');
+  const themeFontFamilySelect = panel.querySelector('#theme-font-family');
+  const themeBorderWidthSlider = panel.querySelector('#theme-border-width');
+  const themeGlowColorInput = panel.querySelector('#theme-glow-color');
+  const themeCardStyleSelect = panel.querySelector('#theme-card-style');
+  const themeBgEffectSelect = panel.querySelector('#theme-bg-effect');
 
   function updateCustomThemeFromUI() {
     const customThemeVal = {
@@ -3428,7 +3493,12 @@ function renderSettings(options = {}) {
       blur: parseInt(themeBlurSlider.value, 10),
       glow: parseFloat(themeGlowSlider.value) / 100,
       opacity: parseFloat(themeOpacitySlider.value) / 100,
-      windowRadius: themeRadiusSlider ? parseInt(themeRadiusSlider.value, 10) : 12
+      windowRadius: themeRadiusSlider ? parseInt(themeRadiusSlider.value, 10) : 12,
+      fontFamily: themeFontFamilySelect ? themeFontFamilySelect.value : 'Inter',
+      borderWidth: themeBorderWidthSlider ? `${themeBorderWidthSlider.value}px` : '1px',
+      glowColor: themeGlowColorInput ? themeGlowColorInput.value : '#ffffff',
+      cardStyle: themeCardStyleSelect ? themeCardStyleSelect.value : 'default',
+      bgEffect: themeBgEffectSelect ? themeBgEffectSelect.value : 'liquid'
     };
 
     panel.querySelector('#angle-val-text').textContent = `${customThemeVal.bgAngle}°`;
@@ -3438,8 +3508,12 @@ function renderSettings(options = {}) {
     if (themeRadiusSlider) {
       panel.querySelector('#radius-val-text').textContent = `${customThemeVal.windowRadius}px`;
     }
+    if (themeBorderWidthSlider) {
+      panel.querySelector('#border-width-val-text').textContent = `${themeBorderWidthSlider.value}px`;
+    }
 
     applyCustomTheme(customThemeVal);
+    applyBgEffect(customThemeVal.bgEffect);
     localStorage.setItem('gp_custom_theme', JSON.stringify(customThemeVal));
     localStorage.setItem('gp_theme', 'custom');
 
@@ -3479,6 +3553,11 @@ function renderSettings(options = {}) {
     if (themeRadiusSlider) {
       themeRadiusSlider.addEventListener('input', updateCustomThemeFromUI);
     }
+    if (themeFontFamilySelect) themeFontFamilySelect.addEventListener('change', updateCustomThemeFromUI);
+    if (themeBorderWidthSlider) themeBorderWidthSlider.addEventListener('input', updateCustomThemeFromUI);
+    if (themeGlowColorInput) themeGlowColorInput.addEventListener('input', updateCustomThemeFromUI);
+    if (themeCardStyleSelect) themeCardStyleSelect.addEventListener('change', updateCustomThemeFromUI);
+    if (themeBgEffectSelect) themeBgEffectSelect.addEventListener('change', updateCustomThemeFromUI);
   }
 
   // Background Image bindings
@@ -3552,7 +3631,13 @@ function renderSettings(options = {}) {
       accentColor: themeAccentInput.value,
       blur: parseInt(themeBlurSlider.value, 10),
       glow: parseFloat(themeGlowSlider.value) / 100,
-      opacity: parseFloat(themeOpacitySlider.value) / 100
+      opacity: parseFloat(themeOpacitySlider.value) / 100,
+      windowRadius: themeRadiusSlider ? parseInt(themeRadiusSlider.value, 10) : 12,
+      fontFamily: themeFontFamilySelect ? themeFontFamilySelect.value : 'Inter',
+      borderWidth: themeBorderWidthSlider ? `${themeBorderWidthSlider.value}px` : '1px',
+      glowColor: themeGlowColorInput ? themeGlowColorInput.value : '#ffffff',
+      cardStyle: themeCardStyleSelect ? themeCardStyleSelect.value : 'default',
+      bgEffect: themeBgEffectSelect ? themeBgEffectSelect.value : 'liquid'
     };
     try {
       const code = btoa(JSON.stringify(customThemeVal));
@@ -3587,8 +3672,15 @@ function renderSettings(options = {}) {
         if (!decoded.cardBg) decoded.cardBg = '#ffffff';
         if (!decoded.accentColor) decoded.accentColor = decoded.textColor || '#ffffff';
         if (decoded.glow === undefined) decoded.glow = 0.05;
+        if (decoded.windowRadius === undefined) decoded.windowRadius = 12;
+        if (decoded.fontFamily === undefined) decoded.fontFamily = 'Inter';
+        if (decoded.borderWidth === undefined) decoded.borderWidth = '1px';
+        if (decoded.glowColor === undefined) decoded.glowColor = '#ffffff';
+        if (decoded.cardStyle === undefined) decoded.cardStyle = 'default';
+        if (decoded.bgEffect === undefined) decoded.bgEffect = 'liquid';
 
         applyCustomTheme(decoded);
+        applyBgEffect(decoded.bgEffect);
         localStorage.setItem('gp_custom_theme', JSON.stringify(decoded));
         localStorage.setItem('gp_theme', 'custom');
         input.value = '';
@@ -3614,7 +3706,13 @@ function renderSettings(options = {}) {
     accentColor: themeAccentInput?.value || customTheme.accentColor || '#ffffff',
     blur: parseInt(themeBlurSlider?.value || customTheme.blur || 28, 10),
     glow: parseFloat(themeGlowSlider?.value || ((customTheme.glow || 0.05) * 100)) / 100,
-    opacity: parseFloat(themeOpacitySlider?.value || ((customTheme.opacity || 0.45) * 100)) / 100
+    opacity: parseFloat(themeOpacitySlider?.value || ((customTheme.opacity || 0.45) * 100)) / 100,
+    windowRadius: parseInt(themeRadiusSlider?.value || customTheme.windowRadius || 12, 10),
+    fontFamily: themeFontFamilySelect?.value || customTheme.fontFamily || 'Inter',
+    borderWidth: themeBorderWidthSlider ? `${themeBorderWidthSlider.value}px` : (customTheme.borderWidth || '1px'),
+    glowColor: themeGlowColorInput?.value || customTheme.glowColor || '#ffffff',
+    cardStyle: themeCardStyleSelect?.value || customTheme.cardStyle || 'default',
+    bgEffect: themeBgEffectSelect?.value || customTheme.bgEffect || 'liquid'
   });
 
   function getSavedThemes() {
@@ -3657,6 +3755,7 @@ function renderSettings(options = {}) {
         const selected = getSavedThemes().find(theme => theme.id === id);
         if (!selected) return;
         applyCustomTheme(selected.colors);
+        applyBgEffect(selected.colors.bgEffect || 'liquid');
         localStorage.setItem('gp_custom_theme', JSON.stringify(selected.colors));
         localStorage.setItem('gp_theme', 'custom');
         if (selected.bgUrl || selected.bgPath) {
@@ -3668,6 +3767,7 @@ function renderSettings(options = {}) {
           applyBackgroundImage(null);
         }
         showToastNotification('Theme applied');
+        renderSettings({ scope, studioTab });
       });
     });
 
@@ -3886,6 +3986,143 @@ function applyBackgroundImage(base64Str) {
   }
 }
 
+// Dynamic Fonts Loader Helper
+function loadGoogleFont(fontFamily) {
+  if (!fontFamily || fontFamily === 'Inter') return;
+  const fontId = `google-font-${fontFamily.replace(/\s+/g, '-').toLowerCase()}`;
+  if (document.getElementById(fontId)) return;
+
+  const link = document.createElement('link');
+  link.id = fontId;
+  link.rel = 'stylesheet';
+  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontFamily)}:wght@300;400;500;600;700&display=swap`;
+  document.head.appendChild(link);
+}
+
+// Ambient Background Particles Canvas Engine
+let ambientCanvas = null;
+let ambientCtx = null;
+let ambientAnimationId = null;
+let ambientParticles = [];
+
+class Particle {
+  constructor(width, height) {
+    this.width = width;
+    this.height = height;
+    this.reset();
+  }
+  reset() {
+    this.x = Math.random() * this.width;
+    this.y = Math.random() * this.height + this.height;
+    if (Math.random() > 0.5) {
+      this.y = Math.random() * this.height;
+    }
+    this.vx = (Math.random() - 0.5) * 0.4;
+    this.vy = -Math.random() * 0.4 - 0.1;
+    this.radius = Math.random() * 80 + 40;
+    this.alpha = Math.random() * 0.05 + 0.01;
+  }
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    if (this.y < -this.radius || this.x < -this.radius || this.x > this.width + this.radius) {
+      this.reset();
+      this.y = this.height + this.radius;
+    }
+  }
+  draw(ctx, accentColor) {
+    ctx.beginPath();
+    const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
+    const color = accentColor || '#ffffff';
+    let rgb = { r: 255, g: 255, b: 255 };
+    if (/^#([A-Fa-f0-9]{3}){1,2}$/.test(color)) {
+      let c = color.substring(1).split('');
+      if (c.length === 3) {
+        c = [c[0], c[0], c[1], c[1], c[2], c[2]];
+      }
+      c = '0x' + c.join('');
+      rgb = {
+        r: (c >> 16) & 255,
+        g: (c >> 8) & 255,
+        b: c & 255
+      };
+    }
+    grad.addColorStop(0, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${this.alpha})`);
+    grad.addColorStop(1, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0)`);
+    ctx.fillStyle = grad;
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function initAmbientCanvas() {
+  ambientCanvas = document.getElementById('ambient-canvas');
+  if (!ambientCanvas) return;
+  ambientCtx = ambientCanvas.getContext('2d');
+  resizeAmbientCanvas();
+  window.addEventListener('resize', resizeAmbientCanvas);
+}
+
+function resizeAmbientCanvas() {
+  if (!ambientCanvas) return;
+  ambientCanvas.width = window.innerWidth;
+  ambientCanvas.height = window.innerHeight;
+}
+
+function startAmbientParticles() {
+  if (!ambientCanvas) {
+    initAmbientCanvas();
+  }
+  if (!ambientCanvas) return;
+  ambientCanvas.style.opacity = '0.8';
+
+  stopAmbientParticles();
+  
+  ambientParticles = [];
+  const numParticles = 12;
+  for (let i = 0; i < numParticles; i++) {
+    ambientParticles.push(new Particle(ambientCanvas.width, ambientCanvas.height));
+  }
+
+  function loop() {
+    if (!ambientCtx) return;
+    ambientCtx.clearRect(0, 0, ambientCanvas.width, ambientCanvas.height);
+    const accentColor = document.documentElement.style.getPropertyValue('--accent-color') || '#ffffff';
+    for (let p of ambientParticles) {
+      p.update();
+      p.draw(ambientCtx, accentColor);
+    }
+    ambientAnimationId = requestAnimationFrame(loop);
+  }
+  loop();
+}
+
+function stopAmbientParticles() {
+  if (ambientAnimationId) {
+    cancelAnimationFrame(ambientAnimationId);
+    ambientAnimationId = null;
+  }
+  if (ambientCanvas && ambientCtx) {
+    ambientCtx.clearRect(0, 0, ambientCanvas.width, ambientCanvas.height);
+    ambientCanvas.style.opacity = '0';
+  }
+}
+
+function applyBgEffect(effectName) {
+  const liquidContainer = document.querySelector('.liquid-container');
+  if (effectName === 'particles') {
+    if (liquidContainer) liquidContainer.style.display = 'none';
+    startAmbientParticles();
+  } else if (effectName === 'liquid') {
+    if (liquidContainer) liquidContainer.style.display = '';
+    stopAmbientParticles();
+  } else {
+    if (liquidContainer) liquidContainer.style.display = 'none';
+    stopAmbientParticles();
+  }
+  localStorage.setItem('gp_bg_effect', effectName);
+}
+
 function applyCustomTheme(theme) {
   const root = document.documentElement;
   root.style.setProperty('--text-color', theme.textColor);
@@ -3921,16 +4158,36 @@ function applyCustomTheme(theme) {
   }
   root.style.setProperty('--accent-color', accentColorHex);
 
+  const glowColorHex = theme.glowColor || '#ffffff';
   const glowAlpha = theme.glow !== undefined ? theme.glow : 0.05;
-  root.style.setProperty('--glass-glow', `inset 0 1px 0 0 rgba(255, 255, 255, ${glowAlpha})`);
+  const glowColorRgba = hexToRgba(glowColorHex, glowAlpha);
+  root.style.setProperty('--glow-color', glowColorRgba);
+  root.style.setProperty('--glass-glow', `inset 0 1px 0 0 ${glowColorRgba}`);
 
   // Redesign dynamic variables exposure
   root.style.setProperty('--bgColor1', theme.bgColor1 || theme.bgColor || '#1e1e24');
   root.style.setProperty('--glow', theme.glow !== undefined ? theme.glow : 0.05);
   root.style.setProperty('--blur', `${theme.blur !== undefined ? theme.blur : 28}px`);
-
+  
   const radius = theme.windowRadius !== undefined ? theme.windowRadius : 12;
   root.style.setProperty('--window-radius', `${radius}px`);
+
+  // Extra Personalization Attributes
+  if (theme.fontFamily) {
+    loadGoogleFont(theme.fontFamily);
+    root.style.setProperty('--font-family', `'${theme.fontFamily}', sans-serif`);
+  } else {
+    root.style.setProperty('--font-family', "'Inter', sans-serif");
+  }
+
+  const borderWidth = theme.borderWidth !== undefined ? theme.borderWidth : '1px';
+  root.style.setProperty('--border-width', borderWidth);
+
+  // Card glass style
+  document.body.classList.remove('glass-style-frosted', 'glass-style-material', 'glass-style-flat');
+  if (theme.cardStyle && theme.cardStyle !== 'default') {
+    document.body.classList.add(`glass-style-${theme.cardStyle}`);
+  }
 }
 
 function clearCustomThemeProperties() {
@@ -3954,6 +4211,10 @@ function clearCustomThemeProperties() {
   root.style.removeProperty('--glow');
   root.style.removeProperty('--blur');
   root.style.removeProperty('--window-radius');
+  root.style.removeProperty('--font-family');
+  root.style.removeProperty('--border-width');
+  root.style.removeProperty('--glow-color');
+  document.body.classList.remove('glass-style-frosted', 'glass-style-material', 'glass-style-flat');
 }
 
 // Startup Initialization
@@ -3965,6 +4226,19 @@ loadHomeView();
 // Apply Saved Theme on Startup
 const savedTheme = localStorage.getItem('gp_theme') || 'theme-dark-glass';
 applyTheme(savedTheme);
+
+// Apply Saved Background Effect on Startup
+if (savedTheme === 'custom') {
+  const savedCustom = localStorage.getItem('gp_custom_theme');
+  if (savedCustom) {
+    const custom = JSON.parse(savedCustom);
+    applyBgEffect(custom.bgEffect || 'liquid');
+  } else {
+    applyBgEffect('liquid');
+  }
+} else {
+  applyBgEffect('liquid');
+}
 
 // Apply Saved Background Image & Opacity on Startup
 const savedBgImage = localStorage.getItem('gp_bg_image');
@@ -4084,12 +4358,18 @@ audioPlayer.addEventListener('play', () => {
   sendDiscordPresence();
   startPresenceInterval();
   broadcastPlayerStatus();
+  startVisualizer();
 });
 
 audioPlayer.addEventListener('pause', () => {
   playCountSession.continuousSeconds = 0;
+  if (rpcInterval) {
+    clearInterval(rpcInterval);
+    rpcInterval = null;
+  }
   sendDiscordPresence();
   broadcastPlayerStatus();
+  stopVisualizer();
 });
 
 // --- Mini-Player Window Mode listener ---
@@ -4228,13 +4508,16 @@ function startVisualizer() {
   if (!visualizerCanvas) return;
   if (visualizerAnimationId) return;
 
+  if (localStorage.getItem('gp_visualizer') !== 'true') return;
+  if (audioPlayer.paused) return;
+
   resizeCanvas();
 
   const ctx = visualizerCanvas.getContext('2d');
   let time = 0;
 
   function draw() {
-    if (localStorage.getItem('gp_visualizer') !== 'true') {
+    if (localStorage.getItem('gp_visualizer') !== 'true' || audioPlayer.paused) {
       stopVisualizer();
       return;
     }
@@ -4249,7 +4532,7 @@ function startVisualizer() {
     let bassSum = 0;
     let bassBins = 0;
     
-    if (analyser && !audioPlayer.paused) {
+    if (analyser) {
       analyser.getByteFrequencyData(dataArray);
       const nyquist = audioCtx ? audioCtx.sampleRate / 2 : 24000;
       const binHz = nyquist / bufferLength;
@@ -4272,7 +4555,7 @@ function startVisualizer() {
 
     // Determine target amplitude
     let targetAmp = 0;
-    if (!audioPlayer.paused && analyser) {
+    if (analyser) {
       const bassMultiplier = bassKick ? 1.65 : 1 + smoothBass * 0.45;
       targetAmp = (3 + smoothBass * height * 0.5) * bassMultiplier;
     }
@@ -4375,6 +4658,12 @@ if (localStorage.getItem('gp_dynamic_cover') === 'true') {
 }
 
 function updateActiveTab(viewName) {
+  // Clear home carousel timer if switching away from home
+  if (viewName !== 'home' && carouselTimer) {
+    clearInterval(carouselTimer);
+    carouselTimer = null;
+  }
+
   // Hide user search results if we switch away from search view
   const usersContainer = document.getElementById('users-search-results');
   if (usersContainer && viewName !== 'search') {
@@ -6085,9 +6374,6 @@ function renderLRCLines(lines) {
  * Called on timeupdate.
  */
 function syncLyricsToTime(currentTime) {
-  const linEls = lyricsContent.querySelectorAll('.lyrics-line');
-  if (!linEls.length) return;
-
   let activeIdx = -1;
   for (let i = 0; i < lyricsState.lrcLines.length; i++) {
     if (lyricsState.lrcLines[i].time <= currentTime) {
@@ -6096,6 +6382,14 @@ function syncLyricsToTime(currentTime) {
       break;
     }
   }
+
+  if (activeIdx === lyricsState.lastActiveIdx) {
+    return;
+  }
+  lyricsState.lastActiveIdx = activeIdx;
+
+  const linEls = lyricsContent.querySelectorAll('.lyrics-line');
+  if (!linEls.length) return;
 
   linEls.forEach((el, i) => {
     el.classList.remove('active', 'past', 'upcoming');
@@ -6148,6 +6442,7 @@ async function openLyricsOverlay() {
   lyricsState.lrcLines = [];
   lyricsState.format = null;
   lyricsState.currentTrackId = currentTrack.id;
+  lyricsState.lastActiveIdx = -1;
 
   try {
     const data = await fetchLyrics(currentTrack.title, currentTrack.artist);
@@ -6200,6 +6495,7 @@ function closeLyricsOverlay() {
     audioPlayer.removeEventListener('timeupdate', lyricsState.syncTimer);
     lyricsState.syncTimer = null;
   }
+  lyricsState.lastActiveIdx = -1;
 }
 
 // ── Lyrics button click ───────────────────────────────────────────

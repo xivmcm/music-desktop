@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600&family=Montserrat:wght@400;500;600;700&family=Outfit:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap');
 
 html {
   background: transparent !important;
@@ -29,6 +29,11 @@ html {
   --glow: 0.05;
   --blur: 28px;
   --window-radius: 12px;
+  /* Mega Customizer Additions */
+  --font-family: 'Inter', sans-serif;
+  --border-width: 1px;
+  --glow-color: rgba(255, 255, 255, 0.05);
+  --card-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
 }
 
 .theme-dark-glass {
@@ -87,7 +92,7 @@ html {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-family, 'Inter', sans-serif);
   user-select: none;
 }
 
@@ -99,7 +104,7 @@ body {
   flex-direction: column;
   border-radius: var(--window-radius);
   overflow: hidden;
-  border: 1px solid var(--card-border);
+  border: var(--border-width, 1px) solid var(--card-border);
   box-shadow: var(--glass-shadow);
   transition: background 0.5s ease, color 0.5s ease, border-color 0.5s ease, box-shadow 0.5s ease;
   position: relative;
@@ -118,7 +123,7 @@ body::before {
   background-position: center;
   background-repeat: no-repeat;
   opacity: var(--bg-image-opacity, 0);
-  z-index: -1;
+  z-index: -2;
   pointer-events: none;
   transition: opacity 0.3s ease;
 }
@@ -147,7 +152,7 @@ body:not(.window-maximized) .titlebar {
   justify-content: space-between;
   align-items: center;
   padding: 0 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: var(--border-width, 1px) solid rgba(255, 255, 255, 0.04);
   -webkit-app-region: drag;
   z-index: 100;
 }
@@ -237,7 +242,7 @@ body:not(.window-maximized) .titlebar {
   background: rgba(10, 10, 12, 0.35);
   backdrop-filter: var(--blur-value);
   -webkit-backdrop-filter: var(--blur-value);
-  border-right: 1px solid var(--card-border);
+  border-right: var(--border-width, 1px) solid var(--card-border);
   box-shadow: 10px 0 30px rgba(0, 0, 0, 0.3), var(--glass-glow, none);
   z-index: 100;
   display: flex;
@@ -537,7 +542,7 @@ body:not(.window-maximized) .titlebar {
   background: var(--card-bg, rgba(255, 255, 255, 0.02));
   backdrop-filter: var(--blur-value);
   -webkit-backdrop-filter: var(--blur-value);
-  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.05));
+  border: var(--border-width, 1px) solid var(--card-border, rgba(255, 255, 255, 0.05));
   border-radius: 16px;
   padding: 12px;
   display: flex;
@@ -727,7 +732,7 @@ body:not(.window-maximized) .titlebar {
   background: var(--player-bg, rgba(5, 5, 5, 0.45));
   backdrop-filter: var(--blur-value);
   -webkit-backdrop-filter: var(--blur-value);
-  border: 1px solid var(--player-border, rgba(255, 255, 255, 0.05));
+  border: var(--border-width, 1px) solid var(--player-border, rgba(255, 255, 255, 0.05));
   border-radius: 20px;
   padding: 0 22px;
   display: flex;
@@ -4496,4 +4501,70 @@ body.mini-player-active .mini-player-block {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* GPU Hardware Acceleration for Glassmorphic elements and backdrop-filters */
+.sidebar,
+.search-header,
+.track-card,
+.track-card-horizontal,
+.friend-activity-panel,
+.update-banner,
+.artist-header,
+.search-history-dropdown,
+.settings-section,
+.studio-tabs,
+.mini-player-block,
+.load-more-btn,
+#users-search-results,
+.glass-auth-container,
+.carousel-nav-btn,
+.scroll-chevron,
+.spotify-placeholder-card,
+.lyrics-overlay,
+.mobile-tab-bar,
+.mood-card,
+.liquid-sphere {
+  transform: translateZ(0);
+  will-change: transform, filter;
+}
+
+/* Card Glass Styles overrides */
+body.glass-style-frosted .track-card,
+body.glass-style-frosted .sidebar,
+body.glass-style-frosted .player-bar,
+body.glass-style-frosted .settings-panel,
+body.glass-style-frosted .settings-section {
+  --card-bg: rgba(255, 255, 255, 0.12) !important;
+  --blur-value: blur(35px) !important;
+}
+body.glass-style-material .track-card,
+body.glass-style-material .sidebar,
+body.glass-style-material .player-bar,
+body.glass-style-material .settings-panel,
+body.glass-style-material .settings-section {
+  --card-bg: rgba(25, 25, 30, 0.85) !important;
+  --blur-value: blur(8px) !important;
+  --card-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
+}
+body.glass-style-flat .track-card,
+body.glass-style-flat .sidebar,
+body.glass-style-flat .player-bar,
+body.glass-style-flat .settings-panel,
+body.glass-style-flat .settings-section {
+  --card-bg: rgba(255, 255, 255, 0.05) !important;
+  --blur-value: none !important;
+  --border-width: 0px !important;
+}
+
+#ambient-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.8;
+  transition: opacity 0.5s ease;
 }

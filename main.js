@@ -106,8 +106,8 @@ function createWindow() {
     frame: false,            // Hides default OS frames for custom window layout
     transparent: true,      // Allows the desktop to show through for glassmorphism
     hasShadow: false,
-    backgroundColor: '#00000000',
-    icon: path.join(__dirname, 'assets/icon.png'),
+    thickFrame: false,      // Removes Windows native resizing outline and gray borders
+    show: false,            // Prevent white flashes on load
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -116,6 +116,10 @@ function createWindow() {
   });
 
   mainWindow.loadFile('index.html');
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+  });
 
   // Notify renderer of window maximize events to toggle rounded corners
   mainWindow.on('maximize', () => {

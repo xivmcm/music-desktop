@@ -133,6 +133,7 @@ body:not(.window-maximized) {
   overflow: hidden !important;
   clip-path: inset(0 round var(--window-radius)) !important;
   -webkit-clip-path: inset(0 round var(--window-radius)) !important;
+  transform: translateZ(0); /* Hardware accelerate body clip */
 }
 
 body:not(.window-maximized)::before {
@@ -738,6 +739,10 @@ body:not(.window-maximized) .titlebar {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  /* Subpixel rendering fix for transparent glassmorphic backgrounds */
+  -webkit-font-smoothing: subpixel-antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transform: translateZ(0);
   z-index: 50;
   transform: translateY(calc(100% + 18px)) translateZ(0);
   transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
@@ -2134,8 +2139,7 @@ body.window-maximized {
 body.mini-player-active {
   min-height: 100px !important;
   height: 100px !important;
-  background: transparent !important;
-  background-color: transparent !important;
+  background: var(--bg-gradient) !important; /* Keep theme background gradient */
   border: none !important;
   box-shadow: none !important;
   border-radius: var(--window-radius) !important;
@@ -2170,12 +2174,16 @@ body.mini-player-active .mini-player-block {
   background: var(--player-bg, rgba(5, 5, 5, 0.45));
   backdrop-filter: var(--blur-value);
   -webkit-backdrop-filter: var(--blur-value);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: var(--border-width, 1px) solid var(--player-border, rgba(255, 255, 255, 0.08));
   border-radius: var(--window-radius);
   box-shadow: var(--glass-shadow);
   overflow: hidden;
   -webkit-app-region: drag;
   animation: miniPlayerFadeIn 0.3s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  /* Subpixel rendering fix */
+  -webkit-font-smoothing: subpixel-antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transform: translateZ(0);
 }
 
 @keyframes miniPlayerFadeIn {
@@ -4567,4 +4575,24 @@ body.glass-style-flat .settings-section {
   pointer-events: none;
   opacity: 0.8;
   transition: opacity 0.5s ease;
+  border-radius: inherit;
+}
+
+/* Custom scrollbars inside Find Friends and Collab friend selectors */
+#find-friends-list::-webkit-scrollbar,
+#collab-friends-list::-webkit-scrollbar {
+  width: 6px;
+}
+#find-friends-list::-webkit-scrollbar-track,
+#collab-friends-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+#find-friends-list::-webkit-scrollbar-thumb,
+#collab-friends-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+#find-friends-list::-webkit-scrollbar-thumb:hover,
+#collab-friends-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
 }

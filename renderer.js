@@ -4559,8 +4559,8 @@ function startVisualizer() {
     
     const avgBass = bassBins > 0 ? bassSum / bassBins : 0;
     const bassNormalized = avgBass / 255;
-    smoothBass = smoothBass * 0.85 + bassNormalized * 0.15;
-    const bassKick = bassNormalized > 0.62;
+    smoothBass = smoothBass * 0.75 + bassNormalized * 0.25; // Faster bass smoothing
+    const bassKick = bassNormalized > 0.6; // Lower threshold to capture beats more frequently
     const playerBar = document.querySelector('.player-bar');
     if (playerBar) {
       playerBar.classList.toggle('bass-pulse', bassKick);
@@ -4569,10 +4569,11 @@ function startVisualizer() {
     // Determine target amplitude
     let targetAmp = 0;
     if (analyser) {
-      const bassMultiplier = bassKick ? 1.65 : 1 + smoothBass * 0.45;
-      targetAmp = (3 + smoothBass * height * 0.5) * bassMultiplier;
+      const bassMultiplier = bassKick ? 2.2 : 1.0 + smoothBass * 0.8;
+      targetAmp = (4 + smoothBass * height * 0.75) * bassMultiplier;
     }
-    currentAmp = currentAmp * 0.9 + targetAmp * 0.1;
+    // High-responsiveness transition constants
+    currentAmp = currentAmp * 0.75 + targetAmp * 0.25;
 
     time += 0.04;
 
@@ -4606,7 +4607,14 @@ function drawSingleWave(ctx, time, amp, phaseOffset, width, height, fillGradient
     const x = i * segmentWidth;
     const waveFreq = 0.5;
     const wavePhase = i * 0.45 + phaseOffset;
-    const y = amp * Math.sin(time * waveFreq + wavePhase);
+    let y = amp * Math.sin(time * waveFreq + wavePhase);
+    
+    // Vibrate wave points intensely on strong bass
+    if (amp > 15) {
+      const jitter = (Math.random() - 0.5) * (amp * 0.35);
+      y += jitter;
+    }
+    
     points.push({ x, y: Math.max(1, y + amp + 1) });
   }
 
@@ -5706,6 +5714,33 @@ function renderCarousel(carouselTracks, container = null) {
   return carouselSection;
 }
 
+// Search and play a friend's active track instantly
+async function playFriendTrack(trackName, artist) {
+  if (!trackName) return;
+  showToastNotification(`Searching: ${trackName} - ${artist || ''}...`);
+  try {
+    const query = `${trackName} ${artist || ''}`.trim();
+    const response = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&sources=soundcloud,youtube&page=1&limit=5`);
+    if (response.status === 200) {
+      const data = await response.json();
+      if (data.status === 'success' && data.tracks && data.tracks.length > 0) {
+        const track = data.tracks[0];
+        playlist = [track];
+        currentTrackIndex = 0;
+        playTrack(0);
+        showToastNotification(`Playing: ${track.title}`);
+      } else {
+        showToastNotification(`Track not found`);
+      }
+    } else {
+      showToastNotification(`Failed to search track`);
+    }
+  } catch (err) {
+    console.error(err);
+    showToastNotification(`Error playing track`);
+  }
+}
+
 // Render Friend Activity sidebar panel
 function renderFriendActivity() {
   const containerEl = document.getElementById('friend-activity-list');
@@ -5761,6 +5796,17 @@ function renderFriendActivity() {
       </div>
     `;
 
+    if (isPlaying) {
+      const marqueeEl = item.querySelector('.friend-marquee');
+      if (marqueeEl) {
+        marqueeEl.style.cursor = 'pointer';
+        marqueeEl.title = 'Нажмите, чтобы включить этот трек';
+        marqueeEl.addEventListener('click', () => {
+          playFriendTrack(status.trackName, status.artist);
+        });
+      }
+    }
+
     containerEl.appendChild(item);
   });
 }
@@ -5777,6 +5823,9 @@ async function syncPlaylistsFromServer(updatedPlaylistId) {
       if (data.status === 'success') {
         currentUser.playlists = data.user.playlists;
         localStorage.setItem('auth_user', JSON.stringify(currentUser));
+        
+        // Also save the playlists into the local storage database key used by getPlaylists()
+        localStorage.setItem(getStorageKey('playlists'), JSON.stringify(data.user.playlists));
         
         // Render again to capture updates in real-time
         if (activeView === 'playlist-tracks' && activePlaylistId === updatedPlaylistId) {

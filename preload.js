@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateReady: (callback) => ipcRenderer.on('update-ready', () => callback()),
   downloadUpdate: () => ipcRenderer.send('download-update'),
   installUpdate: () => ipcRenderer.send('install-update'),
+  checkForUpdates: () => ipcRenderer.send('check-for-updates'),
   updatePresence: (trackData) => ipcRenderer.send('update-presence', trackData),
   saveThemeBackground: (payload) => ipcRenderer.invoke('save-theme-background', payload),
   toggleMiniPlayer: () => ipcRenderer.send('toggle-mini-player'),

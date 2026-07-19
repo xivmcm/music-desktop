@@ -261,6 +261,12 @@ function createWindow() {
     autoUpdater.quitAndInstall();
   });
 
+  ipcMain.on('check-for-updates', () => {
+    autoUpdater.checkForUpdates().catch(err => {
+      mainWindow.webContents.send('update-status', 'error', err.message);
+    });
+  });
+
   // Check for updates shortly after app shows up
   mainWindow.once('ready-to-show', () => {
     setTimeout(() => {

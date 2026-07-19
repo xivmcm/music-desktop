@@ -1,4 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
+const APP_VERSION = '1.12.4';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -3418,7 +3419,7 @@ function renderSettings(options = {}) {
     </div>
 
     <div class="settings-section" data-section="user-info">
-      <h3>Информация о пользователе</h3>
+      <h3>Информация о приложении</h3>
       <div class="settings-info-row">
         <span class="settings-info-label">Активный профиль:</span>
         <span class="settings-info-value" id="settings-profile-val">${currentProfile}</span>
@@ -3427,6 +3428,17 @@ function renderSettings(options = {}) {
         <span class="settings-info-label">Платформа:</span>
         <span class="settings-info-value">Electron Client</span>
       </div>
+      <div class="settings-info-row">
+        <span class="settings-info-label">Текущая версия:</span>
+        <span class="settings-info-value">${APP_VERSION}</span>
+      </div>
+      ${isElectron ? `
+      <div style="margin-top: 15px; display: flex; justify-content: flex-start;">
+        <button id="manual-check-updates-btn" class="view-btn" style="padding: 8px 16px; font-size: 12px; height: auto;">
+          <span>Проверить обновление</span>
+        </button>
+      </div>
+      ` : ''}
     </div>
   `;
 
@@ -3934,6 +3946,14 @@ function renderSettings(options = {}) {
     });
   }
 
+  const manualCheckBtn = panel.querySelector('#manual-check-updates-btn');
+  if (manualCheckBtn && isElectron && window.electronAPI?.checkForUpdates) {
+    manualCheckBtn.addEventListener('click', () => {
+      showToastNotification('Проверка наличия обновлений...');
+      window.electronAPI.checkForUpdates();
+    });
+  }
+
   tracksContainer.classList.remove('hidden');
   updateActiveTab(scope);
 }
@@ -4292,8 +4312,11 @@ if (isElectron && window.electronAPI && window.electronAPI.onUpdateStatus) {
       bannerLoader.classList.add('hidden');
       updateProgressBar.style.width = '0%';
       updateBanner.classList.remove('hidden');
+    } else if (status === 'not-available') {
+      showToastNotification('У вас установлена последняя версия приложения!');
     } else if (status === 'error') {
-      console.error('[Auto-Updater] Error searching for updates');
+      console.error('[Auto-Updater] Error searching for updates:', version);
+      showToastNotification('Ошибка при проверке обновлений.');
     }
   });
 

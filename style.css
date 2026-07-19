@@ -13,8 +13,8 @@ html {
   --card-border: rgba(255, 255, 255, 0.05);
   --card-hover-bg: rgba(255, 255, 255, 0.06);
   --card-hover-border: rgba(255, 255, 255, 0.15);
-  --player-bg: rgba(5, 5, 5, 0.45);
-  --player-border: rgba(255, 255, 255, 0.05);
+  --player-bg: rgba(8, 8, 12, 0.78);
+  --player-border: rgba(255, 255, 255, 0.07);
   --glass-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
   --accent-color: #ffffff;
   --panel-bg: rgba(0, 0, 0, 0.2);
@@ -747,25 +747,28 @@ body:not(.window-maximized) .titlebar {
   right: 16px;
   width: auto;
   height: 86px;
-  background: var(--player-bg, rgba(5, 5, 5, 0.45));
-  backdrop-filter: var(--blur-value);
-  -webkit-backdrop-filter: var(--blur-value);
-  border: var(--border-width, 1px) solid var(--player-border, rgba(255, 255, 255, 0.05));
+  background: var(--player-bg, rgba(8, 8, 12, 0.78));
+  /* Reduce backdrop blur for the player bar specifically for sharper text rendering */
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: var(--border-width, 1px) solid var(--player-border, rgba(255, 255, 255, 0.07));
   border-radius: 20px;
   padding: 0 22px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  /* Subpixel rendering fix for transparent glassmorphic backgrounds */
-  -webkit-font-smoothing: subpixel-antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  transform: translateZ(0);
-  z-index: 50;
-  transform: translateY(calc(100% + 18px)) translateZ(0);
+  /* GPU layer promotion — prevents compositing artifacts on text */
+  will-change: transform;
+  transform: translateY(calc(100% + 18px));
   transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
   overflow: hidden;
   box-shadow: 0 18px 54px rgba(0, 0, 0, 0.35), var(--glass-glow, none);
   transform-origin: bottom center;
+  z-index: 50;
+  /* Subpixel rendering fix for transparent glassmorphic backgrounds */
+  -webkit-font-smoothing: subpixel-antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  isolation: isolate;
 }
 
 #player-visualizer {
@@ -784,7 +787,8 @@ body:not(.window-maximized) .titlebar {
 }
 
 .container.player-active .player-bar {
-  transform: translateY(0) translateZ(0);
+  /* Use translate3d for proper GPU compositing — sharper text */
+  transform: translate3d(0, 0, 0);
 }
 
 .container.player-active .content-area {
@@ -837,6 +841,9 @@ body:not(.window-maximized) .titlebar {
   overflow: hidden;
   text-overflow: ellipsis;
   margin-bottom: 2px;
+  /* Crisp text rendering on translucent panel */
+  -webkit-font-smoothing: subpixel-antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 .track-artist {
@@ -846,6 +853,8 @@ body:not(.window-maximized) .titlebar {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  -webkit-font-smoothing: subpixel-antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 /* Center Controls */

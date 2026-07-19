@@ -271,9 +271,22 @@ function updateMediaSessionPlaybackState(isPlaying) {
 let cachedForYouData = null;
 
 // Base Server API URL Configuration
-const DEFAULT_API_URL = 'https://music-backend-iyni.onrender.com';
+const DEFAULT_API_URL = 'https://music-backend-gwga.onrender.com';
+// If user has old default URL in localStorage, update it to the new default
+if (localStorage.getItem('gp_backend_url') === 'https://music-backend-iyni.onrender.com') {
+  localStorage.setItem('gp_backend_url', DEFAULT_API_URL);
+}
 const API_URL = localStorage.getItem('gp_backend_url') || DEFAULT_API_URL;
 const BACKEND_URL = `${API_URL}/api`;
+
+// Helper to construct proxied audio stream URL via Cloudflare audio-proxy
+function getAudioStreamUrl(track, seekTime) {
+  let streamUrl = `${BACKEND_URL}/stream?id=${encodeURIComponent(track.id)}&source=${track.source}&artist=${encodeURIComponent(track.artist)}&title=${encodeURIComponent(track.title)}`;
+  if (seekTime !== undefined) {
+    streamUrl = `${BACKEND_URL}/stream?id=${encodeURIComponent(track.id)}&source=${track.source}&seek=${seekTime}&artist=${encodeURIComponent(track.artist)}&title=${encodeURIComponent(track.title)}`;
+  }
+  return `https://round-mode-ca71.wayliedayn.workers.dev/?url=${encodeURIComponent(streamUrl)}`;
+}
 
 // ── Keep-Alive ping ──────────────────────────────────────────────────────────
 // Pings the backend every 10 minutes so Render Free Tier never sleeps.
@@ -795,7 +808,7 @@ function playTrack(index) {
 
   // Load stream
   audioPlayer.crossOrigin = 'anonymous';
-  audioPlayer.src = `${BACKEND_URL}/stream?id=${encodeURIComponent(track.id)}&source=${track.source}&artist=${encodeURIComponent(track.artist)}&title=${encodeURIComponent(track.title)}`;
+  audioPlayer.src = getAudioStreamUrl(track);
 
   // Initialize and apply Audio Effects
   initAudioEffects();
@@ -1161,7 +1174,7 @@ audioPlayer.addEventListener('ended', () => {
     currentSeekOffset = 0;
     const track = playlist[currentTrackIndex];
     audioPlayer.crossOrigin = 'anonymous';
-    audioPlayer.src = `${BACKEND_URL}/stream?id=${encodeURIComponent(track.id)}&source=${track.source}&artist=${encodeURIComponent(track.artist)}&title=${encodeURIComponent(track.title)}`;
+    audioPlayer.src = getAudioStreamUrl(track);
     const playPromise = audioPlayer.play();
     currentPlayPromise = playPromise;
     playPromise
@@ -1189,7 +1202,7 @@ function seekToPercent(percent) {
     currentSeekOffset = seekTime;
 
     audioPlayer.crossOrigin = 'anonymous';
-    audioPlayer.src = `${BACKEND_URL}/stream?id=${encodeURIComponent(track.id)}&source=${track.source}&seek=${seekTime}&artist=${encodeURIComponent(track.artist)}&title=${encodeURIComponent(track.title)}`;
+    audioPlayer.src = getAudioStreamUrl(track, seekTime);
     const playPromise = audioPlayer.play();
     currentPlayPromise = playPromise;
     playPromise

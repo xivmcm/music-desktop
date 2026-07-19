@@ -101,8 +101,10 @@ ipcMain.handle('save-theme-background', async (event, payload = {}) => {
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
-    width: 1000,
-    height: 700,
+    width: 1100,
+    height: 750,
+    minWidth: 950,
+    minHeight: 650,
     frame: false,            // Hides default OS frames for custom window layout
     transparent: true,      // Allows the desktop to show through for glassmorphism
     hasShadow: false,

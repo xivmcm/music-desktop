@@ -287,6 +287,23 @@ body:not(.window-maximized) .titlebar {
   background: linear-gradient(135deg, var(--text-color) 0%, var(--text-dim) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-version-badge {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  vertical-align: middle;
+  line-height: 1.6;
 }
 
 .sidebar-menu {
@@ -2139,13 +2156,16 @@ body.window-maximized {
 body.mini-player-active {
   min-height: 100px !important;
   height: 100px !important;
-  background: var(--bg-gradient) !important; /* Keep theme background gradient */
+  /* MUST stay transparent so OS shows rounded clip correctly on frameless window */
+  background: transparent !important;
+  background-color: transparent !important;
   border: none !important;
   box-shadow: none !important;
   border-radius: var(--window-radius) !important;
   overflow: hidden !important;
   clip-path: inset(0 round var(--window-radius)) !important;
   -webkit-clip-path: inset(0 round var(--window-radius)) !important;
+  transform: translateZ(0);
 }
 
 body.mini-player-active::before {

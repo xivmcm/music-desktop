@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.12.8';
+const APP_VERSION = '1.12.9';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -4010,6 +4010,27 @@ function isColorDark(hex) {
   return true;
 }
 
+function mixHexColors(color1, color2, weight) {
+  const parse = (hex) => {
+    if (/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)) {
+      let c = hex.substring(1).split('');
+      if (c.length === 3) {
+        c = [c[0], c[0], c[1], c[1], c[2], c[2]];
+      }
+      const num = parseInt(c.join(''), 16);
+      return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+    }
+    return { r: 255, g: 255, b: 255 };
+  };
+  const c1 = parse(color1);
+  const c2 = parse(color2);
+  const r = Math.min(255, Math.max(0, Math.round(c1.r * (1 - weight) + c2.r * weight)));
+  const g = Math.min(255, Math.max(0, Math.round(c1.g * (1 - weight) + c2.g * weight)));
+  const b = Math.min(255, Math.max(0, Math.round(c1.b * (1 - weight) + c2.b * weight)));
+  const toHex = (n) => n.toString(16).padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
 function applyBackgroundImage(base64Str) {
   const root = document.documentElement;
   if (base64Str) {
@@ -4171,19 +4192,32 @@ function applyCustomTheme(theme) {
     root.style.setProperty('--bg-gradient', theme.bgColor || '#1e1e24');
   }
 
+  const isDarkBg = isColorDark(theme.bgColor1 || theme.bgColor || '#1e1e24');
+
   // Resolve theme custom colors
-  const playerBgHex = theme.playerBg || '#050505';
+  let playerBgHex = theme.playerBg || '#050505';
+
+  // Dynamic player-bg color adjustment logic: 
+  // If the user hasn't overridden the default dark playerBg (#050505 or #08080c),
+  // derive the player color from the background color at the bottom (bgColor2).
+  if ((playerBgHex === '#050505' || playerBgHex === '#08080c') && theme.bgColor2) {
+    playerBgHex = isDarkBg 
+      ? mixHexColors(theme.bgColor2, '#000000', 0.6) 
+      : mixHexColors(theme.bgColor2, '#ffffff', 0.6);
+  }
+
   const cardBgHex = theme.cardBg || '#ffffff';
   const accentColorHex = theme.accentColor || theme.textColor || '#ffffff';
 
-  root.style.setProperty('--player-bg', hexToRgba(playerBgHex, theme.opacity));
-  root.style.setProperty('--player-border', hexToRgba(playerBgHex, theme.opacity * 0.15));
-  root.style.setProperty('--card-bg', hexToRgba(cardBgHex, theme.opacity * 0.15));
-  root.style.setProperty('--card-border', hexToRgba(cardBgHex, theme.opacity * 0.2));
-  root.style.setProperty('--card-hover-bg', hexToRgba(cardBgHex, theme.opacity * 0.3));
-  root.style.setProperty('--card-hover-border', hexToRgba(cardBgHex, theme.opacity * 0.5));
+  // Enforce a minimum opacity threshold (0.18) so panels never completely vanish
+  const effectiveOpacity = Math.max(theme.opacity !== undefined ? theme.opacity : 0.45, 0.18);
 
-  const isDarkBg = isColorDark(theme.bgColor1 || theme.bgColor || '#1e1e24');
+  root.style.setProperty('--player-bg', hexToRgba(playerBgHex, effectiveOpacity));
+  root.style.setProperty('--player-border', hexToRgba(playerBgHex, effectiveOpacity * 0.15));
+  root.style.setProperty('--card-bg', hexToRgba(cardBgHex, effectiveOpacity * 0.15));
+  root.style.setProperty('--card-border', hexToRgba(cardBgHex, effectiveOpacity * 0.2));
+  root.style.setProperty('--card-hover-bg', hexToRgba(cardBgHex, effectiveOpacity * 0.3));
+  root.style.setProperty('--card-hover-border', hexToRgba(cardBgHex, effectiveOpacity * 0.5));
   if (isDarkBg) {
     root.style.setProperty('--panel-bg', `rgba(0, 0, 0, ${theme.opacity * 0.4})`);
   } else {
@@ -5742,12 +5776,25 @@ async function playFriendTrack(trackName, artist) {
   if (!trackName) return;
   showToastNotification(`Searching: ${trackName} - ${artist || ''}...`);
   try {
-    const query = `${trackName} ${artist || ''}`.trim();
-    const response = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&sources=soundcloud,youtube&page=1&limit=5`);
+    let query = `${trackName} ${artist || ''}`.trim();
+    let response = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&sources=soundcloud,youtube&page=1&limit=5`);
     if (response.status === 200) {
-      const data = await response.json();
-      if (data.status === 'success' && data.tracks && data.tracks.length > 0) {
-        const track = data.tracks[0];
+      let data = await response.json();
+      let tracks = data.status === 'success' ? (data.results || data.tracks || []) : [];
+      
+      // Fallback: If combined search yielded no results, try searching by trackName alone
+      if (tracks.length === 0 && artist) {
+        console.log(`No results for "${query}". Trying fallback search with only trackName: "${trackName}"`);
+        query = trackName.trim();
+        response = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&sources=soundcloud,youtube&page=1&limit=5`);
+        if (response.status === 200) {
+          data = await response.json();
+          tracks = data.status === 'success' ? (data.results || data.tracks || []) : [];
+        }
+      }
+
+      if (tracks.length > 0) {
+        const track = tracks[0];
         playlist = [track];
         currentTrackIndex = 0;
         playTrack(0);

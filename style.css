@@ -145,6 +145,16 @@ body:not(.window-maximized) .titlebar {
   border-top-right-radius: var(--window-radius) !important;
 }
 
+body:not(.window-maximized) .sidebar {
+  border-bottom-left-radius: var(--window-radius) !important;
+}
+
+body:not(.window-maximized) .container {
+  border-bottom-left-radius: var(--window-radius) !important;
+  border-bottom-right-radius: var(--window-radius) !important;
+  overflow: hidden !important;
+}
+
 /* Custom Titlebar */
 .titlebar {
   height: 38px;
@@ -784,6 +794,7 @@ body:not(.window-maximized) .titlebar {
 .player-bar > * {
   position: relative;
   z-index: 2;
+  transform: translate3d(0, 0, 0); /* Force crisp GPU text rendering */
 }
 
 .container.player-active .player-bar {
@@ -2200,7 +2211,7 @@ body.mini-player-active .mini-player-block {
   box-sizing: border-box;
   width: 100%;
   height: 100%;
-  background: var(--player-bg, rgba(5, 5, 5, 0.45));
+  background: var(--player-bg, rgba(8, 8, 12, 0.78)), var(--bg-gradient) !important;
   backdrop-filter: var(--blur-value);
   -webkit-backdrop-filter: var(--blur-value);
   border: var(--border-width, 1px) solid var(--player-border, rgba(255, 255, 255, 0.08));
@@ -4542,6 +4553,7 @@ body.mini-player-active .mini-player-block {
 
 /* GPU Hardware Acceleration for Glassmorphic elements and backdrop-filters */
 .sidebar,
+.container,
 .search-header,
 .track-card,
 .track-card-horizontal,

@@ -4604,7 +4604,7 @@ body.glass-style-flat .settings-section {
   pointer-events: none;
   opacity: 0.8;
   transition: opacity 0.5s ease;
-  border-radius: inherit;
+  border-radius: var(--window-radius) !important;
 }
 
 /* Custom scrollbars inside Find Friends and Collab friend selectors */

@@ -37,7 +37,7 @@ html {
 }
 
 .theme-dark-glass {
-  /* Default variables */
+  --bg-gradient: radial-gradient(circle at 50% 30%, #1e1e24 0%, #0a0a0c 100%);
 }
 
 .theme-pink-white {
@@ -286,6 +286,7 @@ body:not(.window-maximized) .titlebar {
   letter-spacing: 3px;
   background: linear-gradient(135deg, var(--text-color) 0%, var(--text-dim) 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
   display: flex;
   align-items: center;
@@ -516,6 +517,7 @@ body:not(.window-maximized) .titlebar {
   margin-bottom: 12px;
   background: linear-gradient(135deg, var(--text-color) 0%, var(--text-dim) 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 

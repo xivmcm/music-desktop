@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.12.9';
+const APP_VERSION = '1.13.0';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -280,13 +280,13 @@ if (localStorage.getItem('gp_backend_url') === 'https://music-backend-iyni.onren
 const API_URL = localStorage.getItem('gp_backend_url') || DEFAULT_API_URL;
 const BACKEND_URL = `${API_URL}/api`;
 
-// Helper to construct proxied audio stream URL via Cloudflare audio-proxy
+// Helper to construct audio stream URL
 function getAudioStreamUrl(track, seekTime) {
   let streamUrl = `${BACKEND_URL}/stream?id=${encodeURIComponent(track.id)}&source=${track.source}&artist=${encodeURIComponent(track.artist)}&title=${encodeURIComponent(track.title)}`;
   if (seekTime !== undefined) {
-    streamUrl = `${BACKEND_URL}/stream?id=${encodeURIComponent(track.id)}&source=${track.source}&seek=${seekTime}&artist=${encodeURIComponent(track.artist)}&title=${encodeURIComponent(track.title)}`;
+    streamUrl += `&seek=${seekTime}`;
   }
-  return `https://round-mode-ca71.wayliedayn.workers.dev/?url=${encodeURIComponent(streamUrl)}`;
+  return streamUrl;
 }
 
 // ── Keep-Alive ping ──────────────────────────────────────────────────────────
@@ -809,7 +809,7 @@ function playTrack(index) {
 
   // Load stream
   audioPlayer.crossOrigin = 'anonymous';
-  audioPlayer.src = getAudioStreamUrl(track);
+  const rawStreamUrl = getAudioStreamUrl(track);
 
   // Initialize and apply Audio Effects
   initAudioEffects();
@@ -818,35 +818,54 @@ function playTrack(index) {
   setupMediaSession(track);
   setupNativeMediaControlsListener();
 
-  const playPromise = audioPlayer.play();
-  currentPlayPromise = playPromise;
-
   // Clear any previous loading timeout before starting a new track
   clearTimeout(trackLoadTimeout);
 
-  // Set 10-second track loading timeout
-  trackLoadTimeout = setTimeout(() => {
-    if (currentPlayPromise === playPromise) {
-      handleTrackLoadError("Track loading timed out (10 seconds limit)");
-    }
-  }, 10000);
+  const startPlaybackWithUrl = (targetUrl) => {
+    audioPlayer.src = targetUrl;
+    const playPromise = audioPlayer.play();
+    currentPlayPromise = playPromise;
 
-  playPromise
-    .then(() => {
-      clearTimeout(trackLoadTimeout);
+    trackLoadTimeout = setTimeout(() => {
       if (currentPlayPromise === playPromise) {
-        setPlayState(true);
+        handleTrackLoadError("Track loading timed out (10 seconds limit)");
+      }
+    }, 10000);
+
+    playPromise
+      .then(() => {
+        clearTimeout(trackLoadTimeout);
+        if (currentPlayPromise === playPromise) {
+          setPlayState(true);
+        }
+      })
+      .catch(err => {
+        clearTimeout(trackLoadTimeout);
+        if (err.name === 'AbortError') return;
+        console.error('Playback failed:', err);
+
+        // Fallback to proxy stream URL if direct CDN URL failed
+        if (targetUrl !== rawStreamUrl) {
+          console.log('[Stream Resolution] Direct CDN stream failed, falling back to backend stream proxy...');
+          startPlaybackWithUrl(rawStreamUrl);
+        } else if (currentPlayPromise === playPromise) {
+          handleTrackLoadError(err.message || 'Media playback error');
+        }
+      });
+  };
+
+  // Resolve direct SoundCloud CDN URL to eliminate Render 5GB server bandwidth limit
+  fetch(`${rawStreamUrl}&direct=true`)
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.status === 'success' && data.directUrl) {
+        startPlaybackWithUrl(data.directUrl);
+      } else {
+        startPlaybackWithUrl(rawStreamUrl);
       }
     })
-    .catch(err => {
-      clearTimeout(trackLoadTimeout);
-      if (err.name === 'AbortError') {
-        return; // Ignore abort exceptions from consecutive clicks
-      }
-      console.error('Playback failed:', err);
-      if (currentPlayPromise === playPromise) {
-        handleTrackLoadError(err.message || 'Media playback error');
-      }
+    .catch(() => {
+      startPlaybackWithUrl(rawStreamUrl);
     });
 }
 

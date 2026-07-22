@@ -107,8 +107,9 @@ function createWindow() {
     minHeight: 650,
     frame: false,            // Hides default OS frames for custom window layout
     transparent: true,      // Allows the desktop to show through for glassmorphism
-    hasShadow: false,
-    thickFrame: false,      // Removes Windows native resizing outline and gray borders
+    backgroundColor: '#00000000', // Fully transparent native canvas background to prevent black corners
+    hasShadow: true,        // Enable native window shadow and DWM rounded corners
+    thickFrame: true,       // Enables Windows native DWM composition frame rounding
     show: false,            // Prevent white flashes on load
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -280,6 +281,22 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Configure native DNS-over-HTTPS (DoH) in Electron to bypass DNS blocking in RU
+  try {
+    if (typeof app.configureHostResolver === 'function') {
+      app.configureHostResolver({
+        secureDnsMode: 'secure',
+        secureDnsServers: [
+          'https://1.1.1.1/dns-query',
+          'https://dns.google/dns-query'
+        ]
+      });
+      console.log('[DNS-over-HTTPS] Secure DoH host resolver configured successfully.');
+    }
+  } catch (dohErr) {
+    console.warn('[DNS-over-HTTPS Warning] Failed to configure DoH:', dohErr.message);
+  }
+
   initDiscordRPC();
   createWindow();
 

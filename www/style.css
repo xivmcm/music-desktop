@@ -1,7 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600&family=Montserrat:wght@400;500;600;700&family=Outfit:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap');
 
 html {
-  background: var(--bgColor1, #121218) !important;
+  background: transparent !important;
   overflow: hidden;
 }
 
@@ -132,9 +132,6 @@ body::before {
 body:not(.window-maximized) {
   border-radius: var(--window-radius) !important;
   overflow: hidden !important;
-  clip-path: inset(0 round var(--window-radius)) !important;
-  -webkit-clip-path: inset(0 round var(--window-radius)) !important;
-  transform: translateZ(0); /* Hardware accelerate body clip */
 }
 
 body:not(.window-maximized)::before {

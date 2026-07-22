@@ -107,9 +107,9 @@ function createWindow() {
     minHeight: 650,
     frame: false,            // Hides default OS frames for custom window layout
     transparent: true,      // Allows desktop transparency for glassmorphism
-    backgroundColor: '#121218', // Matches dark glass theme to prevent black corner artifacts
-    hasShadow: true,        // Enable native window shadow and DWM rounded corners
-    thickFrame: true,       // Enables Windows native DWM composition frame rounding
+    backgroundColor: '#00000000', // Fully transparent background
+    hasShadow: false,       // Disable DWM shadow quad that creates black borders on Windows
+    thickFrame: false,      // Disable DWM thick frame that creates black quad margins
     show: false,            // Prevent white flashes on load
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

@@ -2,6 +2,7 @@
   "name": "music-desktop",
   "version": "1.13.1",
   "description": "Cross-platform music player aggregator desktop application",
+  "author": "GlassPlayer",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -28,7 +29,6 @@
       "oneClick": true,
       "perMachine": false,
       "allowToChangeInstallationDirectory": false,
-      "killProcessOnUninst": true,
       "deleteAppDataOnUninstall": false
     },
     "publish": [

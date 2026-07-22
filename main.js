@@ -106,8 +106,8 @@ function createWindow() {
     minWidth: 950,
     minHeight: 650,
     frame: false,            // Hides default OS frames for custom window layout
-    transparent: true,      // Allows the desktop to show through for glassmorphism
-    backgroundColor: '#00000000', // Fully transparent native canvas background to prevent black corners
+    transparent: true,      // Allows desktop transparency for glassmorphism
+    backgroundColor: '#121218', // Matches dark glass theme to prevent black corner artifacts
     hasShadow: true,        // Enable native window shadow and DWM rounded corners
     thickFrame: true,       // Enables Windows native DWM composition frame rounding
     show: false,            // Prevent white flashes on load

@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.13.3';
+const APP_VERSION = '1.13.4';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -3976,12 +3976,6 @@ function renderSettings(options = {}) {
   updateActiveTab(scope);
 }
 
-function syncElectronThemeColor(colorHex) {
-  if (isElectron && window.electronAPI && window.electronAPI.setThemeColor && colorHex) {
-    window.electronAPI.setThemeColor(colorHex);
-  }
-}
-
 function applyTheme(themeName) {
   document.body.classList.remove('theme-dark-glass', 'theme-pink-white', 'theme-silver-matrix');
   if (themeName === 'custom') {
@@ -4000,13 +3994,6 @@ function applyTheme(themeName) {
   } else {
     clearCustomThemeProperties();
     document.body.classList.add(themeName);
-    if (themeName === 'theme-pink-white') {
-      syncElectronThemeColor('#ffd1ff');
-    } else if (themeName === 'theme-silver-matrix') {
-      syncElectronThemeColor('#e5e5ea');
-    } else {
-      syncElectronThemeColor('#0a0a0c');
-    }
   }
   localStorage.setItem('gp_theme', themeName);
 }
@@ -4265,7 +4252,6 @@ function applyCustomTheme(theme) {
   // Redesign dynamic variables exposure
   const primaryBgColor = theme.bgColor1 || theme.bgColor || '#121218';
   root.style.setProperty('--bgColor1', primaryBgColor);
-  syncElectronThemeColor(primaryBgColor);
   root.style.setProperty('--glow', theme.glow !== undefined ? theme.glow : 0.05);
   root.style.setProperty('--blur', `${theme.blur !== undefined ? theme.blur : 28}px`);
   

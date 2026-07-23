@@ -1521,13 +1521,13 @@ function deleteUserProfile(profileName) {
 function getGreeting() {
   const hour = new Date().getHours();
   if (hour >= 5 && hour < 12) {
-    return 'Good morning';
+    return 'Доброе утро';
   } else if (hour >= 12 && hour < 18) {
-    return 'Good afternoon';
+    return 'Добрый день';
   } else if (hour >= 18 && hour < 22) {
-    return 'Good evening';
+    return 'Добрый вечер';
   } else {
-    return 'Good night';
+    return 'Доброй ночи';
   }
 }
 
@@ -2211,7 +2211,6 @@ function renderHome(sectionsData, forYouData) {
   welcomeHeader.innerHTML = `
     <div class="welcome-greeting">
       <h2>${getGreeting()}, ${escapeHTML(username)}</h2>
-      <p class="welcome-subtitle">Play what you love.</p>
     </div>
     <div class="sources-pill-capsule" style="position: relative;">
       <div class="capsule-active-indicator" style="left: ${activeHomeSource === 'soundcloud' ? '4' : '44'}px;"></div>
@@ -3977,6 +3976,12 @@ function renderSettings(options = {}) {
   updateActiveTab(scope);
 }
 
+function syncElectronThemeColor(colorHex) {
+  if (isElectron && window.electronAPI && window.electronAPI.setThemeColor && colorHex) {
+    window.electronAPI.setThemeColor(colorHex);
+  }
+}
+
 function applyTheme(themeName) {
   document.body.classList.remove('theme-dark-glass', 'theme-pink-white', 'theme-silver-matrix');
   if (themeName === 'custom') {
@@ -3995,6 +4000,13 @@ function applyTheme(themeName) {
   } else {
     clearCustomThemeProperties();
     document.body.classList.add(themeName);
+    if (themeName === 'theme-pink-white') {
+      syncElectronThemeColor('#ffd1ff');
+    } else if (themeName === 'theme-silver-matrix') {
+      syncElectronThemeColor('#e5e5ea');
+    } else {
+      syncElectronThemeColor('#0a0a0c');
+    }
   }
   localStorage.setItem('gp_theme', themeName);
 }
@@ -4251,7 +4263,9 @@ function applyCustomTheme(theme) {
   root.style.setProperty('--glass-glow', `inset 0 1px 0 0 ${glowColorRgba}`);
 
   // Redesign dynamic variables exposure
-  root.style.setProperty('--bgColor1', theme.bgColor1 || theme.bgColor || '#1e1e24');
+  const primaryBgColor = theme.bgColor1 || theme.bgColor || '#121218';
+  root.style.setProperty('--bgColor1', primaryBgColor);
+  syncElectronThemeColor(primaryBgColor);
   root.style.setProperty('--glow', theme.glow !== undefined ? theme.glow : 0.05);
   root.style.setProperty('--blur', `${theme.blur !== undefined ? theme.blur : 28}px`);
   
@@ -6301,15 +6315,15 @@ async function loadSpotifyMoodTracks(moodKey, moodTitle, containerEl, useCacheOn
 
   // 1. Determine dynamic time-of-day greeting text
   const currentHour = new Date().getHours();
-  let dynamicGreeting = "Музыка под настроение";
+  let dynamicGreeting = "Рекомендации";
   if (currentHour >= 6 && currentHour < 12) {
-    dynamicGreeting = "Доброе утро! Твой утренний микс ☕";
+    dynamicGreeting = "Доброе утро";
   } else if (currentHour >= 12 && currentHour < 18) {
-    dynamicGreeting = "Добрый день! Дневной заряд энергии ☀️";
+    dynamicGreeting = "Добрый день";
   } else if (currentHour >= 18 && currentHour < 24) {
-    dynamicGreeting = "Добрый вечер! Время раскачаться 🌙";
+    dynamicGreeting = "Добрый вечер";
   } else {
-    dynamicGreeting = "Доброй ночи! Ночной подземный вайб 🌌";
+    dynamicGreeting = "Доброй ночи";
   }
 
   // --- RENDERING DYNAMIC SECTION ---
@@ -6727,15 +6741,15 @@ function renderSoundCloudDynamicSection(containerEl, tracks) {
   if (tracks.length === 0) return;
 
   const currentHour = new Date().getHours();
-  let greeting = "Твой микс под настроение";
+  let greeting = "Рекомендации";
   if (currentHour >= 6 && currentHour < 12) {
-    greeting = "Доброе утро! Твой утренний микс ☕";
+    greeting = "Доброе утро";
   } else if (currentHour >= 12 && currentHour < 18) {
-    greeting = "Добрый день! Дневной заряд энергии ☀️";
+    greeting = "Добрый день";
   } else if (currentHour >= 18 && currentHour < 24) {
-    greeting = "Добрый вечер! Время раскачаться 🌙";
+    greeting = "Добрый вечер";
   } else {
-    greeting = "Доброй ночи! Ночной подземный вайб 🌌";
+    greeting = "Доброй ночи";
   }
 
   const header = document.createElement('div');

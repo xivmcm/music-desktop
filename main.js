@@ -190,6 +190,17 @@ function createWindow() {
     }
   });
 
+  // Dynamic Window Background Color Sync
+  ipcMain.on('set-theme-color', (event, color) => {
+    if (mainWindow && typeof color === 'string') {
+      try {
+        mainWindow.setBackgroundColor(color);
+      } catch (err) {
+        console.error('[Electron] Failed to set window background color:', err.message);
+      }
+    }
+  });
+
   // Mini-player mode handler
   let isMiniPlayer = false;
   let normalBounds = null;

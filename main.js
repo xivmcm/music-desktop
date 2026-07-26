@@ -5,6 +5,10 @@ const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 const DiscordRPC = require('discord-rpc');
 
+// Configure Chromium DNS-over-HTTPS (DoH) before app ready to bypass DNS blocking in RU for direct CDN streaming
+app.commandLine.appendSwitch('enable-features', 'DnsOverHttps');
+app.commandLine.appendSwitch('dns-over-https-templates', 'https://1.1.1.1/dns-query');
+
 // Discord RPC configuration
 let rpcConnected = false;
 let rpcClient = null;

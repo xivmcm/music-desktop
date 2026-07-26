@@ -98,16 +98,13 @@ html {
 }
 
 body {
-  background: var(--bg-gradient);
+  background: transparent !important;
   color: var(--text-color);
   height: 100vh;
   display: flex;
   flex-direction: column;
   border-radius: var(--window-radius);
   overflow: hidden;
-  border: var(--border-width, 1px) solid var(--card-border);
-  box-shadow: var(--glass-shadow);
-  transition: background 0.5s ease, color 0.5s ease, border-color 0.5s ease, box-shadow 0.5s ease;
   position: relative;
   z-index: 1;
 }
@@ -129,13 +126,44 @@ body::before {
   transition: opacity 0.3s ease;
 }
 
-body:not(.window-maximized) {
-  border-radius: var(--window-radius) !important;
-  overflow: hidden !important;
+body::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-gradient);
+  z-index: -3;
+  pointer-events: none;
+  transition: background 0.5s ease;
 }
 
-body:not(.window-maximized)::before {
+body:not(.window-maximized):not(.mini-player-active) {
   border-radius: var(--window-radius) !important;
+  overflow: hidden !important;
+  clip-path: inset(0 round var(--window-radius)) !important;
+  -webkit-clip-path: inset(0 round var(--window-radius)) !important;
+  border: var(--border-width, 1px) solid var(--card-border);
+  box-shadow: var(--glass-shadow);
+}
+
+body:not(.window-maximized):not(.mini-player-active)::before,
+body:not(.window-maximized):not(.mini-player-active)::after {
+  border-radius: var(--window-radius) !important;
+}
+
+body.window-maximized {
+  border-radius: 0 !important;
+  clip-path: none !important;
+  -webkit-clip-path: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+body.window-maximized::before,
+body.window-maximized::after {
+  border-radius: 0 !important;
 }
 
 body:not(.window-maximized) .titlebar {

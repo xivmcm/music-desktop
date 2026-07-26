@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.13.4';
+const APP_VERSION = '1.13.5';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -821,16 +821,23 @@ function playTrack(index) {
   // Clear any previous loading timeout before starting a new track
   clearTimeout(trackLoadTimeout);
 
-  const startPlaybackWithUrl = (targetUrl) => {
+  const startPlaybackWithUrl = (targetUrl, isFallback = false) => {
     audioPlayer.src = targetUrl;
     const playPromise = audioPlayer.play();
     currentPlayPromise = playPromise;
 
+    const loadTimeoutMs = (!isFallback && targetUrl !== rawStreamUrl) ? 2500 : 12000;
+
     trackLoadTimeout = setTimeout(() => {
       if (currentPlayPromise === playPromise) {
-        handleTrackLoadError("Track loading timed out (10 seconds limit)");
+        if (!isFallback && targetUrl !== rawStreamUrl) {
+          console.log('[Stream Resolution] Direct CDN stream timed out (regional block), falling back to backend stream proxy...');
+          startPlaybackWithUrl(rawStreamUrl, true);
+        } else {
+          handleTrackLoadError("Track loading timed out (12 seconds limit)");
+        }
       }
-    }, 10000);
+    }, loadTimeoutMs);
 
     playPromise
       .then(() => {
@@ -845,27 +852,27 @@ function playTrack(index) {
         console.error('Playback failed:', err);
 
         // Fallback to proxy stream URL if direct CDN URL failed
-        if (targetUrl !== rawStreamUrl) {
+        if (!isFallback && targetUrl !== rawStreamUrl) {
           console.log('[Stream Resolution] Direct CDN stream failed, falling back to backend stream proxy...');
-          startPlaybackWithUrl(rawStreamUrl);
+          startPlaybackWithUrl(rawStreamUrl, true);
         } else if (currentPlayPromise === playPromise) {
           handleTrackLoadError(err.message || 'Media playback error');
         }
       });
   };
 
-  // Resolve direct SoundCloud CDN URL to eliminate Render 5GB server bandwidth limit
+  // Resolve direct SoundCloud CDN URL to eliminate Render server bandwidth limit
   fetch(`${rawStreamUrl}&direct=true`)
     .then(r => r.json())
     .then(data => {
       if (data && data.status === 'success' && data.directUrl) {
-        startPlaybackWithUrl(data.directUrl);
+        startPlaybackWithUrl(data.directUrl, false);
       } else {
-        startPlaybackWithUrl(rawStreamUrl);
+        startPlaybackWithUrl(rawStreamUrl, true);
       }
     })
     .catch(() => {
-      startPlaybackWithUrl(rawStreamUrl);
+      startPlaybackWithUrl(rawStreamUrl, true);
     });
 }
 

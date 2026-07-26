@@ -261,7 +261,18 @@ function createWindow() {
   });
 
   ipcMain.on('install-update', () => {
-    autoUpdater.quitAndInstall();
+    try {
+      app.removeAllListeners('window-all-closed');
+      const browserWindows = BrowserWindow.getAllWindows();
+      browserWindows.forEach(win => {
+        if (!win.isDestroyed()) win.destroy();
+      });
+    } catch (e) {
+      console.error('[Auto-Updater] Error destroying windows prior to install:', e);
+    }
+    setImmediate(() => {
+      autoUpdater.quitAndInstall(false, true);
+    });
   });
 
   ipcMain.on('check-for-updates', () => {

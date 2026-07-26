@@ -46,16 +46,27 @@ public class GlassMediaPlugin extends Plugin {
         title = call.getString("title", "GlassPlayer");
         artist = call.getString("artist", "Ready to play");
         isPlaying = Boolean.TRUE.equals(call.getBoolean("isPlaying", false));
-        showNotification();
+
+        Intent serviceIntent = new Intent(getContext(), GlassMediaService.class);
+        serviceIntent.setAction(GlassMediaService.ACTION_UPDATE);
+        serviceIntent.putExtra(GlassMediaService.EXTRA_TITLE, title);
+        serviceIntent.putExtra(GlassMediaService.EXTRA_ARTIST, artist);
+        serviceIntent.putExtra(GlassMediaService.EXTRA_IS_PLAYING, isPlaying);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            getContext().startForegroundService(serviceIntent);
+        } else {
+            getContext().startService(serviceIntent);
+        }
+
         call.resolve();
     }
 
     @PluginMethod
     public void hide(PluginCall call) {
-        NotificationManagerCompat.from(getContext()).cancel(NOTIFICATION_ID);
-        if (mediaSession != null) {
-            mediaSession.setActive(false);
-        }
+        Intent serviceIntent = new Intent(getContext(), GlassMediaService.class);
+        serviceIntent.setAction(GlassMediaService.ACTION_STOP);
+        getContext().startService(serviceIntent);
         call.resolve();
     }
 

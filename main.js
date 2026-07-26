@@ -5,9 +5,9 @@ const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 const DiscordRPC = require('discord-rpc');
 
-// Configure Chromium DNS-over-HTTPS (DoH) before app ready to bypass DNS blocking in RU for direct CDN streaming
+// Configure Chromium DNS-over-HTTPS (DoH) before app ready to bypass DNS blocking in RU (Google + Yandex + AdGuard)
 app.commandLine.appendSwitch('enable-features', 'DnsOverHttps');
-app.commandLine.appendSwitch('dns-over-https-templates', 'https://1.1.1.1/dns-query');
+app.commandLine.appendSwitch('dns-over-https-templates', 'https://dns.google/dns-query,https://common.dot.dns.yandex.net/dns-query,https://dns.adguard-dns.com/dns-query');
 
 // Discord RPC configuration
 let rpcConnected = false;
@@ -302,8 +302,9 @@ app.whenReady().then(() => {
       app.configureHostResolver({
         secureDnsMode: 'secure',
         secureDnsServers: [
-          'https://1.1.1.1/dns-query',
-          'https://dns.google/dns-query'
+          'https://dns.google/dns-query',
+          'https://common.dot.dns.yandex.net/dns-query',
+          'https://dns.adguard-dns.com/dns-query'
         ]
       });
       console.log('[DNS-over-HTTPS] Secure DoH host resolver configured successfully.');

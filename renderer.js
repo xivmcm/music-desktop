@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.14.0';
+const APP_VERSION = '1.14.1';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -272,13 +272,50 @@ function updateMediaSessionPlaybackState(isPlaying) {
 let cachedForYouData = null;
 
 // Base Server API URL Configuration
-const DEFAULT_API_URL = 'https://music-backend-gwga.onrender.com';
-// If user has old default URL in localStorage, update it to the new default
-if (localStorage.getItem('gp_backend_url') === 'https://music-backend-iyni.onrender.com') {
-  localStorage.setItem('gp_backend_url', DEFAULT_API_URL);
+const DEFAULT_MIRRORS = [
+  'https://music-backend-gwga.onrender.com', // Render
+  'https://glassplayer-backend.koyeb.app',   // Koyeb Mirror
+  'https://glassplayer.zeabur.app'           // Zeabur Mirror
+];
+let API_URL = localStorage.getItem('gp_backend_url') || DEFAULT_MIRRORS[0];
+let BACKEND_URL = `${API_URL}/api`;
+
+async function initApiFailover() {
+  const savedUrl = localStorage.getItem('gp_backend_url');
+  if (savedUrl && !DEFAULT_MIRRORS.includes(savedUrl)) {
+    console.log('[API Failover] Using custom user-defined API URL:', savedUrl);
+    return;
+  }
+  console.log('[API Failover] Verifying backend mirrors...');
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 2000);
+  const checkMirror = async (url) => {
+    try {
+      const response = await fetch(`${url}/api/health`, { 
+        signal: controller.signal,
+        headers: { 'Cache-Control': 'no-cache' }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'ok') return url;
+      }
+    } catch (e) {}
+    throw new Error('Mirror offline');
+  };
+  try {
+    const fastestMirror = await Promise.any(DEFAULT_MIRRORS.map(url => checkMirror(url)));
+    clearTimeout(timeoutId);
+    console.log('[API Failover] Auto-selected active mirror:', fastestMirror);
+    if (fastestMirror !== API_URL) {
+      API_URL = fastestMirror;
+      BACKEND_URL = `${API_URL}/api`;
+      localStorage.setItem('gp_backend_url', fastestMirror);
+    }
+  } catch (err) {
+    clearTimeout(timeoutId);
+    console.warn('[API Failover] All default mirrors failed. Keeping current:', API_URL);
+  }
 }
-const API_URL = localStorage.getItem('gp_backend_url') || DEFAULT_API_URL;
-const BACKEND_URL = `${API_URL}/api`;
 
 // Helper to construct audio stream URL
 function getAudioStreamUrl(track, seekTime) {
@@ -3457,6 +3494,19 @@ function renderSettings(options = {}) {
         <span class="settings-info-label">Текущая версия:</span>
         <span class="settings-info-value">${APP_VERSION}</span>
       </div>
+      <div class="settings-info-row" style="flex-direction: column; align-items: stretch; gap: 8px; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 15px;">
+        <span class="settings-info-label" style="font-weight: 600; margin-bottom: 2px;">Адрес сервера (API URL):</span>
+        <div style="display: flex; gap: 8px; width: 100%;">
+          <input type="text" id="settings-backend-url-input" class="search-box" value="${API_URL}" style="flex: 1; min-height: 38px; height: 38px; padding: 0 12px; font-size: 12px; margin: 0; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #fff;">
+          <button id="settings-save-backend-btn" class="view-btn" style="height: 38px; padding: 0 16px; font-size: 12px; border-radius: 10px;">
+            <span>Сохранить</span>
+          </button>
+          <button id="settings-reset-backend-btn" class="view-btn danger" style="height: 38px; padding: 0 16px; font-size: 12px; border-radius: 10px;">
+            <span>Сброс</span>
+          </button>
+        </div>
+        <p style="font-size: 11px; color: rgba(255,255,255,0.4); margin: 4px 0 0;">Используйте зеркало, если основной сервер Render заблокирован вашим провайдером.</p>
+      </div>
       ${isElectron ? `
       <div style="margin-top: 15px; display: flex; justify-content: flex-start;">
         <button id="manual-check-updates-btn" class="view-btn" style="padding: 8px 16px; font-size: 12px; height: auto;">
@@ -3979,6 +4029,38 @@ function renderSettings(options = {}) {
     });
   }
 
+  const backendInput = panel.querySelector('#settings-backend-url-input');
+  const saveBackendBtn = panel.querySelector('#settings-save-backend-btn');
+  const resetBackendBtn = panel.querySelector('#settings-reset-backend-btn');
+
+  if (saveBackendBtn && backendInput) {
+    saveBackendBtn.addEventListener('click', () => {
+      let newUrl = backendInput.value.trim();
+      if (!newUrl) {
+        showToastNotification('Пожалуйста, введите корректный URL!');
+        return;
+      }
+      if (newUrl.endsWith('/')) {
+        newUrl = newUrl.slice(0, -1);
+      }
+      localStorage.setItem('gp_backend_url', newUrl);
+      showToastNotification('Адрес сервера изменен! Перезагрузка...');
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    });
+  }
+
+  if (resetBackendBtn) {
+    resetBackendBtn.addEventListener('click', () => {
+      localStorage.removeItem('gp_backend_url');
+      showToastNotification('Адрес сервера сброшен! Перезагрузка...');
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    });
+  }
+
   tracksContainer.classList.remove('hidden');
   updateActiveTab(scope);
 }
@@ -4311,10 +4393,17 @@ function clearCustomThemeProperties() {
 }
 
 // Startup Initialization
-loadProfiles();
-initAuth();
-initEditProfileEventListeners();
-loadHomeView();
+(async () => {
+  try {
+    await initApiFailover();
+  } catch (e) {
+    console.warn('[Startup API Failover Error]:', e.message);
+  }
+  loadProfiles();
+  initAuth();
+  initEditProfileEventListeners();
+  loadHomeView();
+})();
 
 // Apply Saved Theme on Startup
 const savedTheme = localStorage.getItem('gp_theme') || 'theme-dark-glass';

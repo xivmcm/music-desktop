@@ -13,6 +13,20 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- App Launch Splash Screen Overlay -->
+  <div id="app-splash-screen" class="splash-screen">
+    <div class="splash-content">
+      <div class="splash-logo-container">
+        <div class="splash-logo-glow"></div>
+        <div class="splash-logo-text">GLASSPLAYER</div>
+      </div>
+      <div class="splash-loader-bar">
+        <div class="splash-loader-progress" id="splash-progress"></div>
+      </div>
+      <div class="splash-status-text" id="splash-status">Инициализация GlassPlayer...</div>
+    </div>
+  </div>
+
   <!-- Ambient background canvas -->
   <canvas id="ambient-canvas"></canvas>
 
@@ -35,7 +49,7 @@
   <!-- Sliding Left Sidebar -->
   <aside id="sidebar" class="sidebar">
     <div class="sidebar-header">
-      <div class="sidebar-logo">GLASSPLAYER <span class="app-version-badge">v1.14.1</span></div>
+      <div class="sidebar-logo">GLASSPLAYER <span class="app-version-badge">v1.15.0</span></div>
     </div>
     <nav class="sidebar-menu">
       <button id="home-button" class="sidebar-btn active" title="Home">

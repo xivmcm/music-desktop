@@ -4668,3 +4668,261 @@ body.glass-style-flat .settings-section {
 #collab-friends-list::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }
+
+/* ── RELEASE 1.15.0: App Startup Splash Screen & Categorized Toasts ───────────────── */
+
+/* 1. Splash Screen Overlay */
+.splash-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: radial-gradient(circle at 50% 40%, rgba(30, 30, 45, 0.98), rgba(8, 8, 12, 0.99));
+  backdrop-filter: blur(35px);
+  -webkit-backdrop-filter: blur(35px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.6s;
+  will-change: opacity, transform;
+}
+
+.splash-screen.fade-out {
+  opacity: 0;
+  transform: scale(1.05);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.splash-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  width: 320px;
+  text-align: center;
+}
+
+.splash-logo-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+}
+
+.splash-logo-glow {
+  position: absolute;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.15) 0%, rgba(48, 209, 88, 0.08) 50%, transparent 80%);
+  animation: splashPulse 2.5s ease-in-out infinite alternate;
+  will-change: transform, opacity;
+}
+
+@keyframes splashPulse {
+  0% { transform: scale(0.85); opacity: 0.5; }
+  100% { transform: scale(1.2); opacity: 1; }
+}
+
+.splash-logo-text {
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 6px;
+  color: #ffffff;
+  text-shadow: 0 0 25px rgba(255, 255, 255, 0.6), 0 0 50px rgba(255, 255, 255, 0.2);
+  z-index: 2;
+}
+
+.splash-loader-bar {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.splash-loader-progress {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #30d158, #0a84ff, #bf5af2);
+  border-radius: 4px;
+  transition: width 0.4s ease-out;
+  box-shadow: 0 0 12px rgba(48, 209, 88, 0.5);
+}
+
+.splash-status-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.65);
+  letter-spacing: 0.5px;
+  height: 18px;
+  transition: opacity 0.2s ease;
+}
+
+/* 2. Categorized Toast Alert Cards */
+.toast-notification {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 280px;
+  max-width: 400px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: rgba(18, 18, 24, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  position: relative;
+  overflow: hidden;
+  transform: translateX(120%);
+  opacity: 0;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease;
+  will-change: transform, opacity;
+}
+
+.toast-notification.toast-error {
+  background: rgba(35, 12, 14, 0.92);
+  border-color: rgba(255, 69, 58, 0.35);
+  box-shadow: 0 16px 40px rgba(255, 69, 58, 0.2);
+}
+.toast-notification.toast-error .toast-icon-badge {
+  background: rgba(255, 69, 58, 0.2);
+  color: #ff453a;
+}
+
+.toast-notification.toast-success {
+  background: rgba(10, 30, 18, 0.92);
+  border-color: rgba(48, 209, 88, 0.35);
+  box-shadow: 0 16px 40px rgba(48, 209, 88, 0.2);
+}
+.toast-notification.toast-success .toast-icon-badge {
+  background: rgba(48, 209, 88, 0.2);
+  color: #30d158;
+}
+
+.toast-notification.toast-info {
+  background: rgba(12, 24, 38, 0.92);
+  border-color: rgba(10, 132, 255, 0.35);
+  box-shadow: 0 16px 40px rgba(10, 132, 255, 0.2);
+}
+.toast-notification.toast-info .toast-icon-badge {
+  background: rgba(10, 132, 255, 0.2);
+  color: #0a84ff;
+}
+
+.toast-notification.toast-warning {
+  background: rgba(35, 26, 10, 0.92);
+  border-color: rgba(255, 159, 10, 0.35);
+  box-shadow: 0 16px 40px rgba(255, 159, 10, 0.2);
+}
+.toast-notification.toast-warning .toast-icon-badge {
+  background: rgba(255, 159, 10, 0.2);
+  color: #ff9f0a;
+}
+
+.toast-icon-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.toast-content-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.toast-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.toast-message {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.toast-progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2.5px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.3);
+  transform-origin: left;
+  animation: toastProgress 3.5s linear forwards;
+}
+
+@keyframes toastProgress {
+  0% { transform: scaleX(1); }
+  100% { transform: scaleX(0); }
+}
+
+/* 3. GPU-Accelerated Pure CSS3 Motion Backgrounds */
+.bg-effect-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -2;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.bg-effect-layer.effect-aurora::before,
+.bg-effect-layer.effect-aurora::after {
+  content: '';
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.35;
+  will-change: transform;
+}
+.bg-effect-layer.effect-aurora::before {
+  top: -150px;
+  left: -150px;
+  background: radial-gradient(circle, var(--accent-color, #bf5af2), transparent 70%);
+  animation: auroraFloat1 18s ease-in-out infinite alternate;
+}
+.bg-effect-layer.effect-aurora::after {
+  bottom: -150px;
+  right: -150px;
+  background: radial-gradient(circle, var(--glow-color, #0a84ff), transparent 70%);
+  animation: auroraFloat2 22s ease-in-out infinite alternate;
+}
+
+@keyframes auroraFloat1 {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  100% { transform: translate3d(150px, 120px, 0) scale(1.25); }
+}
+@keyframes auroraFloat2 {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  100% { transform: translate3d(-180px, -140px, 0) scale(1.3); }
+}

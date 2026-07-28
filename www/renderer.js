@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.14.1';
+const APP_VERSION = '1.15.0';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -968,7 +968,48 @@ async function handleTrackLoadError(reason) {
   }
 }
 
-function showToastNotification(message) {
+let splashSafetyTimer = null;
+
+function updateSplashStatus(statusText, progressPct = 50) {
+  const statusEl = document.getElementById('splash-status');
+  const progressEl = document.getElementById('splash-progress');
+  if (statusEl) statusEl.textContent = statusText;
+  if (progressEl) progressEl.style.width = `${progressPct}%`;
+}
+
+function hideSplashScreen() {
+  if (splashSafetyTimer) {
+    clearTimeout(splashSafetyTimer);
+    splashSafetyTimer = null;
+  }
+  const splashEl = document.getElementById('app-splash-screen');
+  if (splashEl && !splashEl.classList.contains('fade-out')) {
+    updateSplashStatus('Готово!', 100);
+    setTimeout(() => {
+      splashEl.classList.add('fade-out');
+      setTimeout(() => {
+        splashEl.style.display = 'none';
+      }, 600);
+    }, 300);
+  }
+}
+
+function initSplashScreen() {
+  const splashEl = document.getElementById('app-splash-screen');
+  if (!splashEl) return;
+
+  // Emergency Safety Timeout (10 seconds max)
+  splashSafetyTimer = setTimeout(() => {
+    if (splashEl && !splashEl.classList.contains('fade-out')) {
+      console.warn('[Splash Screen] Emergency safety timeout (10s). Forcing app entry.');
+      splashEl.classList.add('fade-out');
+      setTimeout(() => splashEl.style.display = 'none', 600);
+      showToastNotification('Сервер ответил с задержкой, но плеер готов к работе!', 'warning', 'Подключение');
+    }
+  }, 10000);
+}
+
+function showToastNotification(message, type = 'info', title = null) {
   let toastContainer = document.getElementById('toast-container');
   if (!toastContainer) {
     toastContainer = document.createElement('div');
@@ -986,48 +1027,61 @@ function showToastNotification(message) {
     document.body.appendChild(toastContainer);
   }
 
+  const typeConfigs = {
+    error: { icon: '✕', defaultTitle: 'Ошибка', class: 'toast-error' },
+    success: { icon: '✓', defaultTitle: 'Успешно', class: 'toast-success' },
+    info: { icon: 'ℹ', defaultTitle: 'Уведомление', class: 'toast-info' },
+    warning: { icon: '🔔', defaultTitle: 'Внимание', class: 'toast-warning' }
+  };
+
+  const config = typeConfigs[type] || typeConfigs.info;
+  const displayTitle = title || config.defaultTitle;
+
   const toast = document.createElement('div');
-  toast.className = 'toast-notification';
+  toast.className = `toast-notification ${config.class}`;
+  toast.style.pointerEvents = 'auto';
+
   toast.innerHTML = `
-    <div class="toast-icon" style="font-size: 14px; line-height: 1;">✕</div>
-    <div class="toast-message">${message}</div>
-  `;
-  toast.style.cssText = `
-    background: rgba(255, 69, 58, 0.15);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 69, 58, 0.3);
-    border-radius: 12px;
-    padding: 12px 20px;
-    color: #ff453a;
-    font-size: 13px;
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    box-shadow: 0 8px 32px rgba(255, 69, 58, 0.1);
-    transform: translateX(120%);
-    transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease;
-    opacity: 0;
-    pointer-events: auto;
+    <div class="toast-icon-badge">${config.icon}</div>
+    <div class="toast-content-body">
+      <div class="toast-title">${displayTitle}</div>
+      <div class="toast-message">${message}</div>
+    </div>
+    <div class="toast-progress-bar"></div>
   `;
 
   toastContainer.appendChild(toast);
 
-  // Force reflow and animate in
   setTimeout(() => {
     toast.style.transform = 'translateX(0)';
     toast.style.opacity = '1';
   }, 10);
 
-  // Auto-remove after 4 seconds
-  setTimeout(() => {
+  let hideTimeout = setTimeout(() => {
     toast.style.transform = 'translateX(120%)';
     toast.style.opacity = '0';
     setTimeout(() => {
       toast.remove();
     }, 400);
-  }, 4000);
+  }, 3500);
+
+  toast.addEventListener('mouseenter', () => {
+    clearTimeout(hideTimeout);
+    const pb = toast.querySelector('.toast-progress-bar');
+    if (pb) pb.style.animationPlayState = 'paused';
+  });
+
+  toast.addEventListener('mouseleave', () => {
+    const pb = toast.querySelector('.toast-progress-bar');
+    if (pb) pb.style.animationPlayState = 'running';
+    hideTimeout = setTimeout(() => {
+      toast.style.transform = 'translateX(120%)';
+      toast.style.opacity = '0';
+      setTimeout(() => {
+        toast.remove();
+      }, 400);
+    }, 2000);
+  });
 }
 
 function setPlayState(isPlaying) {
@@ -2235,6 +2289,8 @@ async function loadHomeView() {
     tracksContainer.innerHTML = '<div class="welcome-state"><h2>Не удалось подключиться к серверу</h2><p>Проверьте соединение с интернетом</p></div>';
     tracksContainer.classList.remove('hidden');
     updateActiveTab('home');
+  } finally {
+    hideSplashScreen();
   }
 }
 
@@ -4269,17 +4325,24 @@ function stopAmbientParticles() {
   }
 }
 
-function applyBgEffect(effectName) {
-  const liquidContainer = document.querySelector('.liquid-container');
-  if (effectName === 'particles') {
-    if (liquidContainer) liquidContainer.style.display = 'none';
-    startAmbientParticles();
+function applyBgEffect(effectName = 'static') {
+  let layer = document.getElementById('bg-effect-layer');
+  if (!layer) {
+    layer = document.createElement('div');
+    layer.id = 'bg-effect-layer';
+    layer.className = 'bg-effect-layer';
+    document.body.prepend(layer);
+  }
+
+  layer.className = 'bg-effect-layer';
+  stopAmbientParticles();
+
+  if (effectName === 'aurora') {
+    layer.classList.add('effect-aurora');
   } else if (effectName === 'liquid') {
-    if (liquidContainer) liquidContainer.style.display = '';
-    stopAmbientParticles();
-  } else {
-    if (liquidContainer) liquidContainer.style.display = 'none';
-    stopAmbientParticles();
+    layer.classList.add('effect-liquid');
+  } else if (effectName === 'particles') {
+    layer.classList.add('effect-particles');
   }
   localStorage.setItem('gp_bg_effect', effectName);
 }
@@ -4394,15 +4457,21 @@ function clearCustomThemeProperties() {
 
 // Startup Initialization
 (async () => {
+  initSplashScreen();
+  updateSplashStatus('Инициализация интерфейса...', 20);
   try {
+    updateSplashStatus('Проверка подключения к серверам...', 45);
     await initApiFailover();
   } catch (e) {
     console.warn('[Startup API Failover Error]:', e.message);
   }
+  updateSplashStatus('Загрузка профилей и настроек...', 70);
   loadProfiles();
   initAuth();
   initEditProfileEventListeners();
-  loadHomeView();
+  updateSplashStatus('Загрузка рекомендаций...', 85);
+  await loadHomeView();
+  hideSplashScreen();
 })();
 
 // Apply Saved Theme on Startup
@@ -4414,12 +4483,12 @@ if (savedTheme === 'custom') {
   const savedCustom = localStorage.getItem('gp_custom_theme');
   if (savedCustom) {
     const custom = JSON.parse(savedCustom);
-    applyBgEffect(custom.bgEffect || 'liquid');
+    applyBgEffect(custom.bgEffect || 'static');
   } else {
-    applyBgEffect('liquid');
+    applyBgEffect('static');
   }
 } else {
-  applyBgEffect('liquid');
+  applyBgEffect('static');
 }
 
 // Apply Saved Background Image & Opacity on Startup
@@ -5913,16 +5982,16 @@ async function playFriendTrack(trackName, artist) {
         playlist = [track];
         currentTrackIndex = 0;
         playTrack(0);
-        showToastNotification(`Playing: ${track.title}`);
+        showToastNotification(`Воспроизведение: ${track.title}`, 'success', 'Плеер');
       } else {
-        showToastNotification(`Track not found`);
+        showToastNotification('Трек не найден в медиатеке', 'error', 'Ошибка');
       }
     } else {
-      showToastNotification(`Failed to search track`);
+      showToastNotification('Не удалось найти трек', 'error', 'Ошибка');
     }
   } catch (err) {
     console.error(err);
-    showToastNotification(`Error playing track`);
+    showToastNotification('Ошибка при воспроизведении трека', 'error', 'Ошибка');
   }
 }
 

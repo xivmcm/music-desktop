@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.16.0';
+const APP_VERSION = '1.16.5';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -932,7 +932,14 @@ function playTrack(index) {
 
   // Update Player Meta Info
   currentTitle.textContent = track.title;
-  if (miniCurrentTitle) miniCurrentTitle.textContent = track.title;
+  if (miniCurrentTitle) {
+    miniCurrentTitle.textContent = track.title;
+    if (track.title.length > 22) {
+      miniCurrentTitle.classList.add('marquee-scroll');
+    } else {
+      miniCurrentTitle.classList.remove('marquee-scroll');
+    }
+  }
 
   currentArtist.innerHTML = `<span class="artist-link">${track.artist}</span>`;
   const artistLink = currentArtist.querySelector('.artist-link');
@@ -980,7 +987,9 @@ function playTrack(index) {
   currentTrackDuration = parseDurationToSeconds(track.duration);
   currentSeekOffset = 0;
 
-  // Load stream
+  // Load stream with full audio player reset for local MP3 switching
+  audioPlayer.pause();
+  audioPlayer.removeAttribute('src');
   audioPlayer.crossOrigin = 'anonymous';
   const rawStreamUrl = getAudioStreamUrl(track);
 
@@ -1881,7 +1890,7 @@ function toggleLike(e, track) {
 
 let currentLibrarySubTab = 'favorites';
 
-async function loadFavorites(subTab = currentLibrarySubTab) {
+async function loadFavorites(subTab = 'favorites') {
   currentLibrarySubTab = subTab;
   activeView = 'library';
   searchInput.value = '';
@@ -1986,18 +1995,23 @@ function renderLocalTracks(tracks) {
     const card = document.createElement('div');
     card.className = 'track-card';
     card.dataset.index = index;
+    card.dataset.trackId = track.id;
     
     card.innerHTML = `
       <div class="track-info">
         <div class="track-cover-container">
           <div class="track-cover-placeholder" style="width: 44px; height: 44px; border-radius: 8px; background: rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; font-size: 18px;">🎵</div>
+          <button class="cover-play-btn" aria-label="Play">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="margin-left: 2px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          </button>
         </div>
         <div class="track-details">
           <div class="track-title">${escapeHTML(track.title)}</div>
           <div class="track-artist">${escapeHTML(track.artist)} • Локальный MP3</div>
         </div>
       </div>
-      <div class="track-actions" style="display: flex; gap: 8px; align-items: center;">
+      <div class="track-actions" style="display: flex; gap: 10px; align-items: center;">
+        <div class="track-duration" style="font-size: 12px; color: var(--text-dim);">Local</div>
         <button class="local-track-delete-btn" title="Удалить из медиатеки" data-id="${track.id}">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
@@ -6919,13 +6933,25 @@ function parseLRC(lrcText) {
  * Fetches lyrics from the backend for the currently playing track.
  */
 async function fetchLyrics(title, artist) {
-  const params = new URLSearchParams({ title, artist });
-  const res = await fetch(`${BACKEND_URL}/spotify/lyrics?${params.toString()}`);
+  const cleanTitle = title ? title.replace(/\(.*\)|\[.*\]/g, '').trim() : '';
+  const cleanArtist = artist ? artist.replace(/\(.*\)|\[.*\]/g, '').trim() : '';
+
+  const params = new URLSearchParams({
+    track_name: cleanTitle,
+    artist_name: cleanArtist
+  });
+
+  const res = await fetch(`https://lrclib.net/api/get?${params.toString()}`);
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || 'Not found');
+    throw new Error(`Lyrics not found (${res.status})`);
   }
-  return res.json();
+  const data = await res.json();
+  if (data.syncedLyrics) {
+    return { format: 'lrc', lyrics: data.syncedLyrics };
+  } else if (data.plainLyrics) {
+    return { format: 'plain', plainText: data.plainLyrics };
+  }
+  throw new Error('No lyrics available in LRCLIB database');
 }
 
 /**
@@ -7218,4 +7244,123 @@ function renderSoundCloudDynamicSection(containerEl, tracks) {
   section.querySelector('#soundcloud-dynamic-scroll-chevron').addEventListener('click', () => {
     scroller.scrollBy({ left: 300, behavior: 'smooth' });
   });
+}
+
+// ── RELEASE 1.16.5: Hotfix Engine Additions ───────────────────────────────
+
+// 1. Direct Track Download Engine (0 Server Bytes)
+async function downloadCurrentTrack(trackObj) {
+  const track = trackObj || playlist[currentTrackIndex];
+  if (!track) {
+    showToastNotification('Нет активного трека для скачивания', 'warning');
+    return;
+  }
+
+  showToastNotification(`Начало скачивания: ${track.title}...`, 'info');
+  try {
+    const streamUrl = getAudioStreamUrl(track);
+    const response = await fetch(streamUrl);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const blob = await response.blob();
+
+    // Auto-save to IndexedDB local library
+    const file = new File([blob], `${track.artist} - ${track.title}.mp3`, { type: 'audio/mpeg' });
+    await saveLocalTrack(file);
+
+    // Save to user PC disk if in Electron or browser download
+    if (window.electronAPI && window.electronAPI.saveFile) {
+      const arrayBuffer = await blob.arrayBuffer();
+      await window.electronAPI.saveFile(`${track.artist} - ${track.title}.mp3`, Buffer.from(arrayBuffer));
+    } else {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${track.artist} - ${track.title}.mp3`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+
+    showToastNotification(`Трек «${track.title}» скачан в медиатеку!`, 'success');
+    if (activeView === 'library' && currentLibrarySubTab === 'local') {
+      loadFavorites('local');
+    }
+  } catch (err) {
+    console.error('[Download Error]:', err);
+    showToastNotification('Ошибка при скачивании трека', 'error');
+  }
+}
+
+const downloadBtn = document.getElementById('download-button');
+if (downloadBtn) {
+  downloadBtn.addEventListener('click', () => downloadCurrentTrack());
+}
+
+// 2. Mini-Player Options Popover Toggle
+const miniMoreBtn = document.getElementById('mini-more-button');
+const miniMorePopover = document.getElementById('mini-more-popover');
+if (miniMoreBtn && miniMorePopover) {
+  miniMoreBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    miniMorePopover.classList.toggle('hidden');
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#mini-more-popover') && !e.target.closest('#mini-more-button')) {
+      miniMorePopover.classList.add('hidden');
+    }
+  });
+}
+
+// 3. Player Bar Swipe Down Gesture Handler
+let isDraggingPlayerBar = false;
+let startPlayerBarY = 0;
+let currentPlayerBarTranslateY = 0;
+const playerBarEl = document.querySelector('.player-bar');
+
+if (playerBarEl) {
+  const onDragStart = (clientY) => {
+    isDraggingPlayerBar = true;
+    startPlayerBarY = clientY;
+    playerBarEl.style.transition = 'none';
+  };
+
+  const onDragMove = (clientY) => {
+    if (!isDraggingPlayerBar) return;
+    const deltaY = clientY - startPlayerBarY;
+    if (deltaY > 0) {
+      currentPlayerBarTranslateY = deltaY;
+      playerBarEl.style.transform = `translate3d(0, ${deltaY}px, 0)`;
+    }
+  };
+
+  const onDragEnd = () => {
+    if (!isDraggingPlayerBar) return;
+    isDraggingPlayerBar = false;
+    playerBarEl.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
+    
+    if (currentPlayerBarTranslateY > 65) {
+      playerBarEl.classList.add('dismissed');
+      if (!audioPlayer.paused) audioPlayer.pause();
+      setPlayState(false);
+      showToastNotification('Плеер свернут', 'info');
+    } else {
+      playerBarEl.style.transform = 'translate3d(0, 0, 0)';
+    }
+    currentPlayerBarTranslateY = 0;
+  };
+
+  playerBarEl.addEventListener('mousedown', (e) => {
+    if (e.target.closest('button, input, a, .player-volume-container, .player-controls')) return;
+    onDragStart(e.clientY);
+  });
+  window.addEventListener('mousemove', (e) => onDragMove(e.clientY));
+  window.addEventListener('mouseup', onDragEnd);
+
+  playerBarEl.addEventListener('touchstart', (e) => {
+    if (e.target.closest('button, input, a, .player-volume-container, .player-controls')) return;
+    if (e.touches.length === 1) onDragStart(e.touches[0].clientY);
+  }, { passive: true });
+  window.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 1) onDragMove(e.touches[0].clientY);
+  }, { passive: true });
+  window.addEventListener('touchend', onDragEnd);
 }

@@ -49,7 +49,7 @@
   <!-- Sliding Left Sidebar -->
   <aside id="sidebar" class="sidebar">
     <div class="sidebar-header">
-      <div class="sidebar-logo">GLASSPLAYER <span class="app-version-badge">v1.16.0</span></div>
+      <div class="sidebar-logo">GLASSPLAYER <span class="app-version-badge">v1.16.5</span></div>
     </div>
     <nav class="sidebar-menu">
       <button id="home-button" class="sidebar-btn active" title="Home">
@@ -210,6 +210,9 @@
 
       <!-- Volume Bar -->
       <div class="player-volume-container">
+        <button id="download-button" class="download-track-btn" title="Скачать трек на ПК">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        </button>
         <button id="lyrics-btn" class="player-btn lyrics-btn" title="Show Lyrics">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
@@ -367,19 +370,8 @@
 
   <!-- Auto-Update Banner Notification -->
   <div id="update-banner" class="update-banner hidden">
-    <div class="update-banner-content">
-      <div class="spinner banner-spinner hidden" id="banner-loader"></div>
-      <span id="update-banner-text">Доступна новая версия!</span>
-      <div class="update-actions">
-        <button id="update-download-btn" class="modal-btn primary">Скачать</button>
-        <button id="update-install-btn" class="modal-btn primary hidden">Установить</button>
-        <button id="update-close-btn" class="close-btn" style="background:transparent; border:none; color:rgba(255,255,255,0.4); cursor:pointer; font-size:12px; margin-left:10px; width:20px; height:20px; display:flex; align-items:center; justify-content:center;">✕</button>
-      </div>
-    </div>
-    <div class="update-progress-bar-container">
-      <div class="update-progress-bar" id="update-progress-bar" style="width: 0%;"></div>
-    </div>
-  </div>
+  <!-- Toast Notification Container -->
+  <div id="toast-container"></div>
 
   <!-- Drag and Drop Overlay for Local MP3 Files -->
   <div id="drop-overlay" class="drop-overlay hidden">
@@ -420,12 +412,6 @@
       </div>
       
       <div class="mini-player-controls">
-        <button id="mini-like-button" class="mini-player-btn" title="В избранное">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l8.72-8.72 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
-        </button>
-        <button id="mini-shuffle-button" class="mini-player-btn" title="Перемешивание">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>
-        </button>
         <button id="mini-prev-button" class="mini-player-btn" title="Предыдущий">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
         </button>
@@ -435,6 +421,16 @@
         </button>
         <button id="mini-next-button" class="mini-player-btn" title="Следующий">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
+        </button>
+        <button id="mini-more-button" class="mini-player-btn" title="Дополнительно">•••</button>
+      </div>
+
+      <div id="mini-more-popover" class="mini-more-popover hidden">
+        <button id="mini-like-button" class="mini-player-btn" title="В избранное">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l8.72-8.72 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+        </button>
+        <button id="mini-shuffle-button" class="mini-player-btn" title="Перемешивание">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>
         </button>
         <button id="mini-repeat-button" class="mini-player-btn" title="Повтор">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>

@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.16.5';
+const APP_VERSION = '1.16.6';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -1149,7 +1149,7 @@ function initSplashScreen() {
       console.warn('[Splash Screen] Emergency safety timeout (10s). Forcing app entry.');
       splashEl.classList.add('fade-out');
       setTimeout(() => splashEl.style.display = 'none', 600);
-      showToastNotification('Сервер ответил с задержкой, но плеер готов к работе!', 'warning', 'Подключение');
+      showToastNotification('Сервер ответил с задержкой, попробуй перезайти в плеер пока он не заработает', 'warning', 'Подключение');
     }
   }, 10000);
 }

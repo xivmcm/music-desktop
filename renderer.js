@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.15.0';
+const APP_VERSION = '1.16.0';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -317,8 +317,144 @@ async function initApiFailover() {
   }
 }
 
+// ── RELEASE 1.16.0: IndexedDB Local Audio Database & Drag-and-Drop ───────────────
+let dbInstance = null;
+
+function initLocalAudioDB() {
+  return new Promise((resolve, reject) => {
+    if (dbInstance) return resolve(dbInstance);
+    const request = indexedDB.open('GlassPlayerLocalDB', 1);
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('local_tracks')) {
+        db.createObjectStore('local_tracks', { keyPath: 'id' });
+      }
+    };
+    request.onsuccess = (e) => {
+      dbInstance = e.target.result;
+      resolve(dbInstance);
+    };
+    request.onerror = (e) => {
+      console.error('[IndexedDB Error]:', e.target.error);
+      reject(e.target.error);
+    };
+  });
+}
+
+async function saveLocalTrack(file) {
+  const db = await initLocalAudioDB();
+  const id = `local_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const rawName = file.name.replace(/\.[^/.]+$/, "");
+  let title = rawName;
+  let artist = 'Локальный файл';
+  if (rawName.includes(' - ')) {
+    const parts = rawName.split(' - ');
+    artist = parts[0].trim();
+    title = parts.slice(1).join(' - ').trim();
+  }
+
+  const trackObj = {
+    id,
+    title,
+    artist,
+    source: 'local',
+    duration: 180,
+    blob: file,
+    addedAt: Date.now()
+  };
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('local_tracks', 'readwrite');
+    const store = tx.objectStore('local_tracks');
+    const req = store.put(trackObj);
+    req.onsuccess = () => resolve(trackObj);
+    req.onerror = (e) => reject(e.target.error);
+  });
+}
+
+async function getLocalTracks() {
+  try {
+    const db = await initLocalAudioDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction('local_tracks', 'readonly');
+      const store = tx.objectStore('local_tracks');
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const tracks = req.result || [];
+        const mapped = tracks.map(t => {
+          const blobUrl = URL.createObjectURL(t.blob);
+          return {
+            id: t.id,
+            title: t.title,
+            artist: t.artist,
+            source: 'local',
+            duration: t.duration || 180,
+            thumbnail: '',
+            streamUrl: blobUrl,
+            blobUrl: blobUrl
+          };
+        });
+        resolve(mapped);
+      };
+      req.onerror = () => resolve([]);
+    });
+  } catch (err) {
+    console.error('[IndexedDB Get Error]:', err);
+    return [];
+  }
+}
+
+async function deleteLocalTrack(id) {
+  const db = await initLocalAudioDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('local_tracks', 'readwrite');
+    const store = tx.objectStore('local_tracks');
+    const req = store.delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror = (e) => reject(e.target.error);
+  });
+}
+
+// Drag and Drop Event Listeners
+window.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  const overlay = document.getElementById('drop-overlay');
+  if (overlay) overlay.classList.remove('hidden');
+});
+
+window.addEventListener('dragleave', (e) => {
+  if (e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
+    const overlay = document.getElementById('drop-overlay');
+    if (overlay) overlay.classList.add('hidden');
+  }
+});
+
+window.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  const overlay = document.getElementById('drop-overlay');
+  if (overlay) overlay.classList.add('hidden');
+
+  const files = Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.mp3') || f.type.startsWith('audio/'));
+  if (files.length === 0) {
+    showToastNotification('Перетащите файлы формата .mp3', 'warning');
+    return;
+  }
+
+  showToastNotification(`Загрузка ${files.length} MP3...`, 'info');
+  for (const f of files) {
+    await saveLocalTrack(f);
+  }
+  showToastNotification(`Добавлено ${files.length} локальных треков!`, 'success');
+  if (activeView === 'library') {
+    loadFavorites('local');
+  }
+});
+
 // Helper to construct audio stream URL
 function getAudioStreamUrl(track, seekTime) {
+  if (track.source === 'local' || track.blobUrl) {
+    return track.blobUrl || track.streamUrl;
+  }
   let streamUrl = `${BACKEND_URL}/stream?id=${encodeURIComponent(track.id)}&source=${track.source}&artist=${encodeURIComponent(track.artist)}&title=${encodeURIComponent(track.title)}`;
   if (seekTime !== undefined) {
     streamUrl += `&seek=${seekTime}`;
@@ -1743,29 +1879,147 @@ function toggleLike(e, track) {
   }
 }
 
-function loadFavorites() {
+let currentLibrarySubTab = 'favorites';
+
+async function loadFavorites(subTab = currentLibrarySubTab) {
+  currentLibrarySubTab = subTab;
   activeView = 'library';
   searchInput.value = '';
   welcomeScreen.classList.add('hidden');
   tracksContainer.classList.add('hidden');
   loadingIndicator.classList.remove('hidden');
 
-  setTimeout(async () => {
+  const subTabsHeader = `
+    <div class="view-header">
+      <div class="view-header-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l8.72-8.72 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+        <span>Медиатека</span>
+      </div>
+    </div>
+    <div class="library-subtabs">
+      <button class="library-tab-btn ${subTab === 'favorites' ? 'active' : ''}" id="lib-subtab-favs">Избранное</button>
+      <button class="library-tab-btn ${subTab === 'local' ? 'active' : ''}" id="lib-subtab-local">Загруженные файлы</button>
+    </div>
+  `;
+
+  if (subTab === 'favorites') {
     await loadLikedTracks();
     const likes = getLikedTracks();
     loadingIndicator.classList.add('hidden');
 
+    tracksContainer.innerHTML = subTabsHeader;
+    bindLibrarySubTabEvents();
+
     if (likes && likes.length > 0) {
       playlist = likes;
       renderTracks(playlist);
-      tracksContainer.classList.remove('hidden');
     } else {
       playlist = [];
-      tracksContainer.innerHTML = '<div class="welcome-state"><h2>Your Library is empty</h2><p>Click the heart icon on any track to add it here</p></div>';
-      tracksContainer.classList.remove('hidden');
+      const emptyDiv = document.createElement('div');
+      emptyDiv.className = 'welcome-state';
+      emptyDiv.innerHTML = '<h2>Избранное пусто</h2><p>Нажмите сердечко на любом треке, чтобы добавить его сюда</p>';
+      tracksContainer.appendChild(emptyDiv);
     }
-    updateActiveTab('library');
-  }, 200);
+    tracksContainer.classList.remove('hidden');
+  } else {
+    const localTracks = await getLocalTracks();
+    loadingIndicator.classList.add('hidden');
+
+    tracksContainer.innerHTML = subTabsHeader;
+    bindLibrarySubTabEvents();
+
+    const localHeader = document.createElement('div');
+    localHeader.className = 'local-library-header';
+    localHeader.innerHTML = `
+      <div style="font-size: 13px; font-weight: 600; color: var(--text-dim);">Локальные треки: ${localTracks.length}</div>
+      <div style="display: flex; gap: 10px;">
+        <button id="upload-mp3-btn" class="local-action-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+          Загрузить MP3
+        </button>
+        <input type="file" id="local-file-picker" accept=".mp3,audio/*" multiple style="display: none;">
+      </div>
+    `;
+    tracksContainer.appendChild(localHeader);
+
+    const filePicker = localHeader.querySelector('#local-file-picker');
+    const uploadBtn = localHeader.querySelector('#upload-mp3-btn');
+    uploadBtn.addEventListener('click', () => filePicker.click());
+    filePicker.addEventListener('change', async (e) => {
+      const files = Array.from(e.target.files);
+      if (files.length > 0) {
+        showToastNotification(`Загрузка ${files.length} MP3...`, 'info');
+        for (const f of files) {
+          await saveLocalTrack(f);
+        }
+        showToastNotification(`Успешно добавлено ${files.length} локальных треков!`, 'success');
+        loadFavorites('local');
+      }
+    });
+
+    if (localTracks && localTracks.length > 0) {
+      playlist = localTracks;
+      renderLocalTracks(playlist);
+    } else {
+      playlist = [];
+      const emptyDiv = document.createElement('div');
+      emptyDiv.className = 'welcome-state';
+      emptyDiv.innerHTML = '<h2>Локальная медиатека пуста</h2><p>Перетащите файлы .mp3 в окно или нажмите «Загрузить MP3»</p>';
+      tracksContainer.appendChild(emptyDiv);
+    }
+    tracksContainer.classList.remove('hidden');
+  }
+  updateActiveTab('library');
+}
+
+function bindLibrarySubTabEvents() {
+  const btnFavs = document.getElementById('lib-subtab-favs');
+  const btnLocal = document.getElementById('lib-subtab-local');
+  if (btnFavs) btnFavs.addEventListener('click', () => loadFavorites('favorites'));
+  if (btnLocal) btnLocal.addEventListener('click', () => loadFavorites('local'));
+}
+
+function renderLocalTracks(tracks) {
+  const listContainer = document.createElement('div');
+  listContainer.className = 'tracks-list';
+  tracks.forEach((track, index) => {
+    const card = document.createElement('div');
+    card.className = 'track-card';
+    card.dataset.index = index;
+    
+    card.innerHTML = `
+      <div class="track-info">
+        <div class="track-cover-container">
+          <div class="track-cover-placeholder" style="width: 44px; height: 44px; border-radius: 8px; background: rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; font-size: 18px;">🎵</div>
+        </div>
+        <div class="track-details">
+          <div class="track-title">${escapeHTML(track.title)}</div>
+          <div class="track-artist">${escapeHTML(track.artist)} • Локальный MP3</div>
+        </div>
+      </div>
+      <div class="track-actions" style="display: flex; gap: 8px; align-items: center;">
+        <button class="local-track-delete-btn" title="Удалить из медиатеки" data-id="${track.id}">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+    `;
+
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.local-track-delete-btn')) return;
+      playTrack(index);
+    });
+
+    const deleteBtn = card.querySelector('.local-track-delete-btn');
+    deleteBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await deleteLocalTrack(track.id);
+      showToastNotification('Трек удален из медиатеки', 'info');
+      loadFavorites('local');
+    });
+
+    listContainer.appendChild(card);
+  });
+  tracksContainer.appendChild(listContainer);
 }
 
 // Playback History logic
@@ -4347,70 +4601,73 @@ function applyBgEffect(effectName = 'static') {
   localStorage.setItem('gp_bg_effect', effectName);
 }
 
+function getLuminance(hex) {
+  if (!hex || typeof hex !== 'string') return 0;
+  let c = hex.replace('#', '');
+  if (c.length === 3) c = c.split('').map(x => x + x).join('');
+  if (c.length !== 6) return 0;
+  const r = parseInt(c.substring(0, 2), 16) / 255;
+  const g = parseInt(c.substring(2, 4), 16) / 255;
+  const b = parseInt(c.substring(4, 6), 16) / 255;
+  const a = [r, g, b].map(v => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+  return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
+}
+
 function applyCustomTheme(theme) {
   const root = document.documentElement;
-  root.style.setProperty('--text-color', theme.textColor);
-  root.style.setProperty('--blur-value', `blur(${theme.blur}px)`);
+  
+  const bg1 = theme.bgColor1 || theme.bgColor || '#1e1e24';
+  const bg2 = theme.bgColor2 || bg1;
+  const avgLum = (getLuminance(bg1) + getLuminance(bg2)) / 2;
+  const isLightBg = avgLum > 0.42;
 
-  const textDim = hexToRgba(theme.textColor, 0.55);
+  let textColor = theme.textColor || (isLightBg ? '#0f0f14' : '#f5f5f7');
+  if (isLightBg && getLuminance(textColor) > 0.4) {
+    textColor = '#0f0f14';
+  } else if (!isLightBg && getLuminance(textColor) < 0.2) {
+    textColor = '#f5f5f7';
+  }
+
+  root.style.setProperty('--text-color', textColor);
+  root.style.setProperty('--blur-value', `blur(${theme.blur !== undefined ? theme.blur : 28}px)`);
+
+  const textDim = isLightBg ? 'rgba(15, 15, 20, 0.65)' : hexToRgba(textColor, 0.55);
   root.style.setProperty('--text-dim', textDim);
 
   if (theme.bgColor1 && theme.bgColor2) {
     const angle = theme.bgAngle !== undefined ? theme.bgAngle : 135;
     root.style.setProperty('--bg-gradient', `linear-gradient(${angle}deg, ${theme.bgColor1} 0%, ${theme.bgColor2} 100%)`);
   } else {
-    root.style.setProperty('--bg-gradient', theme.bgColor || '#1e1e24');
+    root.style.setProperty('--bg-gradient', bg1);
   }
 
-  const isDarkBg = isColorDark(theme.bgColor1 || theme.bgColor || '#1e1e24');
-
-  // Resolve theme custom colors
-  let playerBgHex = theme.playerBg || '#050505';
-
-  // Dynamic player-bg color adjustment logic: 
-  // If the user hasn't overridden the default dark playerBg (#050505 or #08080c),
-  // derive the player color from the background color at the bottom (bgColor2).
-  if ((playerBgHex === '#050505' || playerBgHex === '#08080c') && theme.bgColor2) {
-    playerBgHex = isDarkBg 
-      ? mixHexColors(theme.bgColor2, '#000000', 0.6) 
-      : mixHexColors(theme.bgColor2, '#ffffff', 0.6);
-  }
-
-  const cardBgHex = theme.cardBg || '#ffffff';
-  const accentColorHex = theme.accentColor || theme.textColor || '#ffffff';
-
-  // Enforce a minimum opacity threshold (0.18) so panels never completely vanish
+  const cardBgHex = isLightBg ? '#000000' : (theme.cardBg || '#ffffff');
+  const cardBorderHex = isLightBg ? '#000000' : '#ffffff';
   const effectiveOpacity = Math.max(theme.opacity !== undefined ? theme.opacity : 0.45, 0.18);
 
-  root.style.setProperty('--player-bg', hexToRgba(playerBgHex, effectiveOpacity));
-  root.style.setProperty('--player-border', hexToRgba(playerBgHex, effectiveOpacity * 0.15));
-  root.style.setProperty('--card-bg', hexToRgba(cardBgHex, effectiveOpacity * 0.15));
-  root.style.setProperty('--card-border', hexToRgba(cardBgHex, effectiveOpacity * 0.2));
-  root.style.setProperty('--card-hover-bg', hexToRgba(cardBgHex, effectiveOpacity * 0.3));
-  root.style.setProperty('--card-hover-border', hexToRgba(cardBgHex, effectiveOpacity * 0.5));
-  if (isDarkBg) {
-    root.style.setProperty('--panel-bg', `rgba(0, 0, 0, ${theme.opacity * 0.4})`);
-  } else {
-    root.style.setProperty('--panel-bg', `rgba(255, 255, 255, ${theme.opacity * 0.4})`);
-  }
+  root.style.setProperty('--card-bg', hexToRgba(cardBgHex, isLightBg ? 0.08 : effectiveOpacity * 0.15));
+  root.style.setProperty('--card-border', hexToRgba(cardBorderHex, isLightBg ? 0.12 : effectiveOpacity * 0.2));
+  root.style.setProperty('--card-hover-bg', hexToRgba(cardBgHex, isLightBg ? 0.14 : effectiveOpacity * 0.3));
+  root.style.setProperty('--card-hover-border', hexToRgba(cardBorderHex, isLightBg ? 0.22 : effectiveOpacity * 0.5));
+  root.style.setProperty('--player-bg', hexToRgba(isLightBg ? bg2 : '#050505', isLightBg ? 0.85 : effectiveOpacity));
+  root.style.setProperty('--player-border', hexToRgba(cardBorderHex, 0.15));
+
+  const accentColorHex = theme.accentColor || (isLightBg ? '#0a84ff' : '#ffffff');
   root.style.setProperty('--accent-color', accentColorHex);
 
-  const glowColorHex = theme.glowColor || '#ffffff';
+  const glowColorHex = theme.glowColor || (isLightBg ? '#0a84ff' : '#ffffff');
   const glowAlpha = theme.glow !== undefined ? theme.glow : 0.05;
   const glowColorRgba = hexToRgba(glowColorHex, glowAlpha);
   root.style.setProperty('--glow-color', glowColorRgba);
   root.style.setProperty('--glass-glow', `inset 0 1px 0 0 ${glowColorRgba}`);
 
-  // Redesign dynamic variables exposure
-  const primaryBgColor = theme.bgColor1 || theme.bgColor || '#121218';
-  root.style.setProperty('--bgColor1', primaryBgColor);
+  root.style.setProperty('--bgColor1', bg1);
   root.style.setProperty('--glow', theme.glow !== undefined ? theme.glow : 0.05);
   root.style.setProperty('--blur', `${theme.blur !== undefined ? theme.blur : 28}px`);
   
   const radius = theme.windowRadius !== undefined ? theme.windowRadius : 12;
   root.style.setProperty('--window-radius', `${radius}px`);
 
-  // Extra Personalization Attributes
   if (theme.fontFamily) {
     loadGoogleFont(theme.fontFamily);
     root.style.setProperty('--font-family', `'${theme.fontFamily}', sans-serif`);
@@ -4421,7 +4678,7 @@ function applyCustomTheme(theme) {
   const borderWidth = theme.borderWidth !== undefined ? theme.borderWidth : '1px';
   root.style.setProperty('--border-width', borderWidth);
 
-  // Card glass style
+  document.body.classList.toggle('theme-light-contrast', isLightBg);
   document.body.classList.remove('glass-style-frosted', 'glass-style-material', 'glass-style-flat');
   if (theme.cardStyle && theme.cardStyle !== 'default') {
     document.body.classList.add(`glass-style-${theme.cardStyle}`);

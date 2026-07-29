@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.16.6';
+const APP_VERSION = '1.16.7';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -18,6 +18,12 @@ let cachedSoundCloudDynamicTracks = null; // Cached SoundCloud time-of-day track
 
 // Genre chip render version — prevents stale async responses from corrupting state
 let genreRenderVersion = 0;
+
+// Social & WebSocket state (hoisted to top level to avoid TDZ ReferenceError during auth init)
+let ws = null;
+let wsReconnectTimeout = null;
+let friendStatuses = new Map(); // friendId -> statusObject
+let mutualFriends = []; // Mutual friends list
 
 // Lyrics state
 const lyricsState = {
@@ -4822,20 +4828,26 @@ if (isElectron && window.electronAPI && window.electronAPI.onUpdateStatus) {
     updateProgressBar.style.width = '100%';
   });
 
-  updateDownloadBtn.addEventListener('click', () => {
-    updateDownloadBtn.classList.add('hidden');
-    bannerLoader.classList.remove('hidden');
-    updateBannerText.textContent = 'Начало загрузки обновления...';
-    window.electronAPI.downloadUpdate();
-  });
+  if (updateDownloadBtn) {
+    updateDownloadBtn.addEventListener('click', () => {
+      updateDownloadBtn.classList.add('hidden');
+      if (bannerLoader) bannerLoader.classList.remove('hidden');
+      if (updateBannerText) updateBannerText.textContent = 'Начало загрузки обновления...';
+      window.electronAPI.downloadUpdate();
+    });
+  }
 
-  updateInstallBtn.addEventListener('click', () => {
-    window.electronAPI.installUpdate();
-  });
+  if (updateInstallBtn) {
+    updateInstallBtn.addEventListener('click', () => {
+      window.electronAPI.installUpdate();
+    });
+  }
 
-  updateCloseBtn.addEventListener('click', () => {
-    updateBanner.classList.add('hidden');
-  });
+  if (updateCloseBtn) {
+    updateCloseBtn.addEventListener('click', () => {
+      if (updateBanner) updateBanner.classList.add('hidden');
+    });
+  }
 }
 
 // === RELEASE 1.1.0 GLOBAL UPDATES ===
@@ -5971,24 +5983,30 @@ async function handleModalAuthSubmit() {
 }
 
 // Bind auth modal event listeners on startup
-document.getElementById('close-auth-modal-btn').addEventListener('click', () => {
-  document.getElementById('auth-modal').classList.add('hidden');
-});
+const closeAuthModalBtn = document.getElementById('close-auth-modal-btn');
+if (closeAuthModalBtn) {
+  closeAuthModalBtn.addEventListener('click', () => {
+    const authModal = document.getElementById('auth-modal');
+    if (authModal) authModal.classList.add('hidden');
+  });
+}
 
-document.getElementById('auth-modal-switch-btn').addEventListener('click', () => {
-  isModalRegistering = !isModalRegistering;
-  updateAuthModalState();
-});
+const authModalSwitchBtn = document.getElementById('auth-modal-switch-btn');
+if (authModalSwitchBtn) {
+  authModalSwitchBtn.addEventListener('click', () => {
+    isModalRegistering = !isModalRegistering;
+    updateAuthModalState();
+  });
+}
 
-document.getElementById('auth-modal-submit-btn').addEventListener('click', handleModalAuthSubmit);
+const authModalSubmitBtn = document.getElementById('auth-modal-submit-btn');
+if (authModalSubmitBtn) {
+  authModalSubmitBtn.addEventListener('click', handleModalAuthSubmit);
+}
 
 // ==========================================================================
 // RELEASE 1.5.0: The Social Engine Websocket & Collaboration Logic
 // ==========================================================================
-let ws = null;
-let wsReconnectTimeout = null;
-let friendStatuses = new Map(); // friendId -> statusObject
-let mutualFriends = []; // Mutual friends list
 
 function connectWS() {
   if (ws) {

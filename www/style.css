@@ -275,27 +275,18 @@ body:not(.window-maximized) .titlebar {
   display: flex;
   flex-direction: column;
   opacity: 0;
-  visibility: hidden;
   pointer-events: none;
-  transform: translate3d(calc(-100% - 12px), 0, 0);
-  transition:
-    transform 0.42s cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 0.26s ease,
-    visibility 0s linear 0.42s;
+  transform: translate3d(-100%, 0, 0);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
   will-change: transform, opacity;
   backface-visibility: hidden;
-  contain: layout paint;
 }
 
 .sidebar.open {
   opacity: 1;
-  visibility: visible;
   pointer-events: auto;
   transform: translate3d(0, 0, 0);
-  transition:
-    transform 0.42s cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 0.22s ease,
-    visibility 0s linear 0s;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
 }
 
 .sidebar-header {
@@ -5122,15 +5113,22 @@ body.glass-style-flat .settings-section {
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-/* Player Bar Swipe Down Gesture & Dismiss */
+/* Player Bar Default Hidden State when not playing */
 .player-bar {
-  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+  transform: translate3d(0, 140%, 0);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
   touch-action: none;
   user-select: none;
+  will-change: transform;
+}
+
+.container.player-active .player-bar,
+.player-bar.active {
+  transform: translate3d(0, 0, 0) !important;
 }
 
 .player-bar.dismissed {
-  transform: translateY(140%) !important;
+  transform: translate3d(0, 140%, 0) !important;
   pointer-events: none;
 }
 

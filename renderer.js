@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.16.7';
+const APP_VERSION = '1.16.8';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -1236,6 +1236,9 @@ function showToastNotification(message, type = 'info', title = null) {
 }
 
 function setPlayState(isPlaying) {
+  const container = document.querySelector('.container');
+  const playerBarEl = document.querySelector('.player-bar');
+
   if (isPlaying) {
     playIcon.classList.add('hidden');
     pauseIcon.classList.remove('hidden');
@@ -1243,6 +1246,13 @@ function setPlayState(isPlaying) {
     if (miniPauseIcon) miniPauseIcon.classList.remove('hidden');
     if (currentCover) currentCover.classList.add('playing');
     if (miniCurrentCover) miniCurrentCover.classList.add('playing');
+
+    if (container) container.classList.add('player-active');
+    if (playerBarEl) {
+      playerBarEl.classList.remove('dismissed');
+      playerBarEl.classList.add('active');
+      playerBarEl.style.transform = 'translate3d(0, 0, 0)';
+    }
   } else {
     playIcon.classList.remove('hidden');
     pauseIcon.classList.add('hidden');
@@ -1369,14 +1379,19 @@ function formatTime(seconds) {
 
 // Helper to convert MM:SS or HH:MM:SS format to seconds
 function parseDurationToSeconds(durationStr) {
-  if (!durationStr) return 0;
-  const parts = durationStr.split(':').map(Number);
-  if (parts.length === 2) {
-    return parts[0] * 60 + parts[1];
-  } else if (parts.length === 3) {
-    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (!durationStr && durationStr !== 0) return 0;
+  if (typeof durationStr === 'number') return Math.round(durationStr);
+  const str = String(durationStr).trim();
+  if (!str.includes(':')) {
+    return parseFloat(str) || 0;
   }
-  return parseFloat(durationStr) || 0;
+  const parts = str.split(':').map(Number);
+  if (parts.length === 2) {
+    return (parts[0] || 0) * 60 + (parts[1] || 0);
+  } else if (parts.length === 3) {
+    return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+  }
+  return parseFloat(str) || 0;
 }
 
 // 4. Listeners
@@ -4858,7 +4873,7 @@ let rpcInterval = null;
 function sendDiscordPresence() {
   if (!isElectron || !window.electronAPI || !window.electronAPI.updatePresence) return;
 
-  if (currentTrackIndex === -1) {
+  if (currentTrackIndex === -1 || !playlist[currentTrackIndex]) {
     window.electronAPI.updatePresence({
       title: 'Not Playing',
       artist: 'Выберите трек для воспроизведения',
@@ -4868,13 +4883,15 @@ function sendDiscordPresence() {
   }
 
   const track = playlist[currentTrackIndex];
+  if (!track) return;
+
   const isPaused = audioPlayer.paused;
   const position = audioPlayer.currentTime;
   const duration = currentTrackDuration || audioPlayer.duration || 0;
 
   window.electronAPI.updatePresence({
-    title: track.title,
-    artist: track.artist,
+    title: track.title || 'Not Playing',
+    artist: track.artist || 'GlassPlayer',
     isPaused: isPaused,
     position: position,
     duration: duration,
@@ -7350,8 +7367,13 @@ if (playerBarEl) {
     
     if (currentPlayerBarTranslateY > 65) {
       playerBarEl.classList.add('dismissed');
+      playerBarEl.classList.remove('active');
+      playerBarEl.style.transform = 'translate3d(0, 140%, 0)';
       if (!audioPlayer.paused) audioPlayer.pause();
       setPlayState(false);
+      currentTrackIndex = -1;
+      const container = document.querySelector('.container');
+      if (container) container.classList.remove('player-active');
       showToastNotification('Плеер свернут', 'info');
     } else {
       playerBarEl.style.transform = 'translate3d(0, 0, 0)';

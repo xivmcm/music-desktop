@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.16.12';
+const APP_VERSION = '1.16.13';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -4944,12 +4944,8 @@ audioPlayer.addEventListener('pause', () => {
 // --- Mini-Player Window Mode listener ---
 if (isElectron && window.electronAPI && window.electronAPI.onMiniPlayerToggled) {
   window.electronAPI.onMiniPlayerToggled((active) => {
-    if (active) {
-      document.body.classList.add('mini-player-active');
-    } else {
-      document.body.classList.remove('mini-player-active');
-    }
-    resizeCanvas();
+    document.body.classList.toggle('mini-player-active', Boolean(active));
+    if (typeof resizeCanvas === 'function') resizeCanvas();
   });
 }
 
@@ -7430,9 +7426,3 @@ document.querySelectorAll('[data-electron-action]').forEach(btn => {
     else if (action === 'toggleMiniPlayer') window.electronAPI.toggleMiniPlayer();
   });
 });
-
-if (isElectron && window.electronAPI && window.electronAPI.onMiniPlayerToggled) {
-  window.electronAPI.onMiniPlayerToggled((active) => {
-    document.body.classList.toggle('mini-player-active', active);
-  });
-}

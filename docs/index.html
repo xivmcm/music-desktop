@@ -2,8 +2,9 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="GlassPlayer — кастомный десктопный плеер со стеклянным дизайном, стримингом SoundCloud/Spotify без VPN и нулевой нагрузкой на ПК.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="GlassPlayer — кастомный десктопный и мобильный плеер со стеклянным дизайном, стримингом SoundCloud/Spotify без VPN и нулевой нагрузкой на устройство.">
+  <meta name="theme-color" content="#0a0a0c">
   <title>GlassPlayer — Your music, unfiltered</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,11 +12,11 @@
   <style>
     /* CSS Tokens & Base Settings */
     :root {
-      --bg-gradient: radial-gradient(circle at 50% 30%, #1e1e24 0%, #0a0a0c 100%);
+      --bg-gradient: radial-gradient(circle at 50% 25%, #1e1e24 0%, #0a0a0c 100%);
       --accent-color: #ffffff;
       --glass-bg: rgba(255, 255, 255, 0.03);
       --glass-border: rgba(255, 255, 255, 0.08);
-      --glass-hover-border: rgba(255, 255, 255, 0.2);
+      --glass-hover-border: rgba(255, 255, 255, 0.22);
       --text-main: #ffffff;
       --text-dim: rgba(255, 255, 255, 0.65);
       --text-subtle: rgba(255, 255, 255, 0.4);
@@ -26,6 +27,7 @@
       box-sizing: border-box;
       margin: 0;
       padding: 0;
+      -webkit-tap-highlight-color: transparent;
     }
 
     body {
@@ -51,7 +53,7 @@
       transform: translateX(-50%);
       width: 750px;
       height: 750px;
-      background: radial-gradient(circle, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 70%);
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 70%);
       pointer-events: none;
       z-index: 0;
     }
@@ -69,8 +71,10 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 32px 0;
+      padding: 28px 0;
       border-bottom: 1px solid var(--glass-border);
+      flex-wrap: wrap;
+      gap: 16px;
     }
 
     .logo-group {
@@ -122,7 +126,7 @@
     /* Hero Section */
     .hero {
       text-align: center;
-      padding: 90px 0 60px;
+      padding: 70px 0 50px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -138,25 +142,25 @@
       border: 1px solid rgba(255, 255, 255, 0.1);
       font-size: 13px;
       color: var(--text-dim);
-      margin-bottom: 28px;
+      margin-bottom: 24px;
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
     }
 
     .hero-title {
-      font-size: 56px;
+      font-size: clamp(34px, 6vw, 56px);
       font-weight: 700;
-      line-height: 1.1;
+      line-height: 1.15;
       letter-spacing: -1px;
       margin-bottom: 20px;
       background: linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0.7) 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
-      max-width: 800px;
+      max-width: 820px;
     }
 
     .hero-subtitle {
-      font-size: 18px;
+      font-size: clamp(15px, 2.5vw, 18px);
       font-weight: 400;
       line-height: 1.6;
       color: var(--text-dim);
@@ -168,52 +172,87 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 14px;
+      gap: 16px;
+      width: 100%;
     }
 
-    .download-btn {
+    .buttons-wrapper {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      width: 100%;
+      max-width: 650px;
+    }
+
+    .btn {
       display: inline-flex;
       align-items: center;
-      gap: 12px;
-      padding: 16px 36px;
+      justify-content: center;
+      gap: 10px;
+      padding: 16px 28px;
       border-radius: 14px;
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 600;
-      color: #000000;
-      background: #ffffff;
       text-decoration: none;
-      box-shadow: 0 0 30px rgba(255, 255, 255, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.8);
-      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
       cursor: pointer;
+      min-height: 52px;
+      flex: 1;
+      min-width: 260px;
     }
 
-    .download-btn:hover {
+    .btn-primary {
+      color: #000000;
+      background: #ffffff;
+      box-shadow: 0 0 30px rgba(255, 255, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+
+    .btn-primary:hover {
       transform: translateY(-2px) scale(1.02);
-      box-shadow: 0 0 45px rgba(255, 255, 255, 0.4), inset 0 1px 0 #ffffff;
+      box-shadow: 0 0 45px rgba(255, 255, 255, 0.35), inset 0 1px 0 #ffffff;
+    }
+
+    .btn-secondary {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    .btn-secondary:hover {
+      transform: translateY(-2px) scale(1.02);
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.3);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4), 0 0 20px rgba(255, 255, 255, 0.05);
     }
 
     .download-subtext {
       font-size: 13px;
       color: var(--text-subtle);
+      margin-top: 4px;
     }
 
     /* Features Grid */
     .features-section {
-      padding: 40px 0 90px;
+      padding: 40px 0 80px;
     }
 
     .section-title {
-      font-size: 24px;
+      font-size: clamp(20px, 4vw, 24px);
       font-weight: 600;
       text-align: center;
-      margin-bottom: 40px;
+      margin-bottom: 36px;
       color: var(--text-dim);
     }
 
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
     }
 
     .feature-card {
@@ -222,10 +261,10 @@
       -webkit-backdrop-filter: blur(28px);
       border: 1px solid var(--glass-border);
       border-radius: var(--window-radius);
-      padding: 28px;
+      padding: 26px;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 14px;
       transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s ease, box-shadow 0.3s ease;
     }
 
@@ -248,7 +287,7 @@
     }
 
     .card-title {
-      font-size: 18px;
+      font-size: 17px;
       font-weight: 600;
       color: var(--text-main);
     }
@@ -263,7 +302,7 @@
     footer {
       width: 100%;
       border-top: 1px solid var(--glass-border);
-      padding: 30px 0;
+      padding: 26px 0;
       text-align: center;
       font-size: 13px;
       color: var(--text-subtle);
@@ -279,14 +318,34 @@
       color: #ffffff;
     }
 
-    /* Responsive */
-    @media (max-width: 600px) {
-      .hero-title {
-        font-size: 38px;
+    /* Responsive Breakpoints */
+    @media (max-width: 768px) {
+      .container {
+        padding: 0 18px;
       }
-      .hero-subtitle {
-        font-size: 15px;
+
+      header {
+        padding: 20px 0;
       }
+
+      .hero {
+        padding: 45px 0 35px;
+      }
+
+      .buttons-wrapper {
+        flex-direction: column;
+        width: 100%;
+      }
+
+      .btn {
+        width: 100%;
+        min-width: 100%;
+      }
+
+      .features-section {
+        padding: 20px 0 60px;
+      }
+
       .grid {
         grid-template-columns: 1fr;
       }
@@ -315,14 +374,25 @@
           GlassPlayer 1.16.12 Release
         </div>
         <h1 class="hero-title">Your music, unfiltered</h1>
-        <p class="hero-subtitle">Кастомный десктопный плеер со стеклянным дизайном, стримингом SoundCloud/Spotify без VPN и нулевой нагрузкой на ПК.</p>
+        <p class="hero-subtitle">Кастомный десктопный и мобильный плеер со стеклянным дизайном, стримингом SoundCloud/Spotify без VPN и нулевой нагрузкой на ПК.</p>
 
         <div class="cta-group">
-          <a href="https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.16.12.exe" class="download-btn">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-            Скачать для Windows (.exe)
-          </a>
-          <div class="download-subtext">Windows 10 / 11 (64-bit) • Полностью бесплатно</div>
+          <div class="buttons-wrapper">
+            <a href="https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.16.12.exe" class="btn btn-primary">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M0 3.449L9.75 2.1v9.451H0V3.449zm0 17.102L9.75 21.9v-9.451H0v9.102zM10.875 2v9.551H24V0L10.875 2zm0 19.9L24 24v-11.449H10.875V21.9z"/>
+              </svg>
+              Скачать для Windows (.exe)
+            </a>
+
+            <a href="https://github.com/xivmcm/music-desktop/releases/latest/download/app-debug.apk" class="btn btn-secondary">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17.523 15.3414C17.06 15.3414 16.685 14.9664 16.685 14.5034C16.685 14.0404 17.06 13.6654 17.523 13.6654C17.986 13.6654 18.361 14.0404 18.361 14.5034C18.361 14.9664 17.986 15.3414 17.523 15.3414ZM6.477 15.3414C6.014 15.3414 5.639 14.9664 5.639 14.5034C5.639 14.0404 6.014 13.6654 6.477 13.6654C6.94 13.6654 7.315 14.0404 7.315 14.5034C7.315 14.9664 6.94 15.3414 6.477 15.3414ZM17.892 10.3784L19.467 7.6504C19.605 7.4114 19.523 7.1064 19.284 6.9684C19.045 6.8304 18.74 6.9124 18.602 7.1514L17.004 9.9194C15.5 9.2344 13.805 8.8474 12 8.8474C10.195 8.8474 8.5 9.2344 6.996 9.9194L5.398 7.1514C5.26 6.9124 4.955 6.8304 4.716 6.9684C4.477 7.1064 4.395 7.4114 4.533 7.6504L6.108 10.3784C2.658 12.2614 0.287 15.8234 0 20H24C23.713 15.8234 21.342 12.2614 17.892 10.3784Z"/>
+              </svg>
+              Скачать для Android (.apk)
+            </a>
+          </div>
+          <div class="download-subtext">Windows 10 / 11 • Android 8.0+ • Полностью бесплатно</div>
         </div>
       </section>
 

@@ -294,7 +294,7 @@ async function initApiFailover() {
   }
   console.log('[API Failover] Verifying backend mirrors...');
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 2000);
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
   const checkMirror = async (url) => {
     try {
       const response = await fetch(`${url}/api/health`, { 

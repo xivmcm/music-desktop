@@ -2199,55 +2199,61 @@ body.window-maximized {
 
 /* Mini Player Mode Styles & Redesign */
 body.mini-player-active {
-  min-height: 100px !important;
-  height: 100px !important;
-  /* MUST stay transparent so OS shows rounded clip correctly on frameless window */
-  background: transparent !important;
-  background-color: transparent !important;
+  min-height: 100% !important;
+  height: 100% !important;
+  width: 100% !important;
+  background: #0d0d14 !important;
+  background-color: #0d0d14 !important;
   border: none !important;
   box-shadow: none !important;
   border-radius: var(--window-radius) !important;
   overflow: hidden !important;
-  clip-path: inset(0 round var(--window-radius)) !important;
-  -webkit-clip-path: inset(0 round var(--window-radius)) !important;
-  transform: translateZ(0);
+  position: relative !important;
 }
 
-body.mini-player-active::before {
-  display: block !important;
-  border-radius: var(--window-radius) !important;
+body.mini-player-active::before,
+body.mini-player-active::after {
+  display: none !important;
 }
 
 /* Hide standard UI fully */
 body.mini-player-active .titlebar,
 body.mini-player-active .container,
-body.mini-player-active .mobile-tab-bar {
+body.mini-player-active .mobile-tab-bar,
+body.mini-player-active .sidebar,
+body.mini-player-active .sidebar-trigger,
+body.mini-player-active .player-bar,
+body.mini-player-active #ambient-canvas,
+body.mini-player-active #app-splash-screen,
+body.mini-player-active .overlay {
   display: none !important;
 }
 
 /* New Dedicated Mini Player Block styling */
 .mini-player-block {
-  display: none;
+  display: none !important;
 }
 
 body.mini-player-active .mini-player-block {
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-  width: 100%;
-  height: 100%;
-  background: var(--player-bg, rgba(8, 8, 12, 0.78)), var(--bg-gradient) !important;
-  backdrop-filter: var(--blur-value);
-  -webkit-backdrop-filter: var(--blur-value);
-  border: var(--border-width, 1px) solid var(--player-border, rgba(255, 255, 255, 0.08));
-  border-radius: var(--window-radius);
-  box-shadow: var(--glass-shadow);
-  overflow: hidden;
+  display: flex !important;
+  flex-direction: column !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  height: 100% !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 999999 !important;
+  background: rgba(14, 14, 22, 0.96) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: var(--window-radius) !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8) !important;
+  overflow: hidden !important;
   -webkit-app-region: drag;
-  animation: miniPlayerFadeIn 0.3s cubic-bezier(0.25, 1, 0.5, 1) forwards;
-  /* Subpixel rendering fix */
-  -webkit-font-smoothing: subpixel-antialiased;
-  -moz-osx-font-smoothing: grayscale;
   transform: translateZ(0);
 }
 

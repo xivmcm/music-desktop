@@ -199,6 +199,7 @@ function createWindow() {
   let normalBounds = null;
 
   ipcMain.on('toggle-mini-player', () => {
+    if (!mainWindow) return;
     isMiniPlayer = !isMiniPlayer;
     if (isMiniPlayer) {
       if (!mainWindow.isMaximized()) {
@@ -209,26 +210,29 @@ function createWindow() {
       }
       mainWindow.setResizable(true);
       mainWindow.setMinimumSize(320, 100);
-      mainWindow.setAlwaysOnTop(true);
+      mainWindow.setAlwaysOnTop(true, 'floating');
       
-      smoothResize(mainWindow, 320, 100, 200, () => {
-        mainWindow.setResizable(false);
-        mainWindow.webContents.send('mini-player-toggled', true);
-      });
+      const currentBounds = mainWindow.getBounds();
+      const newWidth = 340;
+      const newHeight = 115;
+      const newX = Math.round(currentBounds.x + (currentBounds.width - newWidth) / 2);
+      const newY = Math.round(currentBounds.y + (currentBounds.height - newHeight) / 2);
+
+      mainWindow.setBounds({ x: newX, y: newY, width: newWidth, height: newHeight });
+      mainWindow.setResizable(false);
+      mainWindow.webContents.send('mini-player-toggled', true);
     } else {
       mainWindow.setResizable(true);
       mainWindow.setMinimumSize(800, 600);
       mainWindow.setAlwaysOnTop(false);
       
-      const targetWidth = normalBounds ? normalBounds.width : 1000;
-      const targetHeight = normalBounds ? normalBounds.height : 700;
-
-      smoothResize(mainWindow, targetWidth, targetHeight, 200, () => {
-        if (normalBounds) {
-          mainWindow.setBounds(normalBounds);
-        }
-        mainWindow.webContents.send('mini-player-toggled', false);
-      });
+      if (normalBounds) {
+        mainWindow.setBounds(normalBounds);
+      } else {
+        mainWindow.setSize(1100, 720);
+        mainWindow.center();
+      }
+      mainWindow.webContents.send('mini-player-toggled', false);
     }
   });
 

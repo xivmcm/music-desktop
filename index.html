@@ -49,7 +49,7 @@
   <!-- Sliding Left Sidebar -->
   <aside id="sidebar" class="sidebar">
     <div class="sidebar-header">
-      <div class="sidebar-logo">GLASSPLAYER <span class="app-version-badge">v1.16.11</span></div>
+      <div class="sidebar-logo">GLASSPLAYER <span class="app-version-badge">v1.16.12</span></div>
     </div>
     <nav class="sidebar-menu">
       <button id="home-button" class="sidebar-btn active" title="Home">
@@ -370,6 +370,20 @@
 
   <!-- Auto-Update Banner Notification -->
   <div id="update-banner" class="update-banner hidden">
+    <div class="banner-content">
+      <div id="banner-loader" class="banner-loader hidden"></div>
+      <span id="update-banner-text">Доступно обновление GlassPlayer!</span>
+    </div>
+    <div class="banner-actions">
+      <button id="update-download-btn" class="banner-btn primary hidden">Скачать</button>
+      <button id="update-install-btn" class="banner-btn primary hidden">Перезапустить и обновить</button>
+      <button id="update-close-btn" class="banner-btn icon" title="Закрыть">✕</button>
+    </div>
+    <div class="banner-progress-bg">
+      <div id="update-progress-bar" class="banner-progress-fill"></div>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div id="toast-container"></div>
 

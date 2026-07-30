@@ -219,7 +219,13 @@ function createWindow() {
       const newY = Math.round(currentBounds.y + (currentBounds.height - newHeight) / 2);
 
       mainWindow.setBounds({ x: newX, y: newY, width: newWidth, height: newHeight });
-      mainWindow.setResizable(false);
+      
+      setTimeout(() => {
+        if (mainWindow && isMiniPlayer) {
+          mainWindow.setResizable(false);
+        }
+      }, 80);
+
       mainWindow.webContents.send('mini-player-toggled', true);
     } else {
       mainWindow.setResizable(true);

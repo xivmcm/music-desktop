@@ -209,12 +209,12 @@ function createWindow() {
         normalBounds = mainWindow.getBounds();
       }
       mainWindow.setResizable(true);
-      mainWindow.setMinimumSize(320, 100);
+      mainWindow.setMinimumSize(370, 110);
       mainWindow.setAlwaysOnTop(true, 'floating');
       
       const currentBounds = mainWindow.getBounds();
-      const newWidth = 340;
-      const newHeight = 115;
+      const newWidth = 370;
+      const newHeight = 110;
       const newX = Math.round(currentBounds.x + (currentBounds.width - newWidth) / 2);
       const newY = Math.round(currentBounds.y + (currentBounds.height - newHeight) / 2);
 
@@ -229,7 +229,7 @@ function createWindow() {
       if (normalBounds) {
         mainWindow.setBounds(normalBounds);
       } else {
-        mainWindow.setSize(1100, 720);
+        mainWindow.setSize(1100, 750);
         mainWindow.center();
       }
       mainWindow.webContents.send('mini-player-toggled', false);

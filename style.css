@@ -2202,8 +2202,8 @@ body.mini-player-active {
   min-height: 100% !important;
   height: 100% !important;
   width: 100% !important;
-  background: #0d0d14 !important;
-  background-color: #0d0d14 !important;
+  background: transparent !important;
+  background-color: transparent !important;
   border: none !important;
   box-shadow: none !important;
   border-radius: var(--window-radius) !important;

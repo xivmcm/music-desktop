@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.16.10';
+const APP_VERSION = '1.16.11';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -6981,8 +6981,8 @@ function parseLRC(lrcText) {
  * Fetches lyrics from the backend for the currently playing track.
  */
 async function fetchLyrics(title, artist) {
-  const cleanTitle = title ? title.replace(/\(.*\)|\[.*\]/g, '').trim() : '';
-  const cleanArtist = artist ? artist.replace(/\(.*\)|\[.*\]/g, '').trim() : '';
+  const cleanTitle = title ? String(title).replace(/@/g, '').replace(/\(.*\)|\[.*\]/g, '').trim() : '';
+  const cleanArtist = artist ? String(artist).replace(/@/g, '').replace(/\(.*\)|\[.*\]/g, '').trim() : '';
 
   const params = new URLSearchParams({
     track_name: cleanTitle,

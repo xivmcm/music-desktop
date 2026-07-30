@@ -5170,3 +5170,23 @@ body.glass-style-flat .settings-section {
   background: rgba(255, 255, 255, 0.2);
   transform: scale(1.08);
 }
+/* Toast container positioning */
+#toast-container {
+  position: fixed !important;
+  top: 50px !important;
+  right: 24px !important;
+  bottom: auto !important;
+  left: auto !important;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 100000;
+  pointer-events: none;
+}
+
+/* Mini-player block in mini-player mode */
+body.mini-player-active #mini-player-block {
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+}

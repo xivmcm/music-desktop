@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.16.8';
+const APP_VERSION = '1.16.9';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -1940,9 +1940,13 @@ async function loadFavorites(subTab = 'favorites') {
     tracksContainer.innerHTML = subTabsHeader;
     bindLibrarySubTabEvents();
 
+    const favsGrid = document.createElement('div');
+    favsGrid.className = 'tracks-layout-grid';
+    tracksContainer.appendChild(favsGrid);
+
     if (likes && likes.length > 0) {
       playlist = likes;
-      renderTracks(playlist);
+      renderTracks(playlist, favsGrid);
     } else {
       playlist = [];
       const emptyDiv = document.createElement('div');
@@ -2010,29 +2014,38 @@ function bindLibrarySubTabEvents() {
 }
 
 function renderLocalTracks(tracks) {
-  const listContainer = document.createElement('div');
-  listContainer.className = 'tracks-list';
+  const gridContainer = document.createElement('div');
+  gridContainer.className = 'tracks-layout-grid';
+
   tracks.forEach((track, index) => {
     const card = document.createElement('div');
-    card.className = 'track-card';
+    const isActive = activePlayingTrack && track.id === activePlayingTrack.id;
+    card.className = `track-card ${isActive ? 'active' : ''}`;
     card.dataset.index = index;
     card.dataset.trackId = track.id;
-    
+
+    const isCurrentPlaying = isActive && !audioPlayer.paused;
+    const coverPlayIcon = isCurrentPlaying
+      ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`
+      : `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="margin-left: 2px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+
     card.innerHTML = `
       <div class="track-info">
         <div class="track-cover-container">
           <div class="track-cover-placeholder" style="width: 44px; height: 44px; border-radius: 8px; background: rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; font-size: 18px;">🎵</div>
           <button class="cover-play-btn" aria-label="Play">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="margin-left: 2px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            ${coverPlayIcon}
           </button>
         </div>
         <div class="track-details">
-          <div class="track-title">${escapeHTML(track.title)}</div>
-          <div class="track-artist">${escapeHTML(track.artist)} • Локальный MP3</div>
+          <div class="track-title" title="${escapeHTML(track.title)}">${escapeHTML(track.title)}</div>
+          <div class="track-artist">${escapeHTML(track.artist || 'Локальный файл')}</div>
+          <div class="track-meta">
+            <span class="source-badge soundcloud" style="background: rgba(255,255,255,0.12); color: var(--text-color);">🎵 Local MP3</span>
+          </div>
         </div>
       </div>
-      <div class="track-actions" style="display: flex; gap: 10px; align-items: center;">
-        <div class="track-duration" style="font-size: 12px; color: var(--text-dim);">Local</div>
+      <div class="track-actions" style="display: flex; gap: 8px; align-items: center;">
         <button class="local-track-delete-btn" title="Удалить из медиатеки" data-id="${track.id}">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
@@ -2045,16 +2058,18 @@ function renderLocalTracks(tracks) {
     });
 
     const deleteBtn = card.querySelector('.local-track-delete-btn');
-    deleteBtn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      await deleteLocalTrack(track.id);
-      showToastNotification('Трек удален из медиатеки', 'info');
-      loadFavorites('local');
-    });
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await deleteLocalTrack(track.id);
+        showToastNotification('Трек удален из медиатеки', 'info');
+        loadFavorites('local');
+      });
+    }
 
-    listContainer.appendChild(card);
+    gridContainer.appendChild(card);
   });
-  tracksContainer.appendChild(listContainer);
+  tracksContainer.appendChild(gridContainer);
 }
 
 // Playback History logic
@@ -7396,4 +7411,28 @@ if (playerBarEl) {
     if (e.touches.length === 1) onDragMove(e.touches[0].clientY);
   }, { passive: true });
   window.addEventListener('touchend', onDragEnd);
+}
+
+// 4. Window Controls & Mini-Player Global IPC Bindings
+document.querySelectorAll('[data-electron-action]').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const action = btn.dataset.electronAction;
+    if (!window.electronAPI) {
+      if (action === 'toggleMiniPlayer') {
+        document.body.classList.toggle('mini-player-active');
+      }
+      return;
+    }
+    if (action === 'minimize') window.electronAPI.minimize();
+    else if (action === 'maximize') window.electronAPI.maximize();
+    else if (action === 'close') window.electronAPI.close();
+    else if (action === 'toggleMiniPlayer') window.electronAPI.toggleMiniPlayer();
+  });
+});
+
+if (isElectron && window.electronAPI && window.electronAPI.onMiniPlayerToggled) {
+  window.electronAPI.onMiniPlayerToggled((active) => {
+    document.body.classList.toggle('mini-player-active', active);
+  });
 }

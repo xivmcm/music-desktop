@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.16.13';
+const APP_VERSION = '1.17.0';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -12,9 +12,15 @@ const favoritesButton = document.getElementById('favorites-button');
 let activeSources = { soundcloud: true, spotify: false };
 let activeHomeSource = 'soundcloud';
 let activeSpotifyMood = null; // Currently active mood card in Spotify tab
-let cachedSpotifyTracks = null; // Cached tracks of the active Spotify mood
-let cachedSpotifyDynamicTracks = null; // Cached time-of-day tracks
+const spotifyMoodCache = new Map();
+let spotifyMoodLoadVersion = 0;
 let cachedSoundCloudDynamicTracks = null; // Cached SoundCloud time-of-day tracks
+let cachedSoundCloudDynamicAt = 0;
+let soundCloudDynamicLoadVersion = 0;
+let homeRecommendationRotation = 0;
+let homeLoadVersion = 0;
+let forYouLoadVersion = 0;
+const HOME_RECOMMENDATION_TTL = 12 * 60 * 1000;
 
 // Genre chip render version — prevents stale async responses from corrupting state
 let genreRenderVersion = 0;
@@ -70,14 +76,33 @@ const miniPrevButton = document.getElementById('mini-prev-button');
 const miniNextButton = document.getElementById('mini-next-button');
 const miniProgressBar = document.getElementById('mini-progress-bar');
 const miniProgressSlider = document.getElementById('mini-progress-slider');
+const miniLikeButton = document.getElementById('mini-like-button');
+const miniShuffleButton = document.getElementById('mini-shuffle-button');
+const miniRepeatButton = document.getElementById('mini-repeat-button');
 
-document.querySelectorAll('[data-electron-action]').forEach((button) => {
+// A single delegated listener prevents window commands from firing twice when
+// the titlebar is re-rendered or new mini-player controls are introduced.
+let isTogglingMiniPlayer = false;
+document.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-electron-action]');
+  if (!button) return;
+
   const action = button.dataset.electronAction;
-  button.addEventListener('click', () => {
-    if (isElectron && window.electronAPI?.[action]) {
-      window.electronAPI[action]();
-    }
-  });
+  if (action === 'toggleMiniPlayer') {
+    if (isTogglingMiniPlayer) return;
+    isTogglingMiniPlayer = true;
+    setTimeout(() => { isTogglingMiniPlayer = false; }, 300);
+  }
+
+  if (isElectron && typeof window.electronAPI?.[action] === 'function') {
+    window.electronAPI[action]();
+    return;
+  }
+
+  // Browser preview fallback used by visual QA and the PWA build.
+  if (!isElectron && action === 'toggleMiniPlayer') {
+    document.body.classList.toggle('mini-player-active');
+  }
 });
 
 if ('serviceWorker' in navigator && !isElectron) {
@@ -279,12 +304,24 @@ let cachedForYouData = null;
 
 // Base Server API URL Configuration
 const DEFAULT_MIRRORS = [
-  'https://music-backend-gwga.onrender.com', // Render
-  'https://glassplayer-backend.koyeb.app',   // Koyeb Mirror
-  'https://glassplayer.zeabur.app'           // Zeabur Mirror
+  'https://music-backend-gwga.onrender.com' // Primary Render backend
 ];
 let API_URL = localStorage.getItem('gp_backend_url') || DEFAULT_MIRRORS[0];
 let BACKEND_URL = `${API_URL}/api`;
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 7000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const upstreamSignal = options.signal;
+  const abortFromUpstream = () => controller.abort();
+  upstreamSignal?.addEventListener('abort', abortFromUpstream, { once: true });
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+    upstreamSignal?.removeEventListener('abort', abortFromUpstream);
+  }
+}
 
 async function initApiFailover() {
   const savedUrl = localStorage.getItem('gp_backend_url');
@@ -294,7 +331,7 @@ async function initApiFailover() {
   }
   console.log('[API Failover] Verifying backend mirrors...');
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
+  const timeoutId = setTimeout(() => controller.abort(), 4000);
   const checkMirror = async (url) => {
     try {
       const response = await fetch(`${url}/api/health`, { 
@@ -319,12 +356,155 @@ async function initApiFailover() {
     }
   } catch (err) {
     clearTimeout(timeoutId);
-    console.warn('[API Failover] All default mirrors failed. Keeping current:', API_URL);
+    console.warn('[API Failover] Backend mirror offline/sleeping. DirectSoundCloudEngine will handle search & streams.');
   }
 }
 
+// ── Direct SoundCloud Client Engine (Zero-Cost & Anti-Block Fallback) ──────
+const DirectSoundCloudEngine = {
+  clientId: localStorage.getItem('gp_sc_client_id') || 'UMY1dzQ68n2QbCuypNe8JOivmV2FO2Ep',
+  clientIdExpiry: parseInt(localStorage.getItem('gp_sc_client_id_exp') || '0', 10),
+  isFetchingId: false,
+
+  async getClientId() {
+    if (this.clientId && Date.now() < this.clientIdExpiry) {
+      return this.clientId;
+    }
+    if (this.isFetchingId) {
+      while (this.isFetchingId) {
+        await new Promise(r => setTimeout(r, 100));
+      }
+      return this.clientId || 'UMY1dzQ68n2QbCuypNe8JOivmV2FO2Ep';
+    }
+    this.isFetchingId = true;
+    try {
+      const response = await fetch('https://soundcloud.com', {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+      });
+      if (!response.ok) throw new Error('Failed to load soundcloud homepage');
+      const html = await response.text();
+      const scriptRegex = /https:\/\/a-v2\.sndcdn\.com\/assets\/[a-zA-Z0-9-_.]+\.js/g;
+      const scriptUrls = html.match(scriptRegex) || [];
+      for (let i = scriptUrls.length - 1; i >= 0; i--) {
+        try {
+          const sRes = await fetch(scriptUrls[i]);
+          if (!sRes.ok) continue;
+          const content = await sRes.text();
+          const match = content.match(/client_id\s*:\s*["']([a-zA-Z0-9]{32})["']/) ||
+                        content.match(/client_id\s*=\s*["']([a-zA-Z0-9]{32})["']/);
+          if (match && match[1]) {
+            this.clientId = match[1];
+            this.clientIdExpiry = Date.now() + 6 * 3600 * 1000;
+            localStorage.setItem('gp_sc_client_id', this.clientId);
+            localStorage.setItem('gp_sc_client_id_exp', String(this.clientIdExpiry));
+            console.log('[Direct SC Engine] Fresh client_id resolved:', this.clientId);
+            break;
+          }
+        } catch (e) {}
+      }
+    } catch (err) {
+      console.warn('[Direct SC Engine] Could not refresh client_id dynamically, using fallback:', err.message);
+      if (!this.clientId) {
+        this.clientId = 'UMY1dzQ68n2QbCuypNe8JOivmV2FO2Ep';
+      }
+    } finally {
+      this.isFetchingId = false;
+    }
+    return this.clientId || 'UMY1dzQ68n2QbCuypNe8JOivmV2FO2Ep';
+  },
+
+  async search(query, limit = 20, offset = 0) {
+    const clientId = await this.getClientId();
+    const url = `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(query)}&client_id=${clientId}&limit=${limit}&offset=${offset}`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+    if (res.status === 401) {
+      this.clientIdExpiry = 0;
+      throw new Error('SC 401 Unauthorized');
+    }
+    if (!res.ok) throw new Error(`SC Search status: ${res.status}`);
+    const data = await res.json();
+    if (!data || !data.collection) return [];
+    return data.collection.map(track => {
+      const durSec = Math.floor((track.duration || 0) / 1000);
+      const min = Math.floor(durSec / 60);
+      const sec = durSec % 60;
+      return {
+        id: String(track.id),
+        title: track.title || track.display_title || 'Unknown Track',
+        artist: track.user?.username || track.user?.name || track.label_name || 'Unknown Artist',
+        artistId: String(track.user?.id || ''),
+        duration: `${min}:${String(sec).padStart(2, '0')}`,
+        source: 'soundcloud',
+        thumbnail: track.artwork_url || track.user?.avatar_url || '',
+        playbackCount: track.playback_count,
+        playback_count: track.playback_count,
+        media: track.media
+      };
+    });
+  },
+
+  async resolveStreamUrl(track) {
+    try {
+      const clientId = await this.getClientId();
+      let transcodings = track.media?.transcodings;
+      if (!transcodings) {
+        const detailsRes = await fetch(`https://api-v2.soundcloud.com/tracks/${track.id}?client_id=${clientId}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+        });
+        if (detailsRes.ok) {
+          const details = await detailsRes.json();
+          transcodings = details.media?.transcodings;
+        }
+      }
+      if (transcodings && transcodings.length > 0) {
+        const chosen = transcodings.find(t => t.format?.protocol === 'progressive') || transcodings[0];
+        if (chosen?.url) {
+          const streamRes = await fetch(`${chosen.url}?client_id=${clientId}`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+          });
+          if (streamRes.ok) {
+            const streamData = await streamRes.json();
+            if (streamData?.url) return streamData.url;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[Direct SC Engine] Direct stream resolution failed:', err.message);
+    }
+    return null;
+  }
+};
+
 // ── RELEASE 1.16.0: IndexedDB Local Audio Database & Drag-and-Drop ───────────────
 let dbInstance = null;
+const localBlobUrls = new Map();
+
+function readLocalAudioDuration(file) {
+  return new Promise((resolve) => {
+    const probe = document.createElement('audio');
+    const objectUrl = URL.createObjectURL(file);
+    let settled = false;
+    const finish = (duration = 0) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      probe.removeAttribute('src');
+      URL.revokeObjectURL(objectUrl);
+      resolve(Number.isFinite(duration) && duration > 0 ? Math.round(duration) : 0);
+    };
+    const timeoutId = setTimeout(() => finish(0), 4000);
+    probe.preload = 'metadata';
+    probe.addEventListener('loadedmetadata', () => finish(probe.duration), { once: true });
+    probe.addEventListener('error', () => finish(0), { once: true });
+    probe.src = objectUrl;
+  });
+}
 
 function initLocalAudioDB() {
   return new Promise((resolve, reject) => {
@@ -359,12 +539,14 @@ async function saveLocalTrack(file) {
     title = parts.slice(1).join(' - ').trim();
   }
 
+  const detectedDuration = await readLocalAudioDuration(file);
   const trackObj = {
     id,
     title,
     artist,
     source: 'local',
-    duration: 180,
+    duration: detectedDuration,
+    fileSize: file.size || 0,
     blob: file,
     addedAt: Date.now()
   };
@@ -388,13 +570,20 @@ async function getLocalTracks() {
       req.onsuccess = () => {
         const tracks = req.result || [];
         const mapped = tracks.map(t => {
-          const blobUrl = URL.createObjectURL(t.blob);
+          let blobUrl = localBlobUrls.get(t.id);
+          if (!blobUrl) {
+            blobUrl = URL.createObjectURL(t.blob);
+            localBlobUrls.set(t.id, blobUrl);
+          }
           return {
             id: t.id,
             title: t.title,
             artist: t.artist,
             source: 'local',
-            duration: t.duration || 180,
+            duration: t.duration ? formatTime(t.duration) : '—:—',
+            durationSeconds: t.duration || 0,
+            addedAt: t.addedAt || 0,
+            fileSize: t.fileSize || t.blob?.size || 0,
             thumbnail: '',
             streamUrl: blobUrl,
             blobUrl: blobUrl
@@ -416,9 +605,31 @@ async function deleteLocalTrack(id) {
     const tx = db.transaction('local_tracks', 'readwrite');
     const store = tx.objectStore('local_tracks');
     const req = store.delete(id);
-    req.onsuccess = () => resolve();
+    req.onsuccess = () => {
+      const blobUrl = localBlobUrls.get(id);
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+      localBlobUrls.delete(id);
+      resolve();
+    };
     req.onerror = (e) => reject(e.target.error);
   });
+}
+
+async function importLocalAudioFiles(files) {
+  let added = 0;
+  let failed = 0;
+  for (const file of files) {
+    try {
+      await saveLocalTrack(file);
+      added += 1;
+    } catch (error) {
+      failed += 1;
+      console.error(`[Local Library] Failed to import ${file.name}:`, error);
+    }
+  }
+  if (added) showToastNotification(`Добавлено: ${added}`, 'success', 'Медиатека');
+  if (failed) showToastNotification(`Не удалось добавить: ${failed}. Проверьте формат и свободное место.`, 'error', 'Медиатека');
+  return { added, failed };
 }
 
 // Drag and Drop Event Listeners
@@ -446,11 +657,8 @@ window.addEventListener('drop', async (e) => {
     return;
   }
 
-  showToastNotification(`Загрузка ${files.length} MP3...`, 'info');
-  for (const f of files) {
-    await saveLocalTrack(f);
-  }
-  showToastNotification(`Добавлено ${files.length} локальных треков!`, 'success');
+  showToastNotification(`Обрабатываем файлов: ${files.length}`, 'info', 'Медиатека');
+  await importLocalAudioFiles(files);
   if (activeView === 'library') {
     loadFavorites('local');
   }
@@ -549,8 +757,32 @@ async function performSearch() {
     // Refresh likes list first so search displays correct states
     await loadLikedTracks();
 
-    const response = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&sources=${sourcesStr}&page=1&limit=20`);
-    const data = await response.json();
+    let results = [];
+    let users = [];
+
+    // Try backend search with timeout
+    try {
+      const response = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&sources=${sourcesStr}&page=1&limit=20`, {}, 4500);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'success') {
+          results = data.results || [];
+          users = data.users || [];
+        }
+      }
+    } catch (e) {
+      console.warn('[Search] Backend search failed or timed out. Falling back to DirectSoundCloudEngine:', e.message);
+    }
+
+    // Direct Client SoundCloud fallback if backend returned nothing or failed
+    if (results.length === 0 && activeSources.soundcloud) {
+      try {
+        console.log('[Search] Querying DirectSoundCloudEngine for:', query);
+        results = await DirectSoundCloudEngine.search(query, 20, 0);
+      } catch (scErr) {
+        console.error('[Search] DirectSoundCloudEngine search failed:', scErr.message);
+      }
+    }
 
     loadingIndicator.classList.add('hidden');
 
@@ -559,9 +791,9 @@ async function performSearch() {
     const usersRow = usersContainer ? usersContainer.querySelector('.users-search-row') : null;
 
     if (usersContainer && usersRow) {
-      if (data.users && data.users.length > 0) {
+      if (users && users.length > 0) {
         usersRow.innerHTML = '';
-        data.users.forEach(user => {
+        users.forEach(user => {
           const userCard = document.createElement('div');
           userCard.className = 'user-search-card';
           userCard.dataset.userId = user._id || user.id;
@@ -588,27 +820,21 @@ async function performSearch() {
       usersContainer.classList.add('hidden');
     }
 
-    if (data.status === 'success') {
-      if (data.results && data.results.length > 0) {
-        playlist = data.results;
-        renderTracks(playlist);
-        tracksContainer.classList.remove('hidden');
-        updateLoadMoreButton(playlist.length); // Update pagination buttons
-      } else {
-        playlist = [];
-        tracksContainer.innerHTML = '<div class="welcome-state"><h2>No results found</h2><p>Try searching for something else</p></div>';
-        tracksContainer.classList.remove('hidden');
-      }
+    if (results && results.length > 0) {
+      playlist = results;
+      renderTracks(playlist);
+      tracksContainer.classList.remove('hidden');
+      updateLoadMoreButton(playlist.length); // Update pagination buttons
     } else {
       playlist = [];
-      tracksContainer.innerHTML = `<div class="welcome-state"><h2>Ошибка сервера</h2><p>${data.message || 'Произошла ошибка при выполнении поиска'}</p></div>`;
+      tracksContainer.innerHTML = '<div class="welcome-state"><h2>Ничего не найдено</h2><p>Попробуйте изменить поисковый запрос</p></div>';
       tracksContainer.classList.remove('hidden');
     }
     updateActiveTab('search');
   } catch (error) {
     console.error('Search error:', error);
     loadingIndicator.classList.add('hidden');
-    tracksContainer.innerHTML = '<div class="welcome-state"><h2>Не удалось подключиться к серверу</h2><p>Проверьте соединение с интернетом</p></div>';
+    tracksContainer.innerHTML = '<div class="welcome-state"><h2>Ошибка поиска</h2><p>Не удалось получить результаты. Проверьте подключение.</p></div>';
     tracksContainer.classList.remove('hidden');
     updateActiveTab('search');
   }
@@ -656,28 +882,33 @@ async function loadMoreTracks() {
   if (activeSources.spotify) sources.push('spotify');
   const sourcesStr = sources.join(',');
 
+  let newTracks = [];
   try {
-    const response = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&sources=${sourcesStr}&page=${currentSearchPage}&limit=20`);
-    const data = await response.json();
-
-    if (btn) btn.remove();
-
-    if (data.status === 'success' && data.results && data.results.length > 0) {
-      const newTracks = data.results;
-      playlist = playlist.concat(newTracks);
-
-      renderTracks(newTracks, null, true);
-      updateLoadMoreButton(newTracks.length);
-    } else {
-      updateLoadMoreButton(0);
+    const response = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&sources=${sourcesStr}&page=${currentSearchPage}&limit=20`, {}, 4500);
+    if (response.ok) {
+      const data = await response.json();
+      if (data.status === 'success' && data.results && data.results.length > 0) {
+        newTracks = data.results;
+      }
     }
-  } catch (error) {
-    console.error('Load more error:', error);
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = 'Показать еще';
-    }
-    showToastNotification("Не удалось загрузить еще треки");
+  } catch (e) {
+    console.warn('[Search] Backend load more failed, falling back to DirectSoundCloudEngine:', e.message);
+  }
+
+  if (newTracks.length === 0 && activeSources.soundcloud) {
+    try {
+      newTracks = await DirectSoundCloudEngine.search(query, 20, playlist.length);
+    } catch (err) {}
+  }
+
+  if (btn) btn.remove();
+
+  if (newTracks && newTracks.length > 0) {
+    playlist = playlist.concat(newTracks);
+    renderTracks(newTracks, null, true);
+    updateLoadMoreButton(newTracks.length);
+  } else {
+    updateLoadMoreButton(0);
   }
 }
 
@@ -725,6 +956,7 @@ function renderTracks(tracks, container = null, append = false) {
     const card = document.createElement('div');
     const isActive = activePlayingTrack && track.id === activePlayingTrack.id;
     card.className = `track-card ${isActive ? 'active' : ''}`;
+    card.setAttribute('role', 'article');
 
     // Correct playlist index so click events play the correct track!
     const overallIndex = append ? playlist.length - tracks.length + index : index;
@@ -734,7 +966,10 @@ function renderTracks(tracks, container = null, append = false) {
     // Strict validation and fallbacks
     const trackTitle = track.title ? track.title.trim() : "Unknown Track";
     const trackArtist = track.artist ? track.artist.trim() : "Unknown Artist";
-    const defaultSvgCover = 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'><rect width=\'100\' height=\'100\' fill=\'%23222\'/><path d=\'M30 30 L70 50 L30 70 Z\' fill=\'%23444\'/></svg>';
+    card.setAttribute('aria-label', `${trackTitle} — ${trackArtist}`);
+    const defaultSvgCover = track.source === 'local'
+      ? 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'><defs><linearGradient id=\'g\' x1=\'0\' y1=\'0\' x2=\'1\' y2=\'1\'><stop stop-color=\'%23333a4a\'/><stop offset=\'1\' stop-color=\'%23181b24\'/></linearGradient></defs><rect width=\'100\' height=\'100\' rx=\'18\' fill=\'url(%23g)\'/><path d=\'M46 63V35l26-5v27\' fill=\'none\' stroke=\'%23d9dce7\' stroke-width=\'5\' stroke-linecap=\'round\'/><circle cx=\'37\' cy=\'65\' r=\'9\' fill=\'%23d9dce7\'/><circle cx=\'63\' cy=\'58\' r=\'9\' fill=\'%23d9dce7\'/></svg>'
+      : 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'><rect width=\'100\' height=\'100\' fill=\'%23222\'/><path d=\'M30 30 L70 50 L30 70 Z\' fill=\'%23444\'/></svg>';
     const coverUrl = track.thumbnail
       ? `${BACKEND_URL}/cover?url=${encodeURIComponent(track.thumbnail)}`
       : defaultSvgCover;
@@ -745,21 +980,27 @@ function renderTracks(tracks, container = null, append = false) {
       : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`;
 
     let actionsHTML = '';
-    if (activeView === 'playlist-tracks' && activePlaylistId) {
+    if (track.source === 'local' && activeView === 'library' && currentLibrarySubTab === 'local') {
       actionsHTML = `
-        <button class="playlist-remove-track-btn" title="Remove from Playlist" style="background:transparent; border:none; color:rgba(255,255,255,0.25); cursor:pointer; padding:8px; border-radius:50%; display:flex; align-items:center; justify-content:center; transition:all 0.2s ease; z-index:20;">
+        <button class="local-track-delete-btn" title="Удалить с устройства" aria-label="Удалить ${escapeHTML(trackTitle)} с устройства" data-id="${track.id}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>
+        </button>
+      `;
+    } else if (activeView === 'playlist-tracks' && activePlaylistId) {
+      actionsHTML = `
+        <button class="playlist-remove-track-btn" title="Удалить из плейлиста" aria-label="Удалить ${escapeHTML(trackTitle)} из плейлиста" style="background:transparent; border:none; color:var(--text-dim); cursor:pointer; padding:8px; border-radius:50%; display:flex; align-items:center; justify-content:center; transition:all 0.2s ease; z-index:20;">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
       `;
     } else {
       actionsHTML = `
-        <button class="playlist-add-btn" title="Add to Playlist">
+        <button class="playlist-add-btn" title="Добавить в плейлист" aria-label="Добавить ${escapeHTML(trackTitle)} в плейлист">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
         </button>
       `;
     }
 
-    const artistHTML = `<span class="artist-link">${trackArtist}</span>`;
+    const artistHTML = `<button class="artist-link" type="button" aria-label="Открыть исполнителя ${escapeHTML(trackArtist)}">${escapeHTML(trackArtist)}</button>`;
 
     const isCurrentPlaying = isActive && !audioPlayer.paused;
     const coverPlayIcon = isCurrentPlaying
@@ -767,20 +1008,20 @@ function renderTracks(tracks, container = null, append = false) {
       : `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="margin-left: 2px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
 
     const playsHTML = track.source === 'soundcloud' && (track.playbackCount !== undefined || track.playback_count !== undefined)
-      ? `<span class="card-plays" title="Прослушивания">👁 ${formatPlaybackCount(track.playbackCount || track.playback_count)}</span>`
+      ? `<span class="card-plays" title="Прослушивания"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg>${formatPlaybackCount(track.playbackCount || track.playback_count)}</span>`
       : '';
 
     card.innerHTML = `
       <div class="track-cover-container">
-        <img src="${coverUrl}" class="card-cover" alt="${trackTitle}">
+        <img src="${coverUrl}" class="card-cover" alt="" loading="lazy" decoding="async">
         <div class="cover-overlay">
-          <button class="cover-play-btn" title="Play/Pause">
+          <button class="cover-play-btn" title="Воспроизведение/Пауза" aria-label="Воспроизвести или приостановить ${escapeHTML(trackTitle)}">
             ${coverPlayIcon}
           </button>
         </div>
       </div>
       <div class="card-details">
-        <div class="card-title">${trackTitle}</div>
+        <div class="card-title">${escapeHTML(trackTitle)}</div>
         <div class="card-artist">${artistHTML}</div>
         <div class="card-meta">
           <span class="badge ${track.source}">
@@ -788,6 +1029,8 @@ function renderTracks(tracks, container = null, append = false) {
               ? `<svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" style="margin-right:3px"><path d="M23.95 14.47c0-2.45-1.92-4.44-4.29-4.44h-.35c-.48-2.61-2.73-4.6-5.46-4.6-2.58 0-4.73 1.83-5.32 4.26-.26-.06-.53-.09-.81-.09-2.58 0-4.67 2.09-4.67 4.67 0 .16.01.32.02.48C1.29 14.53 0 16.03 0 17.84c0 2.08 1.68 3.76 3.76 3.76h16.5c1.96 0 3.69-1.55 3.69-3.51 0-1.74-1.28-3.18-2.97-3.52z"/></svg>SC`
               : track.source === 'spotify'
               ? `<svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" style="margin-right:3px"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.377-1.454-5.37-1.783-8.894-.978-.335.077-.67-.134-.746-.47-.077-.335.134-.67.47-.746 3.847-.88 7.143-.51 9.814 1.127.294.18.387.563.207.857zm1.225-2.72c-.227.367-.707.487-1.074.26-2.72-1.672-6.87-2.157-10.082-1.182-.413.125-.847-.107-.972-.52-.125-.413.107-.847.52-.972 3.676-1.116 8.243-.57 11.348 1.337.367.227.487.707.26 1.074zm.107-2.834C14.484 8.7 8.012 8.483 4.262 9.622c-.573.173-1.182-.154-1.355-.727-.173-.573.154-1.182.727-1.355 4.3-1.305 11.442-1.055 15.534 1.373.515.305.683.97.378 1.485-.305.515-.97.683-1.485.378z"/></svg>SP`
+              : track.source === 'local'
+              ? `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:3px"><path d="M9 18V5l10-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg>На устройстве`
               : `<svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" style="margin-right:3px"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>YT`}
           </span>
           <span class="card-meta-right" style="display: flex; align-items: center; gap: 8px;">
@@ -797,12 +1040,12 @@ function renderTracks(tracks, container = null, append = false) {
         </div>
       </div>
       ${actionsHTML}
-      <button class="like-btn ${isLiked ? 'liked' : ''}">${heartIcon}</button>
+      ${track.source === 'local' ? '' : `<button class="like-btn ${isLiked ? 'liked' : ''}" aria-label="${isLiked ? 'Убрать из избранного' : 'Добавить в избранное'}" aria-pressed="${isLiked}">${heartIcon}</button>`}
     `;
 
     card.addEventListener('click', (e) => {
       // Don't play if clicking the like, playlist or artist link button itself
-      if (e.target.closest('.like-btn') || e.target.closest('.playlist-add-btn') || e.target.closest('.playlist-remove-track-btn') || e.target.closest('.artist-link')) return;
+      if (e.target.closest('.like-btn') || e.target.closest('.playlist-add-btn') || e.target.closest('.playlist-remove-track-btn') || e.target.closest('.local-track-delete-btn') || e.target.closest('.artist-link')) return;
 
       const isCurrent = activePlayingTrack && track.id === activePlayingTrack.id;
       if (isCurrent) {
@@ -813,9 +1056,9 @@ function renderTracks(tracks, container = null, append = false) {
     });
 
     const likeBtn = card.querySelector('.like-btn');
-    likeBtn.addEventListener('click', (e) => {
-      toggleLike(e, track);
-    });
+    if (likeBtn) {
+      likeBtn.addEventListener('click', (e) => toggleLike(e, track));
+    }
 
     const artistLink = card.querySelector('.artist-link');
     if (artistLink) {
@@ -832,7 +1075,22 @@ function renderTracks(tracks, container = null, append = false) {
       });
     }
 
-    if (activeView === 'playlist-tracks' && activePlaylistId) {
+    if (track.source === 'local' && activeView === 'library' && currentLibrarySubTab === 'local') {
+      const deleteBtn = card.querySelector('.local-track-delete-btn');
+      deleteBtn?.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const shouldDelete = await showConfirmDialog({
+          title: 'Удалить локальный трек?',
+          message: `«${trackTitle}» будет удалён только из медиатеки этого устройства.`,
+          confirmLabel: 'Удалить',
+          danger: true
+        });
+        if (!shouldDelete) return;
+        await deleteLocalTrack(track.id);
+        showToastNotification(`«${trackTitle}» удалён с устройства`, 'success', 'Медиатека');
+        loadFavorites('local');
+      });
+    } else if (activeView === 'playlist-tracks' && activePlaylistId) {
       const removeBtn = card.querySelector('.playlist-remove-track-btn');
       removeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -850,10 +1108,20 @@ function renderTracks(tracks, container = null, append = false) {
   });
 }
 
+function getProfilePlayStats() {
+  const scoped = localStorage.getItem(getStorageKey('stats_counts'));
+  const legacy = !currentUser && currentProfile === 'Default' ? localStorage.getItem('gp_stats_counts') : null;
+  try {
+    return JSON.parse(scoped || legacy || '{}');
+  } catch (err) {
+    console.warn('[Stats] Ignoring invalid local play statistics:', err.message);
+    return {};
+  }
+}
+
 function incrementPlayCount(track) {
   try {
-    const statsStr = localStorage.getItem('gp_stats_counts');
-    const stats = statsStr ? JSON.parse(statsStr) : {};
+    const stats = getProfilePlayStats();
     if (!stats[track.id]) {
       stats[track.id] = {
         id: track.id,
@@ -865,7 +1133,9 @@ function incrementPlayCount(track) {
       };
     }
     stats[track.id].count += 1;
-    localStorage.setItem('gp_stats_counts', JSON.stringify(stats));
+    stats[track.id].lastPlayedAt = Date.now();
+    localStorage.setItem(getStorageKey('stats_counts'), JSON.stringify(stats));
+    invalidateHomeRecommendations();
   } catch (err) {
     console.error('Failed to update play count statistics:', err);
   }
@@ -965,7 +1235,7 @@ function playTrack(index) {
   if (miniCurrentArtist) miniCurrentArtist.textContent = track.artist;
 
   const coverUrl = track.thumbnail
-    ? `${BACKEND_URL}/cover?url=${encodeURIComponent(track.thumbnail)}`
+    ? (track.thumbnail.startsWith('http') ? track.thumbnail : `${BACKEND_URL}/cover?url=${encodeURIComponent(track.thumbnail)}`)
     : 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23222"/><path d="M30 30 L70 50 L30 70 Z" fill="%23444"/></svg>';
 
   currentCover.crossOrigin = 'anonymous';
@@ -976,19 +1246,7 @@ function playTrack(index) {
     miniCurrentCover.src = coverUrl;
   }
 
-  // Update player like button state
-  if (playerLikeBtn) {
-    const isLiked = likedTrackIds.has(track.id);
-    const heartIcon = isLiked
-      ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`
-      : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`;
-    if (isLiked) {
-      playerLikeBtn.classList.add('liked');
-    } else {
-      playerLikeBtn.classList.remove('liked');
-    }
-    playerLikeBtn.innerHTML = heartIcon;
-  }
+  updateLikeUI(track.id);
 
   currentTrackDuration = parseDurationToSeconds(track.duration);
   currentSeekOffset = 0;
@@ -1019,7 +1277,7 @@ function playTrack(index) {
     trackLoadTimeout = setTimeout(() => {
       if (currentPlayPromise === playPromise) {
         if (!isFallback && targetUrl !== rawStreamUrl) {
-          console.log('[Stream Resolution] Direct CDN stream timed out (regional block), falling back to backend stream proxy...');
+          console.log('[Stream Resolution] Direct CDN stream timed out, falling back to backend stream proxy...');
           startPlaybackWithUrl(rawStreamUrl, true);
         } else {
           handleTrackLoadError("Track loading timed out (12 seconds limit)");
@@ -1049,19 +1307,51 @@ function playTrack(index) {
       });
   };
 
-  // Resolve direct SoundCloud CDN URL to eliminate Render server bandwidth limit
-  fetch(`${rawStreamUrl}&direct=true`)
-    .then(r => r.json())
-    .then(data => {
-      if (data && data.status === 'success' && data.directUrl) {
-        startPlaybackWithUrl(data.directUrl, false);
-      } else {
+  // For SoundCloud tracks: first try direct CDN resolution via DirectSoundCloudEngine (0 backend latency, unblocked)
+  if (track.source === 'soundcloud' && !track.blobUrl) {
+    DirectSoundCloudEngine.resolveStreamUrl(track)
+      .then(directCdnUrl => {
+        if (directCdnUrl) {
+          console.log('[PlayTrack] Direct CDN stream resolved successfully');
+          startPlaybackWithUrl(directCdnUrl, false);
+        } else {
+          // Fall back to backend direct query or proxy
+          fetchWithTimeout(`${rawStreamUrl}&direct=true`, {}, 4000)
+            .then(r => r.json())
+            .then(data => {
+              if (data && data.status === 'success' && data.directUrl) {
+                startPlaybackWithUrl(data.directUrl, false);
+              } else {
+                startPlaybackWithUrl(rawStreamUrl, true);
+              }
+            })
+            .catch(() => {
+              startPlaybackWithUrl(rawStreamUrl, true);
+            });
+        }
+      })
+      .catch(() => {
         startPlaybackWithUrl(rawStreamUrl, true);
-      }
-    })
-    .catch(() => {
-      startPlaybackWithUrl(rawStreamUrl, true);
-    });
+      });
+  } else {
+    // Local audio, Spotify translation, or proxy stream
+    if (track.source === 'local' || track.blobUrl) {
+      startPlaybackWithUrl(rawStreamUrl, false);
+    } else {
+      fetchWithTimeout(`${rawStreamUrl}&direct=true`, {}, 4000)
+        .then(r => r.json())
+        .then(data => {
+          if (data && data.status === 'success' && data.directUrl) {
+            startPlaybackWithUrl(data.directUrl, false);
+          } else {
+            startPlaybackWithUrl(rawStreamUrl, true);
+          }
+        })
+        .catch(() => {
+          startPlaybackWithUrl(rawStreamUrl, true);
+        });
+    }
+  }
 }
 
 async function handleTrackLoadError(reason) {
@@ -1165,73 +1455,177 @@ function showToastNotification(message, type = 'info', title = null) {
   if (!toastContainer) {
     toastContainer = document.createElement('div');
     toastContainer.id = 'toast-container';
-    toastContainer.style.cssText = `
-      position: fixed;
-      top: 50px;
-      right: 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      z-index: 100000;
-      pointer-events: none;
-    `;
     document.body.appendChild(toastContainer);
   }
+  toastContainer.removeAttribute('aria-live');
+  toastContainer.removeAttribute('aria-atomic');
+  toastContainer.setAttribute('role', 'region');
+  toastContainer.setAttribute('aria-label', 'Уведомления');
 
   const typeConfigs = {
-    error: { icon: '✕', defaultTitle: 'Ошибка', class: 'toast-error' },
-    success: { icon: '✓', defaultTitle: 'Успешно', class: 'toast-success' },
-    info: { icon: 'ℹ', defaultTitle: 'Уведомление', class: 'toast-info' },
-    warning: { icon: '🔔', defaultTitle: 'Внимание', class: 'toast-warning' }
+    error: {
+      icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>',
+      defaultTitle: 'Не получилось',
+      class: 'toast-error',
+      duration: 7000
+    },
+    success: {
+      icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>',
+      defaultTitle: 'Готово',
+      class: 'toast-success',
+      duration: 4000
+    },
+    info: {
+      icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg>',
+      defaultTitle: 'GlassPlayer',
+      class: 'toast-info',
+      duration: 4000
+    },
+    warning: {
+      icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 3.5 19h17L12 4Z"/><path d="M12 9v4M12 16h.01"/></svg>',
+      defaultTitle: 'Обратите внимание',
+      class: 'toast-warning',
+      duration: 5500
+    }
   };
 
   const config = typeConfigs[type] || typeConfigs.info;
   const displayTitle = title || config.defaultTitle;
+  const toastKey = `${config.class}:${displayTitle}:${String(message)}`;
+
+  const duplicate = Array.from(toastContainer.children)
+    .find((item) => item.dataset.toastKey === toastKey);
+  if (duplicate) duplicate.remove();
+  while (toastContainer.children.length >= 4) {
+    toastContainer.firstElementChild?.remove();
+  }
 
   const toast = document.createElement('div');
   toast.className = `toast-notification ${config.class}`;
-  toast.style.pointerEvents = 'auto';
+  toast.dataset.toastKey = toastKey;
+  toast.style.setProperty('--toast-duration', `${config.duration}ms`);
 
-  toast.innerHTML = `
-    <div class="toast-icon-badge">${config.icon}</div>
-    <div class="toast-content-body">
-      <div class="toast-title">${displayTitle}</div>
-      <div class="toast-message">${message}</div>
-    </div>
-    <div class="toast-progress-bar"></div>
-  `;
+  const iconBadge = document.createElement('div');
+  iconBadge.className = 'toast-icon-badge';
+  iconBadge.innerHTML = config.icon;
+
+  const content = document.createElement('div');
+  content.className = 'toast-content-body';
+  content.setAttribute('role', type === 'error' ? 'alert' : 'status');
+  content.setAttribute('aria-atomic', 'true');
+  const titleElement = document.createElement('div');
+  titleElement.className = 'toast-title';
+  titleElement.textContent = String(displayTitle);
+  const messageElement = document.createElement('div');
+  messageElement.className = 'toast-message';
+  messageElement.textContent = String(message);
+  content.append(titleElement, messageElement);
+
+  const closeButton = document.createElement('button');
+  closeButton.type = 'button';
+  closeButton.className = 'toast-close-btn';
+  closeButton.setAttribute('aria-label', 'Закрыть уведомление');
+  closeButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>';
+
+  const progress = document.createElement('div');
+  progress.className = 'toast-progress-bar';
+  toast.append(iconBadge, content, closeButton, progress);
 
   toastContainer.appendChild(toast);
+  let revealApplied = false;
+  const revealToast = () => {
+    if (revealApplied || !toast.isConnected) return;
+    revealApplied = true;
+    toast.classList.add('is-visible');
+  };
+  requestAnimationFrame(revealToast);
+  setTimeout(revealToast, 40);
 
-  setTimeout(() => {
-    toast.style.transform = 'translateX(0)';
-    toast.style.opacity = '1';
-  }, 10);
+  let remaining = config.duration;
+  let startedAt = Date.now();
+  let hideTimeout = null;
+  let dismissed = false;
+  const pauseReasons = new Set();
 
-  let hideTimeout = setTimeout(() => {
-    toast.style.transform = 'translateX(120%)';
-    toast.style.opacity = '0';
-    setTimeout(() => {
-      toast.remove();
-    }, 400);
-  }, 3500);
-
-  toast.addEventListener('mouseenter', () => {
+  const dismiss = () => {
+    if (dismissed) return;
+    dismissed = true;
     clearTimeout(hideTimeout);
-    const pb = toast.querySelector('.toast-progress-bar');
-    if (pb) pb.style.animationPlayState = 'paused';
-  });
+    toast.classList.remove('is-visible');
+    toast.classList.add('is-leaving');
+    setTimeout(() => toast.remove(), 280);
+  };
+  const scheduleDismiss = () => {
+    clearTimeout(hideTimeout);
+    startedAt = Date.now();
+    hideTimeout = setTimeout(dismiss, remaining);
+  };
+  const pauseDismiss = (reason) => {
+    if (dismissed || pauseReasons.has(reason)) return;
+    if (pauseReasons.size === 0) {
+      clearTimeout(hideTimeout);
+      remaining = Math.max(300, remaining - (Date.now() - startedAt));
+    }
+    pauseReasons.add(reason);
+    toast.classList.add('is-paused');
+  };
+  const resumeDismiss = (reason) => {
+    if (dismissed || !pauseReasons.has(reason)) return;
+    pauseReasons.delete(reason);
+    if (pauseReasons.size > 0) return;
+    toast.classList.remove('is-paused');
+    scheduleDismiss();
+  };
 
-  toast.addEventListener('mouseleave', () => {
-    const pb = toast.querySelector('.toast-progress-bar');
-    if (pb) pb.style.animationPlayState = 'running';
-    hideTimeout = setTimeout(() => {
-      toast.style.transform = 'translateX(120%)';
-      toast.style.opacity = '0';
-      setTimeout(() => {
-        toast.remove();
-      }, 400);
-    }, 2000);
+  closeButton.addEventListener('click', dismiss);
+  toast.addEventListener('mouseenter', () => pauseDismiss('hover'));
+  toast.addEventListener('mouseleave', () => resumeDismiss('hover'));
+  toast.addEventListener('focusin', () => pauseDismiss('focus'));
+  toast.addEventListener('focusout', (event) => {
+    if (!toast.contains(event.relatedTarget)) resumeDismiss('focus');
+  });
+  scheduleDismiss();
+}
+
+function showConfirmDialog({ title, message, confirmLabel = 'Подтвердить', cancelLabel = 'Отмена', danger = false }) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'gp-confirm-overlay';
+    overlay.innerHTML = `
+      <div class="gp-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="gp-confirm-title" aria-describedby="gp-confirm-message">
+        <div class="gp-confirm-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4 3.5 19h17L12 4Z"/><path d="M12 9v4M12 16h.01"/></svg></div>
+        <div class="gp-confirm-copy"><h2 id="gp-confirm-title"></h2><p id="gp-confirm-message"></p></div>
+        <div class="gp-confirm-actions">
+          <button type="button" class="gp-confirm-button cancel"></button>
+          <button type="button" class="gp-confirm-button confirm ${danger ? 'danger' : 'primary'}"></button>
+        </div>
+      </div>
+    `;
+    overlay.querySelector('#gp-confirm-title').textContent = title;
+    overlay.querySelector('#gp-confirm-message').textContent = message;
+    const cancelButton = overlay.querySelector('.gp-confirm-button.cancel');
+    const confirmButton = overlay.querySelector('.gp-confirm-button.confirm');
+    cancelButton.textContent = cancelLabel;
+    confirmButton.textContent = confirmLabel;
+
+    const finish = (confirmed) => {
+      document.removeEventListener('keydown', handleKeydown);
+      overlay.classList.remove('is-visible');
+      setTimeout(() => overlay.remove(), 180);
+      resolve(confirmed);
+    };
+    const handleKeydown = (event) => {
+      if (event.key === 'Escape') finish(false);
+    };
+    cancelButton.addEventListener('click', () => finish(false));
+    confirmButton.addEventListener('click', () => finish(true));
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) finish(false);
+    });
+    document.addEventListener('keydown', handleKeydown);
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('is-visible'));
+    confirmButton.focus();
   });
 }
 
@@ -1539,11 +1933,21 @@ volumeSlider.addEventListener('input', () => {
 shuffleButton.addEventListener('click', () => {
   isShuffle = !isShuffle;
   shuffleButton.classList.toggle('active', isShuffle);
+  shuffleButton.setAttribute('aria-pressed', String(isShuffle));
+  if (miniShuffleButton) {
+    miniShuffleButton.classList.toggle('active', isShuffle);
+    miniShuffleButton.setAttribute('aria-pressed', String(isShuffle));
+  }
 });
 
 repeatButton.addEventListener('click', () => {
   isRepeat = !isRepeat;
   repeatButton.classList.toggle('active', isRepeat);
+  repeatButton.setAttribute('aria-pressed', String(isRepeat));
+  if (miniRepeatButton) {
+    miniRepeatButton.classList.toggle('active', isRepeat);
+    miniRepeatButton.setAttribute('aria-pressed', String(isRepeat));
+  }
 });
 
 // Player Like Button Action
@@ -1554,15 +1958,40 @@ playerLikeBtn.addEventListener('click', (e) => {
   }
 });
 
+if (miniLikeButton) {
+  miniLikeButton.addEventListener('click', (e) => {
+    const playingTrack = playlist[currentTrackIndex];
+    if (playingTrack) toggleLike(e, playingTrack);
+  });
+}
+if (miniShuffleButton) miniShuffleButton.addEventListener('click', () => shuffleButton.click());
+if (miniRepeatButton) miniRepeatButton.addEventListener('click', () => repeatButton.click());
+
 // Local Storage Manager Helper functions
+function getStorageOwnerSuffix() {
+  if (currentUser) {
+    const accountId = currentUser.id || currentUser._id || currentUser.username;
+    return `account_${String(accountId || 'unknown').replace(/[^a-z0-9_-]/gi, '_')}`;
+  }
+  return currentProfile || 'Default';
+}
+
 function getStorageKey(key) {
-  return `gp_${key}_${currentProfile || 'Default'}`;
+  return `gp_${key}_${getStorageOwnerSuffix()}`;
 }
 
 // Subscriptions & Recommendations Helpers
 function getFollowedArtists() {
-  const data = localStorage.getItem('gp_followed_artists');
-  return data ? JSON.parse(data) : [];
+  const scopedKey = getStorageKey('followed_artists');
+  const scoped = localStorage.getItem(scopedKey);
+  const legacy = !currentUser && currentProfile === 'Default' ? localStorage.getItem('gp_followed_artists') : null;
+  try {
+    const artists = JSON.parse(scoped || legacy || '[]');
+    if (!scoped && legacy) localStorage.setItem(scopedKey, JSON.stringify(artists));
+    return Array.isArray(artists) ? artists : [];
+  } catch (err) {
+    return [];
+  }
 }
 
 function isArtistFollowed(artistId) {
@@ -1582,45 +2011,177 @@ function toggleFollowArtist(artistData) {
       avatar: artistData.avatar
     });
   }
-  localStorage.setItem('gp_followed_artists', JSON.stringify(list));
+  localStorage.setItem(getStorageKey('followed_artists'), JSON.stringify(list));
+  invalidateHomeRecommendations();
   return !followed;
 }
 
-async function loadForYouTracks() {
-  const followed = getFollowedArtists();
-  let queryParams = '';
-  let recommendationSource = '';
+function getHomeRecommendationCacheKey() {
+  return `gp_home_feed_v2_${getStorageOwnerSuffix()}_${activeHomeSource}`;
+}
 
-  if (followed.length > 0) {
-    const randomArtist = followed[Math.floor(Math.random() * followed.length)];
-    queryParams = `artistId=${encodeURIComponent(randomArtist.id)}`;
-    recommendationSource = `на основе подписки на ${randomArtist.name}`;
-  } else {
-    const history = getSearchHistory();
-    if (history.length > 0) {
-      const lastQuery = history[0];
-      queryParams = `q=${encodeURIComponent(lastQuery)}`;
-      recommendationSource = `на основе поиска «${lastQuery}»`;
-    }
+function invalidateHomeRecommendations({ preserveCache = false } = {}) {
+  cachedForYouData = null;
+  forYouLoadVersion += 1;
+  spotifyMoodCache.clear();
+  spotifyMoodLoadVersion += 1;
+  cachedSoundCloudDynamicTracks = null;
+  cachedSoundCloudDynamicAt = 0;
+  soundCloudDynamicLoadVersion += 1;
+  if (!preserveCache) {
+    const owner = getStorageOwnerSuffix();
+    ['soundcloud', 'spotify'].forEach((source) => localStorage.removeItem(`gp_home_feed_v2_${owner}_${source}`));
+  }
+}
+
+function buildRecommendationSeeds() {
+  const candidates = [];
+  const addSeed = (seed) => {
+    if (!seed?.label || (!seed.query && !seed.artistId && !seed.trackId)) return;
+    candidates.push(seed);
+  };
+
+  Object.values(getProfilePlayStats())
+    .map((track) => {
+      const ageDays = track.lastPlayedAt ? (Date.now() - track.lastPlayedAt) / 86400000 : 90;
+      const recency = 0.45 + 0.55 * Math.exp(-ageDays / 28);
+      return { ...track, recommendationScore: (track.count || 0) * recency };
+    })
+    .sort((a, b) => b.recommendationScore - a.recommendationScore)
+    .slice(0, 5)
+    .forEach((track, index) => addSeed({
+      key: `play:${track.id}`,
+      trackId: track.source === 'soundcloud' ? track.id : null,
+      query: `${track.artist || ''} ${track.title || ''}`.trim(),
+      label: `вы часто слушаете ${track.artist || track.title}`,
+      weight: 100 - index * 4
+    }));
+
+  getLikedTracks().slice(0, 8).forEach((track, index) => addSeed({
+    key: `like:${track.id}`,
+    trackId: track.source === 'soundcloud' ? track.id : null,
+    query: `${track.artist || ''} ${track.title || ''}`.trim(),
+    label: `вам понравился ${track.artist || track.title}`,
+    weight: 82 - index
+  }));
+
+  getPlayHistory().slice(0, 10).forEach((track, index) => addSeed({
+    key: `history:${track.id}`,
+    trackId: track.source === 'soundcloud' ? track.id : null,
+    query: `${track.artist || ''} ${track.title || ''}`.trim(),
+    label: `вы слушали ${track.artist || track.title}`,
+    weight: 68 - index
+  }));
+
+  getFollowedArtists().slice(0, 6).forEach((artist, index) => addSeed({
+    key: `follow:${artist.id}`,
+    artistId: artist.id,
+    label: `вы подписаны на ${artist.name}`,
+    weight: 74 - index
+  }));
+
+  getSearchHistory().slice(0, 5).forEach((query, index) => addSeed({
+    key: `search:${query.toLocaleLowerCase('ru')}`,
+    query,
+    label: `вы искали «${query}»`,
+    weight: 50 - index
+  }));
+
+  const unique = new Map();
+  candidates.forEach((seed) => {
+    const normalized = seed.trackId
+      ? `track:${seed.trackId}`
+      : seed.artistId
+      ? `artist:${seed.artistId}`
+      : `query:${seed.query.toLocaleLowerCase('ru').replace(/\s+/g, ' ').trim()}`;
+    const previous = unique.get(normalized);
+    if (!previous || previous.weight < seed.weight) unique.set(normalized, seed);
+  });
+  return Array.from(unique.values()).sort((a, b) => b.weight - a.weight);
+}
+
+async function loadForYouTracks({ forceRefresh = false } = {}) {
+  const requestVersion = ++forYouLoadVersion;
+  const ownerAtRequest = getStorageOwnerSuffix();
+  const sourceAtRequest = activeHomeSource;
+  const seeds = buildRecommendationSeeds();
+  if (!seeds.length) {
+    return {
+      source: 'Лайкайте и слушайте треки — подборка начнёт меняться под ваш вкус',
+      tracks: [],
+      personalized: false,
+      signals: []
+    };
   }
 
-  if (!queryParams) {
-    return null;
-  }
-
+  const cacheKey = getHomeRecommendationCacheKey();
+  let cached = null;
   try {
-    const response = await fetch(`${BACKEND_URL}/search/related?${queryParams}`);
-    const data = await response.json();
-    if (data.status === 'success' && data.results && data.results.length > 0) {
-      return {
-        source: recommendationSource,
-        tracks: data.results
-      };
-    }
-  } catch (err) {
-    console.error('[Renderer] Failed to load For You recommendations:', err);
+    cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+  } catch (err) {}
+  if (!forceRefresh && cached?.createdAt && Date.now() - cached.createdAt < HOME_RECOMMENDATION_TTL) {
+    const recentIds = new Set(getPlayHistory().slice(0, 8).map((track) => String(track.id)));
+    const freshTracks = (cached.data?.tracks || []).filter((track) => !recentIds.has(String(track.id)));
+    if (freshTracks.length >= 6) return { ...cached.data, tracks: freshTracks };
   }
-  return null;
+
+  if (forceRefresh) homeRecommendationRotation += 1;
+  const offset = homeRecommendationRotation % seeds.length;
+  const rotatedSeeds = seeds.slice(offset).concat(seeds.slice(0, offset));
+  const selectedSeeds = rotatedSeeds.slice(0, Math.min(3, rotatedSeeds.length));
+
+  const requests = selectedSeeds.map(async (seed) => {
+    const params = seed.trackId
+      ? `trackId=${encodeURIComponent(seed.trackId)}`
+      : seed.artistId
+        ? `artistId=${encodeURIComponent(seed.artistId)}`
+        : `q=${encodeURIComponent(seed.query)}`;
+    const response = await fetchWithTimeout(`${BACKEND_URL}/search/related?${params}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return data.status === 'success' && Array.isArray(data.results) ? data.results : [];
+  });
+
+  const settled = await Promise.allSettled(requests);
+  const recentIds = new Set(getPlayHistory().slice(0, 8).map((track) => String(track.id)));
+  const resultLists = settled.map((result) => result.status === 'fulfilled' ? result.value : []);
+  const allTracks = [];
+  const longestList = Math.max(0, ...resultLists.map((list) => list.length));
+  for (let index = 0; index < longestList; index += 1) {
+    resultLists.forEach((list) => {
+      if (list[index]) allTracks.push(list[index]);
+    });
+  }
+  const deduped = [];
+  const seen = new Set();
+  allTracks.forEach((track) => {
+    const key = `${track.source || 'unknown'}:${track.id}`;
+    if (!track?.id || seen.has(key) || recentIds.has(String(track.id))) return;
+    seen.add(key);
+    deduped.push(track);
+  });
+
+  const fallbackTracks = deduped.length ? deduped : allTracks.filter((track, index, list) =>
+    track?.id && list.findIndex((item) => String(item.id) === String(track.id)) === index
+  );
+  if (!fallbackTracks.length && cached?.data) return { ...cached.data, stale: true };
+
+  const rotationOffset = forceRefresh && fallbackTracks.length
+    ? homeRecommendationRotation % fallbackTracks.length
+    : 0;
+  const tracks = fallbackTracks.slice(rotationOffset).concat(fallbackTracks.slice(0, rotationOffset)).slice(0, 30);
+  const payload = {
+    source: `Потому что ${selectedSeeds[0].label}`,
+    tracks,
+    personalized: true,
+    signals: selectedSeeds.map((seed) => seed.label)
+  };
+  if (requestVersion === forYouLoadVersion && ownerAtRequest === getStorageOwnerSuffix() && sourceAtRequest === activeHomeSource) {
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify({ createdAt: Date.now(), data: payload }));
+    } catch (err) {}
+  }
+  return payload;
 }
 
 function getLikedTracks() {
@@ -1713,6 +2274,11 @@ function renderProfilesDropdown() {
 
 async function switchUserProfile(profileName) {
   currentProfile = profileName;
+  cachedForYouData = null;
+  spotifyMoodCache.clear();
+  spotifyMoodLoadVersion += 1;
+  cachedSoundCloudDynamicTracks = null;
+  cachedSoundCloudDynamicAt = 0;
   localStorage.setItem('gp_active_profile', currentProfile);
   activeProfileName.textContent = currentProfile;
 
@@ -1753,7 +2319,7 @@ function createUserProfile(name) {
   if (!cleanedName) return;
 
   if (profiles.includes(cleanedName)) {
-    alert('Profile already exists.');
+    showToastNotification('Профиль с таким именем уже существует.', 'warning', 'Профили');
     return;
   }
 
@@ -1762,14 +2328,24 @@ function createUserProfile(name) {
   switchUserProfile(cleanedName);
 }
 
-function deleteUserProfile(profileName) {
+async function deleteUserProfile(profileName) {
   if (profileName === 'Default') return;
-  if (!confirm(`Are you sure you want to delete profile "${profileName}"? All local likes, history, and playlists for this user will be lost.`)) return;
+  const confirmed = await showConfirmDialog({
+    title: 'Удалить локальный профиль?',
+    message: `Лайки, история и плейлисты профиля «${profileName}» будут удалены с этого устройства.`,
+    confirmLabel: 'Удалить профиль',
+    danger: true
+  });
+  if (!confirmed) return;
 
   // Clear keys from localStorage
   localStorage.removeItem(`gp_likes_${profileName}`);
   localStorage.removeItem(`gp_history_${profileName}`);
   localStorage.removeItem(`gp_playlists_${profileName}`);
+  localStorage.removeItem(`gp_stats_counts_${profileName}`);
+  localStorage.removeItem(`gp_followed_artists_${profileName}`);
+  localStorage.removeItem(`gp_home_feed_v2_${profileName}_soundcloud`);
+  localStorage.removeItem(`gp_home_feed_v2_${profileName}_spotify`);
 
   profiles = profiles.filter(p => p !== profileName);
   localStorage.setItem('gp_profiles', JSON.stringify(profiles));
@@ -1811,25 +2387,10 @@ function escapeHTML(str) {
 
 // Liked tracks services logic (using client-side localStorage and backend synchronization)
 async function loadLikedTracks() {
-  if (currentUser && currentUser.likedTracks) {
-    const localLikes = getLikedTracks();
-    const cloudLikes = currentUser.likedTracks;
-
-    // Merge local and cloud likes by track ID
-    const mergedLikes = [...cloudLikes];
-    for (const localTrack of localLikes) {
-      if (!mergedLikes.some(t => t.id === localTrack.id)) {
-        mergedLikes.push(localTrack);
-      }
-    }
-
-    saveLikedTracks(mergedLikes);
-    likedTrackIds = new Set(mergedLikes.map(t => t.id));
-
-    // If local likes were added, sync them back to Atlas
-    if (mergedLikes.length > cloudLikes.length && token) {
-      syncLikesWithBackend(mergedLikes);
-    }
+  if (currentUser) {
+    const cloudLikes = Array.isArray(currentUser.likedTracks) ? currentUser.likedTracks : [];
+    saveLikedTracks(cloudLikes);
+    likedTrackIds = new Set(cloudLikes.map(t => t.id));
   } else {
     const likes = getLikedTracks();
     likedTrackIds = new Set(likes.map(t => t.id));
@@ -1842,10 +2403,12 @@ function updateLikeUI(trackId) {
   const heartSvgFilled = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
 
   // 1. Update all track card like buttons
-  const cards = document.querySelectorAll(`.track-card[data-track-id="${trackId}"]`);
+  const cards = document.querySelectorAll(`.track-card[data-track-id="${trackId}"], .track-card-horizontal[data-track-id="${trackId}"]`);
   cards.forEach(card => {
-    const cardLikeBtn = card.querySelector('.like-btn');
+    const cardLikeBtn = card.querySelector('.like-btn, .card-like-btn-horizontal');
     if (cardLikeBtn) {
+      cardLikeBtn.setAttribute('aria-pressed', String(isLiked));
+      cardLikeBtn.setAttribute('aria-label', isLiked ? 'Убрать из избранного' : 'Добавить в избранное');
       if (isLiked) {
         cardLikeBtn.classList.add('liked');
         cardLikeBtn.innerHTML = heartSvgFilled;
@@ -1870,6 +2433,16 @@ function updateLikeUI(trackId) {
       }
     }
   }
+
+  if (miniLikeButton) {
+    const playingTrack = playlist[currentTrackIndex];
+    if (playingTrack && playingTrack.id === trackId) {
+      miniLikeButton.classList.toggle('liked', isLiked);
+      miniLikeButton.setAttribute('aria-pressed', String(isLiked));
+      miniLikeButton.setAttribute('aria-label', isLiked ? 'Убрать из избранного' : 'Добавить в избранное');
+      miniLikeButton.innerHTML = isLiked ? heartSvgFilled : heartSvgEmpty;
+    }
+  }
 }
 
 function toggleLike(e, track) {
@@ -1892,6 +2465,7 @@ function toggleLike(e, track) {
     likedTrackIds.add(track.id);
   }
   saveLikedTracks(likes);
+  invalidateHomeRecommendations();
 
   // Sync with cloud backend database if user is logged in
   if (currentUser && token) {
@@ -1911,6 +2485,19 @@ function toggleLike(e, track) {
 
 let currentLibrarySubTab = 'favorites';
 
+function formatTrackCount(count) {
+  const absolute = Math.abs(count) % 100;
+  const lastDigit = absolute % 10;
+  const label = absolute > 10 && absolute < 20
+    ? 'треков'
+    : lastDigit === 1
+      ? 'трек'
+      : lastDigit >= 2 && lastDigit <= 4
+        ? 'трека'
+        : 'треков';
+  return `${count} ${label}`;
+}
+
 async function loadFavorites(subTab = 'favorites') {
   currentLibrarySubTab = subTab;
   activeView = 'library';
@@ -1920,15 +2507,15 @@ async function loadFavorites(subTab = 'favorites') {
   loadingIndicator.classList.remove('hidden');
 
   const subTabsHeader = `
-    <div class="view-header">
+    <div class="view-header library-view-header">
       <div class="view-header-title">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l8.72-8.72 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
-        <span>Медиатека</span>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="7" height="7" rx="2"/><rect x="14" y="4" width="7" height="7" rx="2"/><rect x="3" y="15" width="7" height="6" rx="2"/><path d="M15 16h6M15 20h6"/></svg>
+        <div><span>Медиатека</span><small>Избранное и музыка на этом устройстве</small></div>
       </div>
     </div>
-    <div class="library-subtabs">
-      <button class="library-tab-btn ${subTab === 'favorites' ? 'active' : ''}" id="lib-subtab-favs">Избранное</button>
-      <button class="library-tab-btn ${subTab === 'local' ? 'active' : ''}" id="lib-subtab-local">Загруженные файлы</button>
+    <div class="library-subtabs" role="navigation" aria-label="Разделы медиатеки">
+      <button class="library-tab-btn ${subTab === 'favorites' ? 'active' : ''}" id="lib-subtab-favs" ${subTab === 'favorites' ? 'aria-current="page"' : ''}>Избранное</button>
+      <button class="library-tab-btn ${subTab === 'local' ? 'active' : ''}" id="lib-subtab-local" ${subTab === 'local' ? 'aria-current="page"' : ''}>На устройстве</button>
     </div>
   `;
 
@@ -1965,11 +2552,24 @@ async function loadFavorites(subTab = 'favorites') {
     const localHeader = document.createElement('div');
     localHeader.className = 'local-library-header';
     localHeader.innerHTML = `
-      <div style="font-size: 13px; font-weight: 600; color: var(--text-dim);">Локальные треки: ${localTracks.length}</div>
-      <div style="display: flex; gap: 10px;">
-        <button id="upload-mp3-btn" class="local-action-btn">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-          Загрузить MP3
+      <div class="local-library-summary">
+        <strong id="local-track-count">${formatTrackCount(localTracks.length)}</strong>
+        <span>Скачанные и добавленные файлы доступны без сети</span>
+      </div>
+      <div class="local-library-tools">
+        <label class="local-search-field">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <span class="sr-only">Поиск по музыке на устройстве</span>
+          <input id="local-library-search" type="search" placeholder="Найти трек или исполнителя">
+        </label>
+        <select id="local-library-sort" class="local-sort-select" aria-label="Сортировка музыки на устройстве">
+          <option value="recent">Сначала новые</option>
+          <option value="title">По названию</option>
+          <option value="artist">По исполнителю</option>
+        </select>
+        <button id="upload-mp3-btn" class="local-action-btn" aria-label="Добавить аудиофайлы с устройства">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+          Добавить музыку
         </button>
         <input type="file" id="local-file-picker" accept=".mp3,audio/*" multiple style="display: none;">
       </div>
@@ -1978,29 +2578,46 @@ async function loadFavorites(subTab = 'favorites') {
 
     const filePicker = localHeader.querySelector('#local-file-picker');
     const uploadBtn = localHeader.querySelector('#upload-mp3-btn');
+    const localSearch = localHeader.querySelector('#local-library-search');
+    const localSort = localHeader.querySelector('#local-library-sort');
+    const localCount = localHeader.querySelector('#local-track-count');
+
+    const renderLocalCollection = () => {
+      const query = localSearch.value.trim().toLocaleLowerCase('ru');
+      const sortMode = localSort.value;
+      const filtered = localTracks.filter((track) => {
+        const searchable = `${track.title || ''} ${track.artist || ''}`.toLocaleLowerCase('ru');
+        return !query || searchable.includes(query);
+      });
+      filtered.sort((a, b) => {
+        if (sortMode === 'title') return (a.title || '').localeCompare(b.title || '', 'ru');
+        if (sortMode === 'artist') return (a.artist || '').localeCompare(b.artist || '', 'ru');
+        return (b.addedAt || 0) - (a.addedAt || 0);
+      });
+      localCount.textContent = formatTrackCount(filtered.length);
+      playlist = filtered;
+      renderLocalTracks(filtered, query ? 'По вашему запросу ничего не найдено' : 'На устройстве пока нет музыки');
+    };
+
     uploadBtn.addEventListener('click', () => filePicker.click());
+    localSearch.addEventListener('input', renderLocalCollection);
+    localSort.addEventListener('change', renderLocalCollection);
     filePicker.addEventListener('change', async (e) => {
       const files = Array.from(e.target.files);
       if (files.length > 0) {
-        showToastNotification(`Загрузка ${files.length} MP3...`, 'info');
-        for (const f of files) {
-          await saveLocalTrack(f);
+        uploadBtn.disabled = true;
+        showToastNotification(`Обрабатываем файлов: ${files.length}`, 'info', 'Медиатека');
+        try {
+          await importLocalAudioFiles(files);
+          await loadFavorites('local');
+        } finally {
+          uploadBtn.disabled = false;
+          filePicker.value = '';
         }
-        showToastNotification(`Успешно добавлено ${files.length} локальных треков!`, 'success');
-        loadFavorites('local');
       }
     });
 
-    if (localTracks && localTracks.length > 0) {
-      playlist = localTracks;
-      renderLocalTracks(playlist);
-    } else {
-      playlist = [];
-      const emptyDiv = document.createElement('div');
-      emptyDiv.className = 'welcome-state';
-      emptyDiv.innerHTML = '<h2>Локальная медиатека пуста</h2><p>Перетащите файлы .mp3 в окно или нажмите «Загрузить MP3»</p>';
-      tracksContainer.appendChild(emptyDiv);
-    }
+    renderLocalCollection();
     tracksContainer.classList.remove('hidden');
   }
   updateActiveTab('library');
@@ -2013,61 +2630,22 @@ function bindLibrarySubTabEvents() {
   if (btnLocal) btnLocal.addEventListener('click', () => loadFavorites('local'));
 }
 
-function renderLocalTracks(tracks) {
+function renderLocalTracks(tracks, emptyMessage = 'На устройстве пока нет музыки') {
+  tracksContainer.querySelector('.local-tracks-grid')?.remove();
+  tracksContainer.querySelector('.local-library-empty')?.remove();
+
+  if (!tracks.length) {
+    const emptyDiv = document.createElement('div');
+    emptyDiv.className = 'welcome-state local-library-empty';
+    emptyDiv.innerHTML = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M9 18V5l10-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg><h2>${escapeHTML(emptyMessage)}</h2><p>Добавьте файлы кнопкой выше или перетащите их в окно GlassPlayer.</p>`;
+    tracksContainer.appendChild(emptyDiv);
+    return;
+  }
+
   const gridContainer = document.createElement('div');
-  gridContainer.className = 'tracks-layout-grid';
-
-  tracks.forEach((track, index) => {
-    const card = document.createElement('div');
-    const isActive = activePlayingTrack && track.id === activePlayingTrack.id;
-    card.className = `track-card ${isActive ? 'active' : ''}`;
-    card.dataset.index = index;
-    card.dataset.trackId = track.id;
-
-    const isCurrentPlaying = isActive && !audioPlayer.paused;
-    const coverPlayIcon = isCurrentPlaying
-      ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`
-      : `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="margin-left: 2px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
-
-    card.innerHTML = `
-      <div class="track-info">
-        <div class="track-cover-container">
-          <div class="track-cover-placeholder" style="width: 44px; height: 44px; border-radius: 8px; background: rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; font-size: 18px;">🎵</div>
-          <button class="cover-play-btn" aria-label="Play">
-            ${coverPlayIcon}
-          </button>
-        </div>
-        <div class="track-details">
-          <div class="track-title" title="${escapeHTML(track.title)}">${escapeHTML(track.title)}</div>
-          <div class="track-artist">${escapeHTML(track.artist || 'Локальный файл')}</div>
-          <div class="track-meta">
-            <span class="source-badge soundcloud" style="background: rgba(255,255,255,0.12); color: var(--text-color);">🎵 Local MP3</span>
-          </div>
-        </div>
-      </div>
-      <div class="track-actions" style="display: flex; gap: 8px; align-items: center;">
-        <button class="local-track-delete-btn" title="Удалить из медиатеки" data-id="${track.id}">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-        </button>
-      </div>
-    `;
-
-    card.addEventListener('click', (e) => {
-      if (e.target.closest('.local-track-delete-btn')) return;
-      playTrack(index);
-    });
-
-    const deleteBtn = card.querySelector('.local-track-delete-btn');
-    deleteBtn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      await deleteLocalTrack(track.id);
-      showToastNotification('Трек удален из медиатеки', 'info');
-      loadFavorites('local');
-    });
-
-    listContainer.appendChild(card);
-  });
-  tracksContainer.appendChild(listContainer);
+  gridContainer.className = 'tracks-layout-grid local-tracks-grid';
+  renderTracks(tracks, gridContainer);
+  tracksContainer.appendChild(gridContainer);
 }
 
 // Playback History logic
@@ -2089,6 +2667,7 @@ function addToHistory(track) {
     history = history.slice(0, 50);
   }
   savePlayHistory(history);
+  invalidateHomeRecommendations();
 
   // Refresh if viewing history
   if (activeView === 'history') {
@@ -2374,7 +2953,7 @@ function createPlaylist(name) {
   let playlists = getPlaylists();
 
   if (playlists.some(p => p.name.toLowerCase() === cleanedName.toLowerCase())) {
-    alert('Playlist with this name already exists.');
+    showToastNotification('Плейлист с таким именем уже существует.', 'warning', 'Плейлисты');
     return;
   }
 
@@ -2453,11 +3032,6 @@ function showPlaylistMenu(e, track) {
   playlistMenu.classList.remove('hidden');
 }
 
-// UI Click Event Listeners
-favoritesButton.addEventListener('click', loadFavorites);
-historyButton.addEventListener('click', loadHistoryView);
-playlistsButton.addEventListener('click', loadPlaylistsView);
-
 profileButton.addEventListener('click', () => {
   renderProfilesDropdown();
   profileDropdown.classList.toggle('hidden');
@@ -2526,8 +3100,8 @@ document.addEventListener('click', (e) => {
 });
 
 // Navigation Click Event Listeners
-homeButton.addEventListener('click', loadHomeView);
-favoritesButton.addEventListener('click', loadFavorites);
+homeButton.addEventListener('click', () => loadHomeView());
+favoritesButton.addEventListener('click', () => loadFavorites(currentLibrarySubTab));
 historyButton.addEventListener('click', loadHistoryView);
 playlistsButton.addEventListener('click', loadPlaylistsView);
 settingsButton.addEventListener('click', loadSettingsView);
@@ -2542,7 +3116,7 @@ document.querySelectorAll('.mobile-tab-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
     const view = btn.dataset.mobileView;
     if (view === 'home') loadHomeView();
-    if (view === 'library') loadFavorites();
+    if (view === 'library') loadFavorites(currentLibrarySubTab);
     if (view === 'playlists') loadPlaylistsView();
     if (view === 'studio') loadStudioView('visual');
     if (view === 'stats') loadStatsView();
@@ -2561,38 +3135,57 @@ searchInput.addEventListener('input', () => {
 
 // --- Step 3 Main View Loading & Recommendation Logic ---
 
-async function loadHomeView() {
+async function loadHomeView({ forceRefresh = false } = {}) {
+  const requestVersion = ++homeLoadVersion;
   activeView = 'home';
   searchInput.value = '';
   welcomeScreen.classList.add('hidden');
   tracksContainer.classList.add('hidden');
+  tracksContainer.setAttribute('aria-busy', 'true');
   loadingIndicator.classList.remove('hidden');
 
   try {
-    const [homeRes, forYouData] = await Promise.all([
-      fetch(`${BACKEND_URL}/search/home`).then(r => r.json()),
-      loadForYouTracks()
+    const homeUrl = `${BACKEND_URL}/search/home${forceRefresh ? `?refresh=${Date.now()}` : ''}`;
+    const [homeResult, forYouResult] = await Promise.allSettled([
+      fetchWithTimeout(homeUrl).then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      }),
+      loadForYouTracks({ forceRefresh })
     ]);
+    if (requestVersion !== homeLoadVersion || activeView !== 'home') return;
+
+    const homeRes = homeResult.status === 'fulfilled' ? homeResult.value : null;
+    const forYouData = forYouResult.status === 'fulfilled' ? forYouResult.value : cachedForYouData;
     loadingIndicator.classList.add('hidden');
 
-    if (homeRes.status === 'success' && homeRes.results) {
+    if (homeRes?.status === 'success' && homeRes.results) {
       originalHomeData = homeRes.results;
       cachedForYouData = forYouData;
       renderHome(homeRes.results, forYouData);
       tracksContainer.classList.remove('hidden');
+    } else if (originalHomeData) {
+      cachedForYouData = forYouData || cachedForYouData;
+      renderHome(originalHomeData, cachedForYouData);
+      tracksContainer.classList.remove('hidden');
+      showToastNotification('Показываем сохранённую подборку. Новые данные пока недоступны.', 'warning', 'Home');
     } else {
       tracksContainer.innerHTML = '<div class="welcome-state"><h2>Не удалось загрузить рекомендации</h2><p>Пожалуйста, проверьте соединение с бэкендом</p></div>';
       tracksContainer.classList.remove('hidden');
     }
     updateActiveTab('home');
   } catch (error) {
+    if (requestVersion !== homeLoadVersion || activeView !== 'home') return;
     console.error('[Renderer] Failed to load home screen recommendations:', error);
     loadingIndicator.classList.add('hidden');
     tracksContainer.innerHTML = '<div class="welcome-state"><h2>Не удалось подключиться к серверу</h2><p>Проверьте соединение с интернетом</p></div>';
     tracksContainer.classList.remove('hidden');
     updateActiveTab('home');
   } finally {
-    hideSplashScreen();
+    if (requestVersion === homeLoadVersion) {
+      tracksContainer.removeAttribute('aria-busy');
+      hideSplashScreen();
+    }
   }
 }
 
@@ -2613,18 +3206,41 @@ function renderHome(sectionsData, forYouData) {
   welcomeHeader.innerHTML = `
     <div class="welcome-greeting">
       <h2>${getGreeting()}, ${escapeHTML(username)}</h2>
+      <p class="welcome-subtitle">${escapeHTML(forYouData?.source || 'Новая музыка, история и ваши любимые треки — в одном месте')}</p>
     </div>
-    <div class="sources-pill-capsule" style="position: relative;">
-      <div class="capsule-active-indicator" style="left: ${activeHomeSource === 'soundcloud' ? '4' : '44'}px;"></div>
-      <button class="source-capsule-btn ${activeHomeSource === 'soundcloud' ? 'active' : ''}" data-source="soundcloud" title="SoundCloud">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M23.95 14.47c0-2.45-1.92-4.44-4.29-4.44h-.35c-.48-2.61-2.73-4.6-5.46-4.6-2.58 0-4.73 1.83-5.32 4.26-.26-.06-.53-.09-.81-.09-2.58 0-4.67 2.09-4.67 4.67 0 .16.01.32.02.48C1.29 14.53 0 16.03 0 17.84c0 2.08 1.68 3.76 3.76 3.76h16.5c1.96 0 3.69-1.55 3.69-3.51 0-1.74-1.28-3.18-2.97-3.52z"/></svg>
+    <div class="home-header-actions">
+      <button class="home-refresh-btn" type="button" aria-label="Обновить все рекомендации" title="Обновить все рекомендации">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M18.5 16a8 8 0 1 1 .8-8.2L20 12"/></svg>
+        <span>Обновить</span>
       </button>
-      <button class="source-capsule-btn ${activeHomeSource === 'spotify' ? 'active' : ''}" data-source="spotify" title="Spotify">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.377-1.454-5.37-1.783-8.894-.978-.335.077-.67-.134-.746-.47-.077-.335.134-.67.47-.746 3.847-.88 7.143-.51 9.814 1.127.294.18.387.563.207.857s-.563.387-.857.207zm1.225-2.72c-.227.367-.707.487-1.074.26-2.72-1.672-6.87-2.157-10.082-1.182-.413.125-.847-.107-.972-.52-.125-.413.107-.847.52-.972 3.676-1.116 8.243-.57 11.348 1.337.367.227.487.707.26 1.074zm.107-2.834C14.484 8.7 8.012 8.483 4.262 9.622c-.573.173-1.182-.154-1.355-.727-.173-.573.154-1.182.727-1.355 4.3-1.305 11.442-1.055 15.534 1.373.515.305.683.97.378 1.485-.305.515-.97.683-1.485.378z"/></svg>
-      </button>
+      <div class="sources-pill-capsule" style="position: relative;">
+        <div class="capsule-active-indicator" style="left: ${activeHomeSource === 'soundcloud' ? '4' : '44'}px;"></div>
+        <button class="source-capsule-btn ${activeHomeSource === 'soundcloud' ? 'active' : ''}" data-source="soundcloud" title="SoundCloud" aria-label="Рекомендации SoundCloud" aria-pressed="${activeHomeSource === 'soundcloud'}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M23.95 14.47c0-2.45-1.92-4.44-4.29-4.44h-.35c-.48-2.61-2.73-4.6-5.46-4.6-2.58 0-4.73 1.83-5.32 4.26-.26-.06-.53-.09-.81-.09-2.58 0-4.67 2.09-4.67 4.67 0 .16.01.32.02.48C1.29 14.53 0 16.03 0 17.84c0 2.08 1.68 3.76 3.76 3.76h16.5c1.96 0 3.69-1.55 3.69-3.51 0-1.74-1.28-3.18-2.97-3.52z"/></svg>
+        </button>
+        <button class="source-capsule-btn ${activeHomeSource === 'spotify' ? 'active' : ''}" data-source="spotify" title="Spotify" aria-label="Рекомендации Spotify" aria-pressed="${activeHomeSource === 'spotify'}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.377-1.454-5.37-1.783-8.894-.978-.335.077-.67-.134-.746-.47-.077-.335.134-.67.47-.746 3.847-.88 7.143-.51 9.814 1.127.294.18.387.563.207.857s-.563.387-.857.207zm1.225-2.72c-.227.367-.707.487-1.074.26-2.72-1.672-6.87-2.157-10.082-1.182-.413.125-.847-.107-.972-.52-.125-.413.107-.847.52-.972 3.676-1.116 8.243-.57 11.348 1.337.367.227.487.707.26 1.074zm.107-2.834C14.484 8.7 8.012 8.483 4.262 9.622c-.573.173-1.182-.154-1.355-.727-.173-.573.154-1.182.727-1.355 4.3-1.305 11.442-1.055 15.534 1.373.515.305.683.97.378 1.485-.305.515-.97.683-1.485.378z"/></svg>
+        </button>
+      </div>
     </div>
   `;
   tracksContainer.appendChild(welcomeHeader);
+
+  welcomeHeader.querySelector('.home-refresh-btn')?.addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    if (button.disabled) return;
+    button.disabled = true;
+    button.classList.add('loading');
+    invalidateHomeRecommendations({ preserveCache: true });
+    try {
+      await loadHomeView({ forceRefresh: true });
+    } finally {
+      if (button.isConnected) {
+        button.disabled = false;
+        button.classList.remove('loading');
+      }
+    }
+  });
 
   // Setup click listeners for capsule buttons
   welcomeHeader.querySelectorAll('.source-capsule-btn').forEach(btn => {
@@ -2637,6 +3253,7 @@ function renderHome(sectionsData, forYouData) {
       // Update button active classes immediately for visual response
       welcomeHeader.querySelectorAll('.source-capsule-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.source === activeHomeSource);
+        b.setAttribute('aria-pressed', String(b.dataset.source === activeHomeSource));
       });
 
       // Slide active indicator instantly
@@ -2681,7 +3298,7 @@ function renderHome(sectionsData, forYouData) {
   };
 
   const carouselTracks = getFilteredCarousel();
-  const carouselSection = renderCarousel(carouselTracks);
+  const carouselSection = renderCarousel(carouselTracks, null, forYouData?.source || 'Популярное прямо сейчас');
   if (carouselSection) {
     tracksContainer.appendChild(carouselSection);
   }
@@ -2708,49 +3325,14 @@ function renderHome(sectionsData, forYouData) {
 
     chip.addEventListener('click', async () => {
       if (tag === 'All') {
-        // ── All: clear genre, increment version, re-render defaults ──
         activeGenreChip = null;
         genreRenderVersion++;
         renderHome(originalHomeData, cachedForYouData);
       } else {
-        if (activeGenreChip === tag) {
-          // ── Toggle off: same chip clicked again → go back to All ──
-          activeGenreChip = null;
-          genreRenderVersion++;
-          renderHome(originalHomeData, cachedForYouData);
-        } else {
-          // ── New genre selected ──
-          activeGenreChip = tag;
-          const myVersion = ++genreRenderVersion; // capture version for this request
-
-          renderHome(originalHomeData, cachedForYouData);
-
-          const contentArea = document.getElementById('home-content-area');
-          if (contentArea) {
-            contentArea.innerHTML = '<div style="display: flex; justify-content: center; padding: 50px;"><div class="spinner"></div></div>';
-          }
-
-          try {
-            const response = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(tag)}`);
-            // ⚠️ Stale-guard: if version changed while waiting, discard this response
-            if (genreRenderVersion !== myVersion) return;
-            const result = await response.json();
-            if (genreRenderVersion !== myVersion) return;
-            if (result.status === 'success' && result.results) {
-              const scTracks = result.results.filter(t => t.source === activeHomeSource);
-              renderGenreTracks(scTracks, tag);
-            } else {
-              const ca = document.getElementById('home-content-area');
-              if (ca) ca.innerHTML = '<div style="text-align: center; padding: 30px; color: rgba(255,255,255,0.4);">Не удалось загрузить треки</div>';
-            }
-          } catch (err) {
-            console.error(err);
-            if (genreRenderVersion === myVersion) {
-              const ca = document.getElementById('home-content-area');
-              if (ca) ca.innerHTML = '<div style="text-align: center; padding: 30px; color: rgba(255,255,255,0.4);">Ошибка загрузки</div>';
-            }
-          }
-        }
+        activeGenreChip = activeGenreChip === tag ? null : tag;
+        genreRenderVersion++;
+        // renderHome owns the single guarded request for the selected genre.
+        renderHome(originalHomeData, cachedForYouData);
       }
     });
 
@@ -2784,20 +3366,23 @@ function renderHome(sectionsData, forYouData) {
         contentArea.innerHTML = '<div style="display: flex; justify-content: center; padding: 50px;"><div class="spinner"></div></div>';
       }
       try {
-        const response = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(tag)}`);
-        if (genreRenderVersion !== myVersion) return;
+        const response = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(tag)}`);
+        if (genreRenderVersion !== myVersion || activeView !== 'home' || activeGenreChip !== tag || !contentArea?.isConnected) return;
         const result = await response.json();
-        if (genreRenderVersion !== myVersion) return;
+        if (genreRenderVersion !== myVersion || activeView !== 'home' || activeGenreChip !== tag || !contentArea?.isConnected) return;
         if (result.status === 'success' && result.results) {
           const scTracks = result.results.filter(t => t.source === activeHomeSource);
           renderGenreTracks(scTracks, tag);
         } else {
           if (contentArea) {
-            contentArea.innerHTML = '<div style="text-align: center; padding: 30px; color: rgba(255,255,255,0.4);">Не удалось загрузить треки</div>';
+            contentArea.innerHTML = '<div class="inline-error-state">Не удалось загрузить треки этого жанра. Попробуйте ещё раз.</div>';
           }
         }
       } catch (err) {
         console.error(err);
+        if (genreRenderVersion === myVersion && activeView === 'home' && activeGenreChip === tag && contentArea?.isConnected) {
+          contentArea.innerHTML = '<div class="inline-error-state">Не удалось загрузить жанр. Проверьте соединение и повторите попытку.</div>';
+        }
       }
     }, 50);
   } else {
@@ -2805,97 +3390,121 @@ function renderHome(sectionsData, forYouData) {
   }
 }
 
+function openHomeCollection(title, subtitle, tracks) {
+  activeView = 'home-collection';
+  clearInterval(carouselTimer);
+  tracksContainer.innerHTML = `
+    <div class="collection-view-header">
+      <button class="collection-back-btn" type="button" aria-label="Вернуться на Home"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+      <div><h2>${escapeHTML(title)}</h2><p>${escapeHTML(subtitle)}</p></div>
+    </div>
+    <div class="tracks-layout-grid home-collection-grid"></div>
+  `;
+  tracksContainer.querySelector('.collection-back-btn').addEventListener('click', () => loadHomeView());
+  playlist = tracks;
+  renderTracks(tracks, tracksContainer.querySelector('.home-collection-grid'));
+  updateActiveTab('home');
+}
+
+function appendHomeRail(parent, { id, title, subtitle, tracks }) {
+  if (!tracks.length) return;
+  const section = document.createElement('section');
+  section.className = 'home-section scrollable';
+  section.setAttribute('aria-labelledby', `${id}-title`);
+  section.innerHTML = `
+    <div class="home-section-header">
+      <div class="home-section-heading"><h3 id="${id}-title">${escapeHTML(title)}</h3><p>${escapeHTML(subtitle)}</p></div>
+      <button type="button" class="see-all-link">Показать все <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+    </div>
+    <div class="scroller-container-outer">
+      <button class="scroll-chevron prev" type="button" aria-label="Прокрутить ${escapeHTML(title)} назад"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+      <div class="scroller-container" tabindex="0" aria-label="${escapeHTML(title)}"></div>
+      <button class="scroll-chevron next" type="button" aria-label="Прокрутить ${escapeHTML(title)} вперёд"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+    </div>
+  `;
+  parent.appendChild(section);
+
+  const scroller = section.querySelector('.scroller-container');
+  tracks.forEach((track, index) => scroller.appendChild(renderTrackCardHorizontal(track, index, tracks)));
+  const prev = section.querySelector('.scroll-chevron.prev');
+  const next = section.querySelector('.scroll-chevron.next');
+  const updateArrows = () => {
+    prev.disabled = scroller.scrollLeft <= 4;
+    next.disabled = scroller.scrollLeft + scroller.clientWidth >= scroller.scrollWidth - 4;
+  };
+  prev.addEventListener('click', () => scroller.scrollBy({ left: -Math.max(280, scroller.clientWidth * 0.72), behavior: 'smooth' }));
+  next.addEventListener('click', () => scroller.scrollBy({ left: Math.max(280, scroller.clientWidth * 0.72), behavior: 'smooth' }));
+  scroller.addEventListener('scroll', updateArrows, { passive: true });
+  section.querySelector('.see-all-link').addEventListener('click', () => openHomeCollection(title, subtitle, tracks));
+  requestAnimationFrame(updateArrows);
+}
+
 function renderHomeContent(sectionsData, forYouData) {
   const contentArea = document.getElementById('home-content-area');
   if (!contentArea) return;
   contentArea.innerHTML = '';
 
-  const filterBySource = (trackList) => {
-    if (!trackList) return [];
-    return trackList.filter(t => t.source === activeHomeSource);
+  const filterBySource = (trackList) => (trackList || []).filter((track) => track.source === activeHomeSource);
+  const trackKeys = (track) => [
+    `${track.source || 'unknown'}:${track.id}`,
+    `${String(track.artist || '').trim().toLocaleLowerCase('ru')}::${String(track.title || '').trim().toLocaleLowerCase('ru')}`
+  ];
+  const heroCandidates = filterBySource(forYouData?.tracks).length
+    ? filterBySource(forYouData.tracks)
+    : filterBySource(sectionsData.trending).length
+      ? filterBySource(sectionsData.trending)
+      : filterBySource(sectionsData.top);
+  const used = new Set(heroCandidates.slice(0, 5).flatMap(trackKeys));
+  const takeUnique = (trackList, limit = 14) => {
+    const result = [];
+    filterBySource(trackList).forEach((track) => {
+      if (!track?.id || result.length >= limit) return;
+      const keys = trackKeys(track);
+      if (keys.some((key) => used.has(key))) return;
+      keys.forEach((key) => used.add(key));
+      result.push(track);
+    });
+    return result;
   };
 
-  // 1. Recommended tracks (top sections data fallback)
-  let recommendedTracks = [];
-  if (forYouData && forYouData.tracks) {
-    recommendedTracks = filterBySource(forYouData.tracks);
-  }
-  if (recommendedTracks.length === 0 && sectionsData.top) {
-    recommendedTracks = filterBySource(sectionsData.top);
-  }
-
-  if (recommendedTracks.length > 0) {
-    const recSection = document.createElement('div');
-    recSection.className = 'home-section scrollable';
-    recSection.innerHTML = `
-      <div class="home-section-header">
-        <h3>Recommended</h3>
-        <a href="#" class="see-all-link" id="see-all-recommended">See all <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg></a>
-      </div>
-      <div class="scroller-container-outer">
-        <div class="scroller-container" id="recommended-scroller"></div>
-        <button class="scroll-chevron next" id="rec-scroll-chevron">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
-        </button>
-      </div>
-    `;
-
-    contentArea.appendChild(recSection);
-
-    const scroller = recSection.querySelector('#recommended-scroller');
-    recommendedTracks.forEach((track, idx) => {
-      const card = renderTrackCardHorizontal(track, idx, recommendedTracks);
-      scroller.appendChild(card);
-    });
-
-    recSection.querySelector('#rec-scroll-chevron').addEventListener('click', () => {
-      scroller.scrollBy({ left: 300, behavior: 'smooth' });
-    });
-
-    recSection.querySelector('#see-all-recommended').addEventListener('click', (e) => {
-      e.preventDefault();
-      playlist = recommendedTracks;
-      renderTracks(playlist);
+  const continueTracks = takeUnique(getPlayHistory(), 8);
+  let personalTracks = takeUnique(forYouData?.tracks, 14);
+  if (!personalTracks.length) personalTracks = takeUnique(sectionsData.top, 14);
+  const discoverySources = [sectionsData.electronic || [], sectionsData.rock || [], sectionsData.pop || []];
+  const discoveryPool = [];
+  const discoveryDepth = Math.max(0, ...discoverySources.map((list) => list.length));
+  for (let index = 0; index < discoveryDepth; index += 1) {
+    discoverySources.forEach((list) => {
+      if (list[index]) discoveryPool.push(list[index]);
     });
   }
+  const discoveryTracks = takeUnique(discoveryPool, 14);
+  const trendingTracks = takeUnique(sectionsData.trending, 14);
 
-  // 2. Trending this week (trending sections data)
-  const trendingTracks = filterBySource(sectionsData.trending || []);
-
-  if (trendingTracks.length > 0) {
-    const trendSection = document.createElement('div');
-    trendSection.className = 'home-section scrollable';
-    trendSection.innerHTML = `
-      <div class="home-section-header">
-        <h3>Trending this week</h3>
-        <a href="#" class="see-all-link" id="see-all-trending">See all <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg></a>
-      </div>
-      <div class="scroller-container-outer">
-        <div class="scroller-container" id="trending-scroller"></div>
-        <button class="scroll-chevron next" id="trend-scroll-chevron">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
-        </button>
-      </div>
-    `;
-
-    contentArea.appendChild(trendSection);
-
-    const scroller = trendSection.querySelector('#trending-scroller');
-    trendingTracks.forEach((track, idx) => {
-      const card = renderTrackCardHorizontal(track, idx, trendingTracks);
-      scroller.appendChild(card);
-    });
-
-    trendSection.querySelector('#trend-scroll-chevron').addEventListener('click', () => {
-      scroller.scrollBy({ left: 300, behavior: 'smooth' });
-    });
-
-    trendSection.querySelector('#see-all-trending').addEventListener('click', (e) => {
-      e.preventDefault();
-      playlist = trendingTracks;
-      renderTracks(playlist);
-    });
-  }
+  appendHomeRail(contentArea, {
+    id: 'continue-listening',
+    title: 'Продолжить слушать',
+    subtitle: 'Недавние треки — без повторного поиска',
+    tracks: continueTracks
+  });
+  appendHomeRail(contentArea, {
+    id: 'made-for-you',
+    title: forYouData?.personalized ? 'Для вас' : 'С чего начать',
+    subtitle: forYouData?.personalized ? forYouData.source : 'Подборка станет точнее после нескольких прослушиваний',
+    tracks: personalTracks
+  });
+  appendHomeRail(contentArea, {
+    id: 'fresh-discovery',
+    title: 'Новые находки',
+    subtitle: 'Смешиваем жанры, чтобы Home не застывал на одном настроении',
+    tracks: discoveryTracks
+  });
+  appendHomeRail(contentArea, {
+    id: 'trending-now',
+    title: 'Сейчас в тренде',
+    subtitle: 'Популярное у слушателей прямо сейчас',
+    tracks: trendingTracks
+  });
 }
 
 // Redesigned Track Card Horizontal builder
@@ -2903,11 +3512,13 @@ function renderTrackCardHorizontal(track, index, sectionTracks) {
   const card = document.createElement('div');
   const isActive = activePlayingTrack && track.id === activePlayingTrack.id;
   card.className = `track-card-horizontal ${isActive ? 'active' : ''}`;
+  card.setAttribute('role', 'article');
   card.dataset.index = index;
   card.dataset.trackId = track.id;
 
   const trackTitle = track.title ? track.title.trim() : "Unknown Track";
   const trackArtist = track.artist ? track.artist.trim() : "Unknown Artist";
+  card.setAttribute('aria-label', `${trackTitle} — ${trackArtist}`);
   const defaultSvgCover = 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'><rect width=\'100\' height=\'100\' fill=\'%23222\'/><path d=\'M30 30 L70 50 L30 70 Z\' fill=\'%23444\'/></svg>';
   const coverUrl = track.thumbnail
     ? `${BACKEND_URL}/cover?url=${encodeURIComponent(track.thumbnail)}`
@@ -2925,10 +3536,10 @@ function renderTrackCardHorizontal(track, index, sectionTracks) {
     : `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="margin-left: 2px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
 
   card.innerHTML = `
-    <img src="${coverUrl}" class="card-cover-horizontal" alt="${trackTitle}">
+    <img src="${coverUrl}" class="card-cover-horizontal" alt="" loading="lazy" decoding="async">
     <div class="card-details-horizontal">
-      <div class="card-title-horizontal">${trackTitle}</div>
-      <div class="card-artist-horizontal">${trackArtist}</div>
+      <div class="card-title-horizontal">${escapeHTML(trackTitle)}</div>
+      <div class="card-artist-horizontal">${escapeHTML(trackArtist)}</div>
       <div class="card-meta-horizontal">
         <span class="badge ${track.source}" style="display:inline-flex;align-items:center;">
           ${track.source === 'soundcloud'
@@ -2942,17 +3553,20 @@ function renderTrackCardHorizontal(track, index, sectionTracks) {
       </div>
     </div>
     <div class="card-actions-horizontal">
-      <button class="card-play-btn-horizontal" title="Play">
+      <button class="card-play-btn-horizontal" title="Слушать" aria-label="Воспроизвести или приостановить ${escapeHTML(trackTitle)}">
         ${playButtonIcon}
       </button>
-      <button class="card-more-btn-horizontal" title="Add to Playlist">
+      <button class="card-like-btn-horizontal ${isLiked ? 'liked' : ''}" title="В избранное" aria-label="${isLiked ? 'Убрать из избранного' : 'Добавить в избранное'}" aria-pressed="${isLiked}">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+      </button>
+      <button class="card-more-btn-horizontal" title="Добавить в плейлист" aria-label="Добавить ${escapeHTML(trackTitle)} в плейлист">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
       </button>
     </div>
   `;
 
   card.addEventListener('click', (e) => {
-    if (e.target.closest('.card-more-btn-horizontal') || e.target.closest('.card-play-btn-horizontal')) return;
+    if (e.target.closest('.card-more-btn-horizontal') || e.target.closest('.card-play-btn-horizontal') || e.target.closest('.card-like-btn-horizontal')) return;
     playOrToggle(track, index, sectionTracks);
   });
 
@@ -2964,6 +3578,10 @@ function renderTrackCardHorizontal(track, index, sectionTracks) {
   card.querySelector('.card-more-btn-horizontal').addEventListener('click', (e) => {
     e.stopPropagation();
     showPlaylistMenu(e, track);
+  });
+
+  card.querySelector('.card-like-btn-horizontal').addEventListener('click', (e) => {
+    toggleLike(e, track);
   });
 
   return card;
@@ -3000,7 +3618,7 @@ function renderGenreTracks(tracks, tagName) {
     playlist = tracks;
     renderTracks(tracks, grid);
   } else {
-    grid.innerHTML = '<div style="color: rgba(255,255,255,0.4); padding: 20px;">Нет треков в этом жанре</div>';
+    grid.innerHTML = '<div class="inline-empty-state">В этом жанре пока нет доступных треков</div>';
   }
 
   contentArea.appendChild(sectionEl);
@@ -3250,12 +3868,12 @@ async function loadArtistPlaylist(playlistId, playlistName) {
 // --- Step 3 Search History Autocomplete Dropdown Logic ---
 
 function getSearchHistory() {
-  const data = localStorage.getItem(`gp_search_history_${currentProfile}`);
+  const data = localStorage.getItem(getStorageKey('search_history'));
   return data ? JSON.parse(data) : [];
 }
 
 function saveSearchHistory(history) {
-  localStorage.setItem(`gp_search_history_${currentProfile}`, JSON.stringify(history));
+  localStorage.setItem(getStorageKey('search_history'), JSON.stringify(history));
 }
 
 function addToSearchHistory(query) {
@@ -3269,6 +3887,7 @@ function addToSearchHistory(query) {
     history = history.slice(0, 5);
   }
   saveSearchHistory(history);
+  invalidateHomeRecommendations();
 }
 
 function showSearchHistory() {
@@ -3487,31 +4106,12 @@ function renderSettings(options = {}) {
   const totalSeconds = parseFloat(localStorage.getItem('gp_stats_total_seconds')) || 0;
   const totalHours = (totalSeconds / 3600).toFixed(1);
 
-  const statsStr = localStorage.getItem('gp_stats_counts');
-  const stats = statsStr ? JSON.parse(statsStr) : {};
+  const stats = getProfilePlayStats();
   const topTracks = Object.values(stats)
     .sort((a, b) => b.count - a.count)
     .slice(0, 3);
 
-  const savedCustom = localStorage.getItem('gp_custom_theme');
-  const customTheme = savedCustom ? JSON.parse(savedCustom) : {
-    bgColor1: '#1e1e24',
-    bgColor2: '#0a0a0c',
-    bgAngle: 135,
-    textColor: '#f5f5f7',
-    playerBg: '#050505',
-    cardBg: '#ffffff',
-    accentColor: '#ffffff',
-    blur: 28,
-    glow: 0.05,
-    opacity: 0.45,
-    windowRadius: 12,
-    fontFamily: 'Inter',
-    borderWidth: '1px',
-    glowColor: '#ffffff',
-    cardStyle: 'default',
-    bgEffect: 'liquid'
-  };
+  const customTheme = getStoredCustomTheme();
 
   const viewHeader = document.createElement('div');
   viewHeader.className = 'view-header';
@@ -3523,9 +4123,14 @@ function renderSettings(options = {}) {
     : scope === 'stats'
       ? { title: 'Stats', subtitle: 'Listening analytics' }
       : { title: 'Profile & Settings', subtitle: '' };
+  const headerIcon = scope === 'studio'
+    ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18h1.2a2 2 0 0 0 0-4H12a2 2 0 0 1 0-4h5a4 4 0 0 0 4-4c0-3.3-4-6-9-6Z"/><circle cx="7.5" cy="10" r="1" fill="currentColor" stroke="none"/><circle cx="10" cy="6.7" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="7" r="1" fill="currentColor" stroke="none"/></svg>'
+    : scope === 'stats'
+      ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>'
+      : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
   viewHeader.innerHTML = `
     <div class="view-header-title">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+      ${headerIcon}
       <span>${headerCopy.title}</span>
       ${headerCopy.subtitle ? `<span class="view-header-subtitle">${headerCopy.subtitle}</span>` : ``}
     </div>
@@ -3553,20 +4158,20 @@ function renderSettings(options = {}) {
     ` : ''}
     <div class="settings-section" data-section="theme-presets">
       <h3>Тема оформления</h3>
-      <div class="theme-options">
-        <button class="theme-option-btn ${currentTheme === 'theme-dark-glass' ? 'active' : ''}" data-theme="theme-dark-glass">
+      <div class="theme-options" role="group" aria-label="Предустановки темы">
+        <button class="theme-option-btn ${currentTheme === 'theme-dark-glass' ? 'active' : ''}" data-theme="theme-dark-glass" aria-pressed="${currentTheme === 'theme-dark-glass'}">
           <span>Dark Glass</span>
           <div class="theme-preview dark"></div>
         </button>
-        <button class="theme-option-btn ${currentTheme === 'theme-pink-white' ? 'active' : ''}" data-theme="theme-pink-white">
+        <button class="theme-option-btn ${currentTheme === 'theme-pink-white' ? 'active' : ''}" data-theme="theme-pink-white" aria-pressed="${currentTheme === 'theme-pink-white'}">
           <span>Pink-White Glass</span>
           <div class="theme-preview pink"></div>
         </button>
-        <button class="theme-option-btn ${currentTheme === 'theme-silver-matrix' ? 'active' : ''}" data-theme="theme-silver-matrix">
+        <button class="theme-option-btn ${currentTheme === 'theme-silver-matrix' ? 'active' : ''}" data-theme="theme-silver-matrix" aria-pressed="${currentTheme === 'theme-silver-matrix'}">
           <span>Silver Matrix</span>
           <div class="theme-preview silver"></div>
         </button>
-        <button class="theme-option-btn ${currentTheme === 'custom' ? 'active' : ''}" data-theme="custom">
+        <button class="theme-option-btn ${currentTheme === 'custom' ? 'active' : ''}" data-theme="custom" aria-pressed="${currentTheme === 'custom'}">
           <span>Custom</span>
           <div class="theme-preview custom"></div>
         </button>
@@ -3905,8 +4510,12 @@ function renderSettings(options = {}) {
     btn.addEventListener('click', (e) => {
       const selectedTheme = e.currentTarget.dataset.theme;
       applyTheme(selectedTheme);
-      btns.forEach(b => b.classList.remove('active'));
+      btns.forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-pressed', 'false');
+      });
       e.currentTarget.classList.add('active');
+      e.currentTarget.setAttribute('aria-pressed', 'true');
 
       const constructorSec = panel.querySelector('#theme-constructor-section');
       const bgImageSec = panel.querySelector('#background-image-section');
@@ -3938,6 +4547,38 @@ function renderSettings(options = {}) {
   const themeGlowColorInput = panel.querySelector('#theme-glow-color');
   const themeCardStyleSelect = panel.querySelector('#theme-card-style');
   const themeBgEffectSelect = panel.querySelector('#theme-bg-effect');
+
+  const themeControlLabels = new Map([
+    [themeBgColor1Input, 'Первый цвет фона'],
+    [themeBgColor2Input, 'Второй цвет фона'],
+    [themeBgAngleSlider, 'Угол градиента'],
+    [themeTextInput, 'Цвет основного текста'],
+    [themePlayerInput, 'Цвет нижней панели и мини-плеера'],
+    [themeCardInput, 'Цвет карточек'],
+    [themeAccentInput, 'Акцентный цвет'],
+    [themeBlurSlider, 'Интенсивность размытия'],
+    [themeGlowSlider, 'Интенсивность свечения'],
+    [themeOpacitySlider, 'Прозрачность поверхностей'],
+    [themeRadiusSlider, 'Скругление окна'],
+    [themeFontFamilySelect, 'Шрифт интерфейса'],
+    [themeBorderWidthSlider, 'Толщина границ'],
+    [themeGlowColorInput, 'Цвет свечения'],
+    [themeCardStyleSelect, 'Стиль поверхностей'],
+    [themeBgEffectSelect, 'Эффект фона']
+  ]);
+  themeControlLabels.forEach((label, control) => control?.setAttribute('aria-label', label));
+
+  const customControlsEnabled = currentTheme === 'custom';
+  ['#theme-constructor-section', '#background-image-section'].forEach((selector) => {
+    const section = panel.querySelector(selector);
+    if (!section) return;
+    section.classList.toggle('disabled-customizer', !customControlsEnabled);
+    section.toggleAttribute('inert', !customControlsEnabled);
+    section.setAttribute('aria-disabled', String(!customControlsEnabled));
+    section.querySelectorAll('input, select, button').forEach((control) => {
+      control.disabled = !customControlsEnabled;
+    });
+  });
 
   function updateCustomThemeFromUI() {
     const customThemeVal = {
@@ -4078,7 +4719,7 @@ function renderSettings(options = {}) {
 
   const themeExportBtn = panel.querySelector('#theme-export-btn');
   if (themeExportBtn && hasThemeConstructor) {
-    themeExportBtn.addEventListener('click', () => {
+    themeExportBtn.addEventListener('click', async () => {
     const customThemeVal = {
       bgColor1: themeBgColor1Input.value,
       bgColor2: themeBgColor2Input.value,
@@ -4099,11 +4740,11 @@ function renderSettings(options = {}) {
     };
     try {
       const code = btoa(JSON.stringify(customThemeVal));
-      navigator.clipboard.writeText(code);
-      alert('Код темы скопирован в буфер обмена!');
+      await navigator.clipboard.writeText(code);
+      showToastNotification('Код темы скопирован в буфер обмена.', 'success', 'Тема оформления');
     } catch (err) {
       console.error(err);
-      alert('Не удалось экспортировать тему');
+      showToastNotification('Не удалось скопировать код темы.', 'error', 'Тема оформления');
     }
   });
   }
@@ -4116,40 +4757,21 @@ function renderSettings(options = {}) {
     if (!code) return;
     try {
       const decoded = JSON.parse(atob(code));
-      if (decoded.textColor && decoded.blur !== undefined && decoded.opacity !== undefined) {
-        // Backwards compatibility for single bgColor
-        if (decoded.bgColor && !decoded.bgColor1) {
-          decoded.bgColor1 = decoded.bgColor;
-          decoded.bgColor2 = decoded.bgColor;
-          decoded.bgAngle = 135;
-        }
-        if (!decoded.bgColor1) decoded.bgColor1 = '#1e1e24';
-        if (!decoded.bgColor2) decoded.bgColor2 = '#0a0a0c';
-        if (decoded.bgAngle === undefined) decoded.bgAngle = 135;
-        if (!decoded.playerBg) decoded.playerBg = '#050505';
-        if (!decoded.cardBg) decoded.cardBg = '#ffffff';
-        if (!decoded.accentColor) decoded.accentColor = decoded.textColor || '#ffffff';
-        if (decoded.glow === undefined) decoded.glow = 0.05;
-        if (decoded.windowRadius === undefined) decoded.windowRadius = 12;
-        if (decoded.fontFamily === undefined) decoded.fontFamily = 'Inter';
-        if (decoded.borderWidth === undefined) decoded.borderWidth = '1px';
-        if (decoded.glowColor === undefined) decoded.glowColor = '#ffffff';
-        if (decoded.cardStyle === undefined) decoded.cardStyle = 'default';
-        if (decoded.bgEffect === undefined) decoded.bgEffect = 'liquid';
-
-        applyCustomTheme(decoded);
-        applyBgEffect(decoded.bgEffect);
-        localStorage.setItem('gp_custom_theme', JSON.stringify(decoded));
+      if (decoded && typeof decoded === 'object' && (decoded.bgColor || decoded.bgColor1)) {
+        const normalized = normalizeCustomTheme(decoded);
+        applyCustomTheme(normalized);
+        applyBgEffect(normalized.bgEffect);
+        localStorage.setItem('gp_custom_theme', JSON.stringify(normalized));
         localStorage.setItem('gp_theme', 'custom');
         input.value = '';
-        alert('Тема успешно импортирована!');
+        showToastNotification('Тема проверена и применена.', 'success', 'Тема оформления');
         renderSettings({ scope, studioTab });
       } else {
-        alert('Некорректный код темы');
+        showToastNotification('В коде нет обязательных параметров темы.', 'error', 'Тема оформления');
       }
     } catch (err) {
       console.error(err);
-      alert('Не удалось расшифровать код темы');
+      showToastNotification('Не удалось прочитать код темы.', 'error', 'Тема оформления');
     }
   });
   }
@@ -4382,7 +5004,7 @@ function renderSettings(options = {}) {
   const manualCheckBtn = panel.querySelector('#manual-check-updates-btn');
   if (manualCheckBtn && isElectron && window.electronAPI?.checkForUpdates) {
     manualCheckBtn.addEventListener('click', () => {
-      showToastNotification('Проверка наличия обновлений...');
+      showToastNotification('Проверяем наличие новой версии…', 'info', 'Обновления');
       window.electronAPI.checkForUpdates();
     });
   }
@@ -4395,7 +5017,7 @@ function renderSettings(options = {}) {
     saveBackendBtn.addEventListener('click', () => {
       let newUrl = backendInput.value.trim();
       if (!newUrl) {
-        showToastNotification('Пожалуйста, введите корректный URL!');
+        showToastNotification('Введите корректный адрес сервера.', 'warning', 'Настройки');
         return;
       }
       if (newUrl.endsWith('/')) {
@@ -4423,21 +5045,85 @@ function renderSettings(options = {}) {
   updateActiveTab(scope);
 }
 
+const DEFAULT_CUSTOM_THEME = Object.freeze({
+  bgColor1: '#1e1e24',
+  bgColor2: '#0a0a0c',
+  bgAngle: 135,
+  textColor: '#f5f5f7',
+  playerBg: '#050505',
+  cardBg: '#ffffff',
+  accentColor: '#ffffff',
+  blur: 28,
+  glow: 0.05,
+  opacity: 0.45,
+  windowRadius: 12,
+  fontFamily: 'Inter',
+  borderWidth: '1px',
+  glowColor: '#ffffff',
+  cardStyle: 'default',
+  bgEffect: 'liquid'
+});
+
+const CUSTOM_THEME_FONTS = new Set(['Inter', 'Outfit', 'Montserrat', 'Fira Code', 'Playfair Display']);
+const CUSTOM_THEME_CARD_STYLES = new Set(['default', 'frosted', 'material', 'flat']);
+const CUSTOM_THEME_BG_EFFECTS = new Set(['static', 'aurora', 'liquid', 'particles']);
+let customThemeRecoveryNotified = false;
+
+function isValidHexColor(value) {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
+}
+
+function clampThemeNumber(value, fallback, min, max) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.min(max, Math.max(min, number)) : fallback;
+}
+
+function normalizeCustomTheme(value) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const legacyBg = isValidHexColor(source.bgColor) ? source.bgColor : null;
+  const color = (candidate, fallback) => isValidHexColor(candidate) ? candidate.toLowerCase() : fallback;
+  return {
+    bgColor1: color(source.bgColor1, legacyBg || DEFAULT_CUSTOM_THEME.bgColor1),
+    bgColor2: color(source.bgColor2, legacyBg || DEFAULT_CUSTOM_THEME.bgColor2),
+    bgAngle: clampThemeNumber(source.bgAngle, DEFAULT_CUSTOM_THEME.bgAngle, 0, 360),
+    textColor: color(source.textColor, DEFAULT_CUSTOM_THEME.textColor),
+    playerBg: color(source.playerBg, DEFAULT_CUSTOM_THEME.playerBg),
+    cardBg: color(source.cardBg, DEFAULT_CUSTOM_THEME.cardBg),
+    accentColor: color(source.accentColor, DEFAULT_CUSTOM_THEME.accentColor),
+    blur: clampThemeNumber(source.blur, DEFAULT_CUSTOM_THEME.blur, 0, 60),
+    glow: clampThemeNumber(source.glow, DEFAULT_CUSTOM_THEME.glow, 0, 0.4),
+    opacity: clampThemeNumber(source.opacity, DEFAULT_CUSTOM_THEME.opacity, 0.18, 1),
+    windowRadius: clampThemeNumber(source.windowRadius, DEFAULT_CUSTOM_THEME.windowRadius, 0, 32),
+    fontFamily: CUSTOM_THEME_FONTS.has(source.fontFamily) ? source.fontFamily : DEFAULT_CUSTOM_THEME.fontFamily,
+    borderWidth: ['0px', '1px', '2px'].includes(source.borderWidth) ? source.borderWidth : DEFAULT_CUSTOM_THEME.borderWidth,
+    glowColor: color(source.glowColor, DEFAULT_CUSTOM_THEME.glowColor),
+    cardStyle: CUSTOM_THEME_CARD_STYLES.has(source.cardStyle) ? source.cardStyle : DEFAULT_CUSTOM_THEME.cardStyle,
+    bgEffect: CUSTOM_THEME_BG_EFFECTS.has(source.bgEffect) ? source.bgEffect : DEFAULT_CUSTOM_THEME.bgEffect
+  };
+}
+
+function getStoredCustomTheme() {
+  const raw = localStorage.getItem('gp_custom_theme');
+  if (!raw) return { ...DEFAULT_CUSTOM_THEME };
+  try {
+    const normalized = normalizeCustomTheme(JSON.parse(raw));
+    localStorage.setItem('gp_custom_theme', JSON.stringify(normalized));
+    return normalized;
+  } catch (error) {
+    console.warn('[Theme] Invalid custom theme was reset:', error.message);
+    localStorage.removeItem('gp_custom_theme');
+    if (!customThemeRecoveryNotified) {
+      customThemeRecoveryNotified = true;
+      setTimeout(() => showToastNotification('Повреждённые настройки заменены безопасной темой.', 'warning', 'Тема оформления'), 0);
+    }
+    return { ...DEFAULT_CUSTOM_THEME };
+  }
+}
+
 function applyTheme(themeName) {
   document.body.classList.remove('theme-dark-glass', 'theme-pink-white', 'theme-silver-matrix');
   if (themeName === 'custom') {
-    const savedCustom = localStorage.getItem('gp_custom_theme');
-    if (savedCustom) {
-      applyCustomTheme(JSON.parse(savedCustom));
-    } else {
-      const defaultCustomTheme = {
-        bgColor: '#1e1e24',
-        textColor: '#f5f5f7',
-        blur: 28,
-        opacity: 0.45
-      };
-      applyCustomTheme(defaultCustomTheme);
-    }
+    applyCustomTheme(getStoredCustomTheme());
   } else {
     clearCustomThemeProperties();
     document.body.classList.add(themeName);
@@ -4661,68 +5347,93 @@ function getLuminance(hex) {
   return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
 }
 
+function getContrastRatio(foreground, background) {
+  const lighter = Math.max(getLuminance(foreground), getLuminance(background));
+  const darker = Math.min(getLuminance(foreground), getLuminance(background));
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function pickReadableText(background, preferred) {
+  if (isValidHexColor(preferred) && getContrastRatio(preferred, background) >= 4.5) return preferred;
+  const dark = '#111116';
+  const light = '#f7f7fa';
+  return getContrastRatio(dark, background) >= getContrastRatio(light, background) ? dark : light;
+}
+
 function applyCustomTheme(theme) {
+  theme = normalizeCustomTheme(theme);
   const root = document.documentElement;
-  
-  const bg1 = theme.bgColor1 || theme.bgColor || '#1e1e24';
-  const bg2 = theme.bgColor2 || bg1;
+
+  const bg1 = theme.bgColor1;
+  const bg2 = theme.bgColor2;
+  const averageBackground = mixHexColors(bg1, bg2, 0.5);
   const avgLum = (getLuminance(bg1) + getLuminance(bg2)) / 2;
   const isLightBg = avgLum > 0.42;
 
-  let textColor = theme.textColor || (isLightBg ? '#0f0f14' : '#f5f5f7');
-  if (isLightBg && getLuminance(textColor) > 0.4) {
-    textColor = '#0f0f14';
-  } else if (!isLightBg && getLuminance(textColor) < 0.2) {
-    textColor = '#f5f5f7';
-  }
+  const textColor = pickReadableText(averageBackground, theme.textColor);
 
   root.style.setProperty('--text-color', textColor);
-  root.style.setProperty('--blur-value', `blur(${theme.blur !== undefined ? theme.blur : 28}px)`);
+  root.style.setProperty('--blur-value', `blur(${theme.blur}px)`);
 
-  const textDim = isLightBg ? 'rgba(15, 15, 20, 0.65)' : hexToRgba(textColor, 0.55);
+  const textDim = hexToRgba(textColor, 0.68);
   root.style.setProperty('--text-dim', textDim);
 
-  if (theme.bgColor1 && theme.bgColor2) {
-    const angle = theme.bgAngle !== undefined ? theme.bgAngle : 135;
-    root.style.setProperty('--bg-gradient', `linear-gradient(${angle}deg, ${theme.bgColor1} 0%, ${theme.bgColor2} 100%)`);
-  } else {
-  }
+  root.style.setProperty('--bg-gradient', `linear-gradient(${theme.bgAngle}deg, ${bg1} 0%, ${bg2} 100%)`);
 
-  const cardBgHex = theme.cardBg || '#ffffff';
-  const accentColorHex = theme.accentColor || theme.textColor || '#ffffff';
+  const cardBgHex = theme.cardBg;
+  const playerBgHex = theme.playerBg;
+  const effectiveOpacity = theme.opacity;
+  const cardOpacity = Math.min(0.78, Math.max(0.14, effectiveOpacity * (isLightBg ? 1.15 : 0.72)));
+  const playerOpacity = Math.min(0.96, Math.max(0.58, effectiveOpacity + 0.22));
+  const surfaceBackground = mixHexColors(averageBackground, cardBgHex, cardOpacity);
+  const surfaceTextColor = pickReadableText(surfaceBackground, textColor);
+  const surfaceIsLight = getLuminance(surfaceBackground) > 0.42;
+  const borderAlpha = surfaceIsLight ? 0.2 : 0.16;
 
-  // Enforce a minimum opacity threshold (0.18) so panels never completely vanish
-  const effectiveOpacity = Math.max(theme.opacity !== undefined ? theme.opacity : 0.45, 0.18);
+  root.style.setProperty('--card-bg', hexToRgba(cardBgHex, cardOpacity));
+  root.style.setProperty('--card-border', hexToRgba(surfaceTextColor, borderAlpha));
+  root.style.setProperty('--card-hover-bg', hexToRgba(cardBgHex, Math.min(0.9, cardOpacity + 0.1)));
+  root.style.setProperty('--card-hover-border', hexToRgba(surfaceTextColor, surfaceIsLight ? 0.32 : 0.28));
+  root.style.setProperty('--surface-elevated', hexToRgba(cardBgHex, Math.min(0.94, cardOpacity + 0.16)));
+  root.style.setProperty('--panel-bg', hexToRgba(cardBgHex, Math.min(0.88, cardOpacity + 0.08)));
+  root.style.setProperty('--surface-text-color', surfaceTextColor);
+  root.style.setProperty('--surface-text-dim', hexToRgba(surfaceTextColor, 0.68));
+  root.style.setProperty('--player-bg', hexToRgba(playerBgHex, playerOpacity));
 
-  root.style.setProperty('--player-bg', hexToRgba(playerBgHex, effectiveOpacity));
-  root.style.setProperty('--player-border', hexToRgba(playerBgHex, effectiveOpacity * 0.15));
-  root.style.setProperty('--card-bg', hexToRgba(cardBgHex, effectiveOpacity * 0.15));
-  root.style.setProperty('--card-border', hexToRgba(cardBgHex, effectiveOpacity * 0.2));
-  root.style.setProperty('--card-hover-bg', hexToRgba(cardBgHex, effectiveOpacity * 0.3));
-  root.style.setProperty('--card-hover-border', hexToRgba(cardBgHex, effectiveOpacity * 0.5));
-  if (isDarkBg) {
-    root.style.setProperty('--panel-bg', `rgba(0, 0, 0, ${theme.opacity * 0.4})`);
-  } else {
-    root.style.setProperty('--panel-bg', `rgba(255, 255, 255, ${theme.opacity * 0.4})`);
-  }
+  const playerBackground = mixHexColors(averageBackground, playerBgHex, playerOpacity);
+  const playerIsLight = getLuminance(playerBackground) > 0.42;
+  const playerTextColor = pickReadableText(playerBackground, null);
+  root.style.setProperty('--player-border', hexToRgba(playerTextColor, 0.16));
+  root.style.setProperty('--player-text-color', playerTextColor);
+  root.style.setProperty('--player-text-dim', playerIsLight ? 'rgba(17, 17, 22, 0.62)' : 'rgba(247, 247, 250, 0.62)');
+
+  const accentColorHex = theme.accentColor;
   root.style.setProperty('--accent-color', accentColorHex);
+  const onAccent = pickReadableText(accentColorHex, null);
+  root.style.setProperty('--on-accent', onAccent);
+  root.style.setProperty('--play-main-bg', accentColorHex);
+  root.style.setProperty('--play-main-color', onAccent);
+  root.style.setProperty('--primary-btn-bg', accentColorHex);
+  root.style.setProperty('--primary-btn-color', onAccent);
+  root.style.setProperty('--focus-ring', hexToRgba(accentColorHex, 0.72));
+  root.style.setProperty('--wallpaper-scrim', isLightBg ? 'rgba(255, 255, 255, 0.48)' : 'rgba(2, 3, 8, 0.46)');
+  const statusPalette = surfaceIsLight
+    ? { info: '#005eb8', success: '#146c35', warning: '#875000', error: '#b52b25' }
+    : { info: '#74b7ff', success: '#5bd98b', warning: '#ffc166', error: '#ff7b72' };
+  Object.entries(statusPalette).forEach(([name, color]) => root.style.setProperty(`--status-${name}`, color));
 
-  const glowColorHex = theme.glowColor || '#ffffff';
-  const glowAlpha = theme.glow !== undefined ? theme.glow : 0.05;
+  const glowColorHex = theme.glowColor;
+  const glowAlpha = theme.glow;
   const glowColorRgba = hexToRgba(glowColorHex, glowAlpha);
   root.style.setProperty('--glow-color', glowColorRgba);
   root.style.setProperty('--glass-glow', `inset 0 1px 0 0 ${glowColorRgba}`);
 
-  // Redesign dynamic variables exposure
-  const primaryBgColor = theme.bgColor1 || theme.bgColor || '#121218';
-  root.style.setProperty('--bgColor1', primaryBgColor);
-  root.style.setProperty('--glow', theme.glow !== undefined ? theme.glow : 0.05);
-  root.style.setProperty('--blur', `${theme.blur !== undefined ? theme.blur : 28}px`);
+  root.style.setProperty('--bgColor1', bg1);
+  root.style.setProperty('--glow', theme.glow);
+  root.style.setProperty('--blur', `${theme.blur}px`);
   
-  const radius = theme.windowRadius !== undefined ? theme.windowRadius : 12;
-  root.style.setProperty('--window-radius', `${radius}px`);
+  root.style.setProperty('--window-radius', `${theme.windowRadius}px`);
 
-  // Extra Personalization Attributes
   if (theme.fontFamily) {
     loadGoogleFont(theme.fontFamily);
     root.style.setProperty('--font-family', `'${theme.fontFamily}', sans-serif`);
@@ -4730,10 +5441,8 @@ function applyCustomTheme(theme) {
     root.style.setProperty('--font-family', "'Inter', sans-serif");
   }
 
-  const borderWidth = theme.borderWidth !== undefined ? theme.borderWidth : '1px';
-  root.style.setProperty('--border-width', borderWidth);
+  root.style.setProperty('--border-width', theme.borderWidth);
 
-  // Card glass style
   document.body.classList.remove('glass-style-frosted', 'glass-style-material', 'glass-style-flat');
   if (theme.cardStyle && theme.cardStyle !== 'default') {
     document.body.classList.add(`glass-style-${theme.cardStyle}`);
@@ -4752,8 +5461,24 @@ function clearCustomThemeProperties() {
   root.style.removeProperty('--card-hover-border');
   root.style.removeProperty('--player-bg');
   root.style.removeProperty('--player-border');
+  root.style.removeProperty('--player-text-color');
+  root.style.removeProperty('--player-text-dim');
   root.style.removeProperty('--panel-bg');
+  root.style.removeProperty('--surface-elevated');
+  root.style.removeProperty('--surface-text-color');
+  root.style.removeProperty('--surface-text-dim');
   root.style.removeProperty('--accent-color');
+  root.style.removeProperty('--on-accent');
+  root.style.removeProperty('--play-main-bg');
+  root.style.removeProperty('--play-main-color');
+  root.style.removeProperty('--primary-btn-bg');
+  root.style.removeProperty('--primary-btn-color');
+  root.style.removeProperty('--focus-ring');
+  root.style.removeProperty('--wallpaper-scrim');
+  root.style.removeProperty('--status-info');
+  root.style.removeProperty('--status-success');
+  root.style.removeProperty('--status-warning');
+  root.style.removeProperty('--status-error');
   root.style.removeProperty('--glass-glow');
 
   // Clear custom redesign variables
@@ -4792,13 +5517,7 @@ applyTheme(savedTheme);
 
 // Apply Saved Background Effect on Startup
 if (savedTheme === 'custom') {
-  const savedCustom = localStorage.getItem('gp_custom_theme');
-  if (savedCustom) {
-    const custom = JSON.parse(savedCustom);
-    applyBgEffect(custom.bgEffect || 'static');
-  } else {
-    applyBgEffect('static');
-  }
+  applyBgEffect(getStoredCustomTheme().bgEffect);
 } else {
   applyBgEffect('static');
 }
@@ -4843,10 +5562,10 @@ if (isElectron && window.electronAPI && window.electronAPI.onUpdateStatus) {
       updateProgressBar.style.width = '0%';
       updateBanner.classList.remove('hidden');
     } else if (status === 'not-available') {
-      showToastNotification('У вас установлена последняя версия приложения!');
+       showToastNotification('У вас установлена последняя версия приложения.', 'success', 'Обновления');
     } else if (status === 'error') {
       console.error('[Auto-Updater] Error searching for updates:', version);
-      showToastNotification('Ошибка при проверке обновлений.');
+       showToastNotification('Не удалось проверить наличие новой версии.', 'error', 'Обновления');
     }
   });
 
@@ -5303,7 +6022,9 @@ async function initAuth() {
       if (res.status === 200) {
         const data = await res.json();
         if (data.status === 'success') {
+          const previousOwner = getStorageOwnerSuffix();
           currentUser = data.user;
+          if (previousOwner !== getStorageOwnerSuffix()) invalidateHomeRecommendations();
           localStorage.setItem('auth_user', JSON.stringify(currentUser));
           updateHeaderProfileUI();
           await loadLikedTracks();
@@ -5394,6 +6115,7 @@ async function handleAuthSubmit() {
     if (data.status === 'success') {
       token = data.token;
       currentUser = data.user;
+      invalidateHomeRecommendations();
       localStorage.setItem('auth_token', token);
       localStorage.setItem('auth_user', JSON.stringify(currentUser));
 
@@ -5406,6 +6128,7 @@ async function handleAuthSubmit() {
       showToastNotification(isRegistering ? 'Регистрация успешна!' : 'Успешный вход!');
       renderProfileContainer();
       updateHeaderProfileUI();
+      if (activeView === 'home') loadHomeView({ forceRefresh: true });
     } else {
       if (errorEl) {
         errorEl.textContent = data.message || 'Произошла ошибка';
@@ -5430,6 +6153,7 @@ async function handleAuthSubmit() {
 function handleLogout() {
   currentUser = null;
   token = null;
+  invalidateHomeRecommendations();
   localStorage.removeItem('auth_token');
   localStorage.removeItem('auth_user');
 
@@ -5976,6 +6700,7 @@ async function handleModalAuthSubmit() {
     if (data.status === 'success') {
       token = data.token;
       currentUser = data.user;
+      invalidateHomeRecommendations();
       localStorage.setItem('auth_token', token);
       localStorage.setItem('auth_user', JSON.stringify(currentUser));
 
@@ -6125,7 +6850,7 @@ async function loadMutualFriends() {
 }
 
 // Helper to render a horizontal carousel banner
-function renderCarousel(carouselTracks, container = null) {
+function renderCarousel(carouselTracks, container = null, recommendationReason = 'Подобрано для вас') {
   // Clear any old auto-slide interval
   clearInterval(carouselTimer);
   homeCarouselIndex = 0;
@@ -6151,13 +6876,13 @@ function renderCarousel(carouselTracks, container = null) {
       : '';
 
     slidesHTML += `
-      <div class="carousel-slide">
+      <div class="carousel-slide" role="group" aria-roledescription="слайд" aria-label="${idx + 1} из ${carouselTracks.length}">
         <div class="carousel-slide-content">
-          <img class="carousel-cover" src="${coverUrl}" alt="${trackTitle}">
+          <img class="carousel-cover" src="${coverUrl}" alt="" loading="${idx === 0 ? 'eager' : 'lazy'}" decoding="async">
           <div class="carousel-details">
-            <span class="carousel-tag">✦ FOR YOU</span>
-            <h3 class="carousel-title">${trackTitle}</h3>
-            <p class="carousel-artist">${trackArtist}</p>
+            <h3 class="carousel-title">${escapeHTML(trackTitle)}</h3>
+            <p class="carousel-artist">${escapeHTML(trackArtist)}</p>
+            <p class="carousel-reason">${escapeHTML(recommendationReason)}</p>
             <div class="carousel-meta">
               <span class="badge ${track.source}">
                 ${track.source === 'soundcloud'
@@ -6170,14 +6895,14 @@ function renderCarousel(carouselTracks, container = null) {
               <span>${track.duration}</span>
             </div>
             <div class="carousel-actions">
-              <button class="carousel-play-now-btn" data-index="${idx}">
+              <button class="carousel-play-now-btn" data-index="${idx}" aria-label="Воспроизвести ${escapeHTML(trackTitle)}">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="margin-left:2px;"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                <span>Play Now</span>
+                <span>Слушать</span>
               </button>
-              <button class="carousel-icon-btn add-btn" data-index="${idx}" title="Add to Playlist">
+              <button class="carousel-icon-btn add-btn" data-index="${idx}" title="Добавить в плейлист" aria-label="Добавить ${escapeHTML(trackTitle)} в плейлист">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
               </button>
-              <button class="carousel-icon-btn like-btn ${isLiked ? 'liked' : ''}" data-index="${idx}" title="Like">
+              <button class="carousel-icon-btn like-btn ${isLiked ? 'liked' : ''}" data-index="${idx}" title="В избранное" aria-label="${isLiked ? 'Убрать из избранного' : 'Добавить в избранное'}" aria-pressed="${isLiked}">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
               </button>
             </div>
@@ -6186,23 +6911,29 @@ function renderCarousel(carouselTracks, container = null) {
       </div>
     `;
 
-    dotsHTML += `<div class="carousel-dot ${idx === 0 ? 'active' : ''}" data-index="${idx}"></div>`;
+    dotsHTML += `<button type="button" class="carousel-dot ${idx === 0 ? 'active' : ''}" data-index="${idx}" aria-label="Показать рекомендацию ${idx + 1}" aria-current="${idx === 0 ? 'true' : 'false'}"></button>`;
   });
 
+  carouselSection.setAttribute('aria-label', 'Главная рекомендация');
   carouselSection.innerHTML = `
     <div class="carousel-container">
       <div class="carousel-wrapper" id="carousel-wrapper" style="display:flex; transition: transform 0.5s ease-in-out; width: 100%;">
         ${slidesHTML}
       </div>
     </div>
-    <button class="carousel-nav-btn prev" id="carousel-prev">
+    <button class="carousel-nav-btn prev" id="carousel-prev" aria-label="Предыдущая рекомендация">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
     </button>
-    <button class="carousel-nav-btn next" id="carousel-next">
+    <button class="carousel-nav-btn next" id="carousel-next" aria-label="Следующая рекомендация">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
     </button>
-    <div class="carousel-dots" id="carousel-dots">
-      ${dotsHTML}
+    <div class="carousel-dots-wrap">
+      <div class="carousel-dots" id="carousel-dots">
+        ${dotsHTML}
+      </div>
+      <button type="button" class="carousel-pause-btn" aria-label="Приостановить автоматическую смену рекомендаций" aria-pressed="false">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+      </button>
     </div>
   `;
 
@@ -6212,27 +6943,70 @@ function renderCarousel(carouselTracks, container = null) {
 
   const wrapper = carouselSection.querySelector('#carousel-wrapper');
   const dots = carouselSection.querySelectorAll('.carousel-dot');
+  const slides = carouselSection.querySelectorAll('.carousel-slide');
+  const pauseButton = carouselSection.querySelector('.carousel-pause-btn');
+  slides.forEach((slide, index) => {
+    const thumbnail = carouselTracks[index]?.thumbnail;
+    if (!thumbnail) return;
+    const artUrl = `${BACKEND_URL}/cover?url=${encodeURIComponent(thumbnail)}`;
+    slide.style.setProperty('--carousel-art', `url("${artUrl}")`);
+  });
 
   const updateCarousel = (newIdx) => {
     if (!carouselTracks.length) return;
     homeCarouselIndex = (newIdx + carouselTracks.length) % carouselTracks.length;
     wrapper.style.transform = `translateX(-${homeCarouselIndex * 100}%)`;
+    slides.forEach((slide, slideIndex) => {
+      const isActiveSlide = slideIndex === homeCarouselIndex;
+      slide.setAttribute('aria-hidden', String(!isActiveSlide));
+      slide.inert = !isActiveSlide;
+    });
     dots.forEach((dot, dIdx) => {
       dot.classList.toggle('active', dIdx === homeCarouselIndex);
+      dot.setAttribute('aria-current', String(dIdx === homeCarouselIndex));
     });
   };
 
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const hasMultipleSlides = carouselTracks.length > 1;
+  let autoPlayPaused = reduceMotion;
+  const updatePauseButton = () => {
+    pauseButton.setAttribute('aria-pressed', String(autoPlayPaused));
+    pauseButton.setAttribute('aria-label', autoPlayPaused
+      ? 'Возобновить автоматическую смену рекомендаций'
+      : 'Приостановить автоматическую смену рекомендаций');
+    pauseButton.innerHTML = autoPlayPaused
+      ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4v16l12-8z"/></svg>'
+      : '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+  };
   const startAutoSlide = () => {
     clearInterval(carouselTimer);
+    if (autoPlayPaused || reduceMotion || !hasMultipleSlides) return;
     carouselTimer = setInterval(() => {
       updateCarousel(homeCarouselIndex + 1);
     }, 5000);
   };
 
+  carouselSection.querySelector('#carousel-prev').hidden = !hasMultipleSlides;
+  carouselSection.querySelector('#carousel-next').hidden = !hasMultipleSlides;
+  carouselSection.querySelector('.carousel-dots-wrap').hidden = !hasMultipleSlides;
+  pauseButton.hidden = reduceMotion || !hasMultipleSlides;
+  updateCarousel(0);
+  updatePauseButton();
   startAutoSlide();
+  pauseButton.addEventListener('click', () => {
+    autoPlayPaused = !autoPlayPaused;
+    updatePauseButton();
+    if (autoPlayPaused) clearInterval(carouselTimer);
+    else startAutoSlide();
+  });
 
   carouselSection.addEventListener('mouseenter', () => clearInterval(carouselTimer));
   carouselSection.addEventListener('mouseleave', startAutoSlide);
+  carouselSection.addEventListener('focusin', () => clearInterval(carouselTimer));
+  carouselSection.addEventListener('focusout', (event) => {
+    if (!carouselSection.contains(event.relatedTarget)) startAutoSlide();
+  });
 
   carouselSection.querySelector('#carousel-prev').addEventListener('click', () => {
     updateCarousel(homeCarouselIndex - 1);
@@ -6627,20 +7401,46 @@ if (token) {
 
 // ── Mood card definitions ─────────────────────────────────────────
 const MOOD_CARDS = [
-  { key: 'plugg',       title: 'Plugg Vibe',       sub: 'Melodic darkness'   },
-  { key: 'heavy',       title: 'Heavy Session',    sub: 'Hard-hitting 808s'  },
-  { key: 'dark',        title: 'Dark Archive',     sub: 'Forgotten classics' },
-  { key: 'rage',        title: 'Rage / Jerk',      sub: 'High energy chaos'  },
-  { key: 'chill',       title: 'Chill Waves',      sub: 'Smooth & easy'      },
-  { key: 'underground', title: 'Underground Raw',  sub: 'Street certified'   },
-  { key: 'electronic',  title: 'Electronic Zone',  sub: 'Synth & bass'       },
-  { key: 'latenight',   title: 'Late Night R&B',   sub: 'Midnight sessions'  },
-  { key: 'phonk',       title: 'Phonk Drift',      sub: 'Bass boost & speed' },
-  { key: 'jerk',        title: 'Jerk / Jerk-Trap', sub: 'Hypnotic jerky rap' },
-  { key: 'lofi',        title: 'Lofi Relax',       sub: 'Study & sleep vibes'},
-  { key: 'cyber',       title: 'Cyber Synth',      sub: 'Cyberpunk beats'    },
-  { key: 'ambient',     title: 'Ambient Space',    sub: 'Atmospheric relax'  },
+  { key: 'plugg',       title: 'Plugg Vibe',       sub: 'Мелодичный и тёмный' },
+  { key: 'heavy',       title: 'Heavy Session',    sub: 'Тяжёлые 808-е'        },
+  { key: 'dark',        title: 'Dark Archive',     sub: 'Забытые находки'      },
+  { key: 'rage',        title: 'Rage / Jerk',      sub: 'Максимум энергии'     },
+  { key: 'chill',       title: 'Chill Waves',      sub: 'Спокойный поток'      },
+  { key: 'underground', title: 'Underground Raw',  sub: 'Сырой андеграунд'     },
+  { key: 'electronic',  title: 'Electronic Zone',  sub: 'Синты и бас'          },
+  { key: 'latenight',   title: 'Late Night R&B',   sub: 'После полуночи'       },
+  { key: 'phonk',       title: 'Phonk Drift',      sub: 'Скорость и бас'       },
+  { key: 'jerk',        title: 'Jerk / Jerk-Trap', sub: 'Ломаный грув'         },
+  { key: 'lofi',        title: 'Lofi Relax',       sub: 'Учёба и отдых'        },
+  { key: 'cyber',       title: 'Cyber Synth',      sub: 'Неоновая электроника'},
+  { key: 'ambient',     title: 'Ambient Space',    sub: 'Воздух и атмосфера'   },
 ];
+
+function getSpotifyMoodCacheKey(moodKey) {
+  const hourBucket = Math.floor(new Date().getHours() / 3);
+  return `${getStorageOwnerSuffix()}:${moodKey}:${hourBucket}`;
+}
+
+function getFreshSpotifyMoodCache(moodKey) {
+  const cached = spotifyMoodCache.get(getSpotifyMoodCacheKey(moodKey));
+  return cached && Date.now() - cached.createdAt < HOME_RECOMMENDATION_TTL ? cached : null;
+}
+
+function getTrackIdentity(track) {
+  return `${String(track?.artist || '').trim().toLocaleLowerCase('ru')}::${String(track?.title || '').trim().toLocaleLowerCase('ru')}`;
+}
+
+function dedupeTracksByIdentity(tracks, excluded = new Set()) {
+  const seen = new Set(excluded);
+  return (tracks || []).filter((track) => {
+    const identity = getTrackIdentity(track);
+    const idKey = `${track?.source || 'unknown'}:${track?.id}`;
+    if (!track?.id || seen.has(identity) || seen.has(idKey)) return false;
+    seen.add(identity);
+    seen.add(idKey);
+    return true;
+  });
+}
 
 /**
  * Renders the Spotify tab: mood card grid + track results.
@@ -6658,15 +7458,17 @@ function renderSpotifyHome() {
   // 2. Choose a vibe grid
   const gridLabel = document.createElement('div');
   gridLabel.className = 'spotify-home-greeting';
-  gridLabel.textContent = 'Choose a vibe to explore';
+  gridLabel.textContent = 'Выберите настроение';
   container.appendChild(gridLabel);
 
   const grid = document.createElement('div');
   grid.className = 'mood-grid';
 
   MOOD_CARDS.forEach(mood => {
-    const card = document.createElement('div');
+    const card = document.createElement('button');
+    card.type = 'button';
     card.className = `mood-card ${activeSpotifyMood === mood.key ? 'active' : ''}`;
+    card.setAttribute('aria-pressed', String(activeSpotifyMood === mood.key));
     card.innerHTML = `
       <div class="mood-card-active-ring"></div>
       <div class="mood-card-title">${mood.title}</div>
@@ -6675,15 +7477,19 @@ function renderSpotifyHome() {
 
     card.addEventListener('click', async () => {
       // Update active state visually
-      grid.querySelectorAll('.mood-card').forEach(c => c.classList.remove('active'));
+      grid.querySelectorAll('.mood-card').forEach(c => {
+        c.classList.remove('active');
+        c.setAttribute('aria-pressed', 'false');
+      });
       card.classList.add('active');
+      card.setAttribute('aria-pressed', 'true');
       activeSpotifyMood = mood.key;
 
       // Show loading state on this card
       card.classList.add('loading');
 
       await loadSpotifyMoodTracks(mood.key, mood.title, container);
-      card.classList.remove('loading');
+      if (activeSpotifyMood === mood.key) card.classList.remove('loading');
     });
 
     grid.appendChild(card);
@@ -6698,20 +7504,20 @@ function renderSpotifyHome() {
 
   tracksContainer.appendChild(container);
 
-  // If we already have cached tracks for the active mood, draw carousel immediately
-  if (cachedSpotifyTracks && cachedSpotifyTracks.length > 0) {
-    renderCarousel(cachedSpotifyTracks.slice(0, 5), carouselPlaceholder);
-  }
-
   // Auto-load the previously selected mood (or default to first)
   const defaultMood = activeSpotifyMood || MOOD_CARDS[0].key;
+  activeSpotifyMood = defaultMood;
+  const defaultCache = getFreshSpotifyMoodCache(defaultMood);
+  if (defaultCache?.moodTracks?.length) {
+    renderCarousel(defaultCache.moodTracks.slice(0, 5), carouselPlaceholder);
+  }
   const defaultCard = grid.querySelectorAll('.mood-card')[
     MOOD_CARDS.findIndex(m => m.key === defaultMood)
   ];
   if (defaultCard) {
     defaultCard.classList.add('active');
-    // If no cache or active mood is different, fetch from server
-    if (!cachedSpotifyTracks || activeSpotifyMood !== defaultMood) {
+    defaultCard.setAttribute('aria-pressed', 'true');
+    if (!defaultCache) {
       defaultCard.classList.add('loading');
       const moodDef = MOOD_CARDS.find(m => m.key === defaultMood);
       loadSpotifyMoodTracks(defaultMood, moodDef ? moodDef.title : defaultMood, container)
@@ -6732,12 +7538,16 @@ async function loadSpotifyMoodTracks(moodKey, moodTitle, containerEl, useCacheOn
     document.getElementById('spotify-results-area');
   if (!resultsArea) return;
 
+  const requestVersion = ++spotifyMoodLoadVersion;
+  const ownerAtRequest = getStorageOwnerSuffix();
+  const cacheKey = getSpotifyMoodCacheKey(moodKey);
+  const cached = getFreshSpotifyMoodCache(moodKey);
   let moodTracks = [];
   let dynamicTracks = [];
 
-  if (useCacheOnly && cachedSpotifyTracks && cachedSpotifyDynamicTracks) {
-    moodTracks = cachedSpotifyTracks;
-    dynamicTracks = cachedSpotifyDynamicTracks;
+  if (useCacheOnly && cached) {
+    moodTracks = cached.moodTracks;
+    dynamicTracks = cached.dynamicTracks;
   } else {
     resultsArea.innerHTML = `
       <div style="display: flex; justify-content: center; padding: 40px;">
@@ -6750,8 +7560,8 @@ async function loadSpotifyMoodTracks(moodKey, moodTitle, containerEl, useCacheOn
       
       // Fetch both requests in parallel
       const [moodRes, dynamicRes] = await Promise.all([
-        fetch(`${BACKEND_URL}/spotify/recommendations?mood=${encodeURIComponent(moodKey)}`),
-        fetch(`${BACKEND_URL}/spotify/recommendations?mood=dynamic&hour=${hour}`)
+        fetchWithTimeout(`${BACKEND_URL}/spotify/recommendations?mood=${encodeURIComponent(moodKey)}`),
+        fetchWithTimeout(`${BACKEND_URL}/spotify/recommendations?mood=dynamic&hour=${hour}`)
       ]);
 
       if (!moodRes.ok || !dynamicRes.ok) {
@@ -6764,17 +7574,22 @@ async function loadSpotifyMoodTracks(moodKey, moodTitle, containerEl, useCacheOn
       moodTracks = moodData.results || [];
       dynamicTracks = dynamicData.results || [];
 
-      cachedSpotifyTracks = moodTracks;
-      cachedSpotifyDynamicTracks = dynamicTracks;
+      moodTracks = dedupeTracksByIdentity(moodTracks);
+      const moodIdentities = new Set(moodTracks.flatMap((track) => [getTrackIdentity(track), `${track.source || 'unknown'}:${track.id}`]));
+      dynamicTracks = dedupeTracksByIdentity(dynamicTracks, moodIdentities);
+
+      if (requestVersion !== spotifyMoodLoadVersion || ownerAtRequest !== getStorageOwnerSuffix() || activeSpotifyMood !== moodKey || activeHomeSource !== 'spotify') return;
+      spotifyMoodCache.set(cacheKey, { createdAt: Date.now(), moodTracks, dynamicTracks });
 
       // Update Carousel dynamically with loaded mood tracks
-      const carouselPlaceholder = document.getElementById('spotify-carousel-container');
+      const carouselPlaceholder = containerEl.querySelector('#spotify-carousel-container');
       if (carouselPlaceholder) {
         carouselPlaceholder.innerHTML = '';
         renderCarousel(moodTracks.slice(0, 5), carouselPlaceholder);
       }
     } catch (err) {
       console.error('[Spotify Recommendations] Failed to load tracks:', err.message);
+      if (requestVersion !== spotifyMoodLoadVersion || activeSpotifyMood !== moodKey || activeHomeSource !== 'spotify' || !containerEl.isConnected) return;
       resultsArea.innerHTML = `
         <div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);">
           Не удалось загрузить рекомендации. Попробуйте еще раз.
@@ -6783,6 +7598,8 @@ async function loadSpotifyMoodTracks(moodKey, moodTitle, containerEl, useCacheOn
       return;
     }
   }
+
+  if (requestVersion !== spotifyMoodLoadVersion || ownerAtRequest !== getStorageOwnerSuffix() || activeSpotifyMood !== moodKey || activeHomeSource !== 'spotify' || !containerEl.isConnected) return;
 
   resultsArea.innerHTML = '';
 
@@ -6890,7 +7707,7 @@ async function loadSpotifyMoodTracks(moodKey, moodTitle, containerEl, useCacheOn
     resultsArea.appendChild(recSection);
 
     const recScroller = recSection.querySelector('#spotify-rec-scroller');
-    const recTracks = moodTracks.slice(0, 8);
+    const recTracks = moodTracks.slice(5, 13);
     recTracks.forEach((track, idx) => {
       const card = renderTrackCardHorizontal(track, idx, recTracks);
       recScroller.appendChild(card);
@@ -6906,13 +7723,13 @@ async function loadSpotifyMoodTracks(moodKey, moodTitle, containerEl, useCacheOn
       renderTracks(playlist);
     });
 
-    // Trending section (next 8 tracks)
-    if (moodTracks.length > 8) {
+    // More tracks from the selected mood, kept distinct from the hero and recommendations.
+    if (moodTracks.length > 13) {
       const trendSection = document.createElement('div');
       trendSection.className = 'home-section scrollable';
       trendSection.innerHTML = `
         <div class="home-section-header">
-          <h3>В тренде</h3>
+          <h3>Ещё в этом настроении</h3>
           <a href="#" class="see-all-link" id="see-all-spotify-trend">See all <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg></a>
         </div>
         <div class="scroller-container-outer">
@@ -6925,7 +7742,7 @@ async function loadSpotifyMoodTracks(moodKey, moodTitle, containerEl, useCacheOn
       resultsArea.appendChild(trendSection);
 
       const trendScroller = trendSection.querySelector('#spotify-trend-scroller');
-      const trendTracks = moodTracks.slice(8, 16);
+      const trendTracks = moodTracks.slice(13, 21);
       trendTracks.forEach((track, idx) => {
         const card = renderTrackCardHorizontal(track, idx, trendTracks);
         trendScroller.appendChild(card);
@@ -7184,8 +8001,10 @@ audioPlayer.addEventListener('playing', () => {
 // --- Vibe Engine 2.0: SoundCloud Dynamic recommendations helpers ---
 async function loadSoundCloudDynamicRecommendations(containerEl, forceRefresh = false) {
   if (!containerEl) return;
+  const requestVersion = ++soundCloudDynamicLoadVersion;
+  const ownerAtRequest = getStorageOwnerSuffix();
 
-  if (!forceRefresh && cachedSoundCloudDynamicTracks) {
+  if (!forceRefresh && cachedSoundCloudDynamicTracks && Date.now() - cachedSoundCloudDynamicAt < HOME_RECOMMENDATION_TTL) {
     renderSoundCloudDynamicSection(containerEl, cachedSoundCloudDynamicTracks);
     return;
   }
@@ -7198,7 +8017,7 @@ async function loadSoundCloudDynamicRecommendations(containerEl, forceRefresh = 
 
   try {
     const hour = new Date().getHours();
-    const res = await fetch(`${BACKEND_URL}/spotify/recommendations?mood=dynamic&hour=${hour}`);
+    const res = await fetchWithTimeout(`${BACKEND_URL}/spotify/recommendations?mood=dynamic&hour=${hour}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     
@@ -7213,11 +8032,14 @@ async function loadSoundCloudDynamicRecommendations(containerEl, forceRefresh = 
       };
     });
 
+    if (requestVersion !== soundCloudDynamicLoadVersion || ownerAtRequest !== getStorageOwnerSuffix() || activeView !== 'home' || activeHomeSource !== 'soundcloud' || !containerEl.isConnected) return;
     cachedSoundCloudDynamicTracks = tracks;
+    cachedSoundCloudDynamicAt = Date.now();
     renderSoundCloudDynamicSection(containerEl, tracks);
   } catch (err) {
     console.error('[SoundCloud Dynamic Recs] Failed to load:', err.message);
-    containerEl.innerHTML = ''; // Hide silently on error to not disrupt main UI
+    if (requestVersion !== soundCloudDynamicLoadVersion || activeView !== 'home' || activeHomeSource !== 'soundcloud' || !containerEl.isConnected) return;
+    containerEl.innerHTML = '<div class="inline-error-state compact">Не удалось обновить подборку под настроение.</div>';
   }
 }
 
@@ -7226,22 +8048,22 @@ function renderSoundCloudDynamicSection(containerEl, tracks) {
   if (tracks.length === 0) return;
 
   const currentHour = new Date().getHours();
-  let greeting = "Рекомендации";
+  let timeContext = "Подборка на сейчас";
   if (currentHour >= 6 && currentHour < 12) {
-    greeting = "Доброе утро";
+    timeContext = "Спокойный старт дня";
   } else if (currentHour >= 12 && currentHour < 18) {
-    greeting = "Добрый день";
+    timeContext = "Музыка для дневного ритма";
   } else if (currentHour >= 18 && currentHour < 24) {
-    greeting = "Добрый вечер";
+    timeContext = "Для вечернего настроения";
   } else {
-    greeting = "Доброй ночи";
+    timeContext = "Ночная подборка";
   }
 
   const header = document.createElement('div');
   header.className = 'spotify-section-header';
   header.style.marginTop = '16px';
   header.innerHTML = `
-    <div class="spotify-section-title">${greeting}</div>
+    <div class="home-section-heading"><div class="spotify-section-title">Под настроение</div><p>${timeContext}</p></div>
     <button class="spotify-refresh-btn" id="soundcloud-refresh-btn" title="Обновить рекомендации">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
       <span>Обновить реки</span>
@@ -7254,13 +8076,13 @@ function renderSoundCloudDynamicSection(containerEl, tracks) {
   if (refreshBtn) {
     refreshBtn.addEventListener('click', () => {
       refreshBtn.classList.add('loading');
-      refreshBtn.style.pointerEvents = 'none';
+      refreshBtn.disabled = true;
       loadSoundCloudDynamicRecommendations(containerEl, true)
         .finally(() => {
           const btn = document.getElementById('soundcloud-refresh-btn');
           if (btn) {
             btn.classList.remove('loading');
-            btn.style.pointerEvents = 'auto';
+            btn.disabled = false;
           }
         });
     });
@@ -7413,21 +8235,3 @@ if (playerBarEl) {
   }, { passive: true });
   window.addEventListener('touchend', onDragEnd);
 }
-
-// 4. Window Controls & Mini-Player Global IPC Bindings
-document.querySelectorAll('[data-electron-action]').forEach(btn => {
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const action = btn.dataset.electronAction;
-    if (!window.electronAPI) {
-      if (action === 'toggleMiniPlayer') {
-        document.body.classList.toggle('mini-player-active');
-      }
-      return;
-    }
-    if (action === 'minimize') window.electronAPI.minimize();
-    else if (action === 'maximize') window.electronAPI.maximize();
-    else if (action === 'close') window.electronAPI.close();
-    else if (action === 'toggleMiniPlayer') window.electronAPI.toggleMiniPlayer();
-  });
-});

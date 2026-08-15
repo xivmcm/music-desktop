@@ -5,13 +5,37 @@ const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 const DiscordRPC = require('discord-rpc');
 
-// Configure Chromium DNS-over-HTTPS (DoH) before app ready to bypass DNS blocking in RU (Google + Yandex + AdGuard)
+// Configure Chromium DNS-over-HTTPS (DoH) before app ready to bypass DNS blocking in RU (Cloudflare + Google + Yandex + AdGuard + Quad9)
 app.commandLine.appendSwitch('enable-features', 'DnsOverHttps');
-app.commandLine.appendSwitch('dns-over-https-templates', 'https://dns.google/dns-query,https://common.dot.dns.yandex.net/dns-query,https://dns.adguard-dns.com/dns-query');
+app.commandLine.appendSwitch('dns-over-https-templates', 'https://cloudflare-dns.com/dns-query,https://dns.google/dns-query,https://common.dot.dns.yandex.net/dns-query,https://dns.adguard-dns.com/dns-query,https://dns.quad9.net/dns-query');
 
 // Discord RPC configuration
 let rpcConnected = false;
 let rpcClient = null;
+let mainWindow = null;
+let ipcHandlersRegistered = false;
+const windowStates = new WeakMap();
+const NORMAL_MINIMUM_SIZE = [950, 650];
+
+function getEventWindow(event) {
+  if (!event?.sender || event.sender.isDestroyed()) return null;
+  const window = BrowserWindow.fromWebContents(event.sender);
+  return window && !window.isDestroyed() ? window : null;
+}
+
+function sendToWindow(window, channel, ...args) {
+  if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return;
+  window.webContents.send(channel, ...args);
+}
+
+function getPrimaryWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) return mainWindow;
+  return BrowserWindow.getAllWindows().find(window => !window.isDestroyed()) || null;
+}
+
+function sendToPrimaryWindow(channel, ...args) {
+  sendToWindow(getPrimaryWindow(), channel, ...args);
+}
 
 function initDiscordRPC() {
   const isValidId = DISCORD_CLIENT_ID && /^\d+$/.test(DISCORD_CLIENT_ID) && DISCORD_CLIENT_ID !== "ЗАМЕНИ_МЕНЯ";
@@ -103,58 +127,28 @@ ipcMain.handle('save-theme-background', async (event, payload = {}) => {
   };
 });
 
-function createWindow() {
-  const mainWindow = new BrowserWindow({
-    width: 1100,
-    height: 750,
-    minWidth: 950,
-    minHeight: 650,
-    frame: false,            // Hides default OS frames for custom window layout
-    transparent: true,      // Allows desktop transparency for glassmorphism
-    backgroundColor: '#00000000', // Fully transparent background
-    hasShadow: false,       // Disable DWM shadow quad that creates black borders on Windows
-    thickFrame: false,      // Disable DWM thick frame that creates black quad margins
-    show: false,            // Prevent white flashes on load
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false
-    }
+function registerIpcHandlers() {
+  if (ipcHandlersRegistered) return;
+  ipcHandlersRegistered = true;
+
+  ipcMain.on('window-minimize', (event) => {
+    getEventWindow(event)?.minimize();
   });
 
-  mainWindow.loadFile('index.html');
-
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-  });
-
-  // Notify renderer of window maximize events to toggle rounded corners
-  mainWindow.on('maximize', () => {
-    mainWindow.webContents.send('window-maximized-status', true);
-  });
-
-  mainWindow.on('unmaximize', () => {
-    mainWindow.webContents.send('window-maximized-status', false);
-  });
-
-  // Register IPC listeners for custom title bar controls
-  ipcMain.on('window-minimize', () => {
-    mainWindow.minimize();
-  });
-
-  ipcMain.on('window-maximize', () => {
-    if (mainWindow.isMaximized()) {
-      mainWindow.unmaximize();
+  ipcMain.on('window-maximize', (event) => {
+    const window = getEventWindow(event);
+    if (!window) return;
+    if (window.isMaximized()) {
+      window.unmaximize();
     } else {
-      mainWindow.maximize();
+      window.maximize();
     }
   });
 
-  ipcMain.on('window-close', () => {
-    mainWindow.close();
+  ipcMain.on('window-close', (event) => {
+    getEventWindow(event)?.close();
   });
 
-  // Discord RPC presence handler
   ipcMain.on('update-presence', (event, trackData) => {
     if (!rpcClient || !rpcConnected) return;
 
@@ -178,8 +172,7 @@ function createWindow() {
 
         if (trackData.position !== undefined && trackData.duration) {
           const now = Date.now();
-          const startTimestamp = Math.floor(now - (trackData.position * 1000));
-          activity.startTimestamp = startTimestamp;
+          activity.startTimestamp = Math.floor(now - (trackData.position * 1000));
           if (trackData.duration > trackData.position) {
             activity.endTimestamp = Math.floor(now + ((trackData.duration - trackData.position) * 1000));
           }
@@ -194,82 +187,73 @@ function createWindow() {
     }
   });
 
-  // Mini-player mode handler
-  let isMiniPlayer = false;
-  let normalBounds = null;
+  ipcMain.on('toggle-mini-player', (event) => {
+    const window = getEventWindow(event);
+    const state = window && windowStates.get(window);
+    if (!window || !state) return;
 
-  ipcMain.on('toggle-mini-player', () => {
-    if (!mainWindow) return;
-    isMiniPlayer = !isMiniPlayer;
-    if (isMiniPlayer) {
-      if (!mainWindow.isMaximized()) {
-        normalBounds = mainWindow.getBounds();
-      } else {
-        mainWindow.unmaximize();
-        normalBounds = mainWindow.getBounds();
-      }
-      mainWindow.setResizable(true);
-      mainWindow.setMinimumSize(370, 110);
-      mainWindow.setAlwaysOnTop(true, 'floating');
-      
-      const currentBounds = mainWindow.getBounds();
+    // Debounce toggle requests to prevent rapid duplicate calls
+    if (state.isTogglingMini) return;
+    state.isTogglingMini = true;
+    setTimeout(() => {
+      if (state) state.isTogglingMini = false;
+    }, 250);
+
+    if (state.resizeLockTimer) {
+      clearTimeout(state.resizeLockTimer);
+      state.resizeLockTimer = null;
+    }
+
+    state.isMiniPlayer = !state.isMiniPlayer;
+    if (state.isMiniPlayer) {
+      state.wasMaximized = window.isMaximized();
+      state.normalBounds = state.wasMaximized
+        ? window.getNormalBounds()
+        : window.getBounds();
+      if (state.wasMaximized) window.unmaximize();
+
+      window.setResizable(true);
+      window.setMinimumSize(370, 110);
+      window.setAlwaysOnTop(true, 'floating');
+
+      const currentBounds = window.getBounds();
       const newWidth = 370;
       const newHeight = 110;
       const newX = Math.round(currentBounds.x + (currentBounds.width - newWidth) / 2);
       const newY = Math.round(currentBounds.y + (currentBounds.height - newHeight) / 2);
+      window.setBounds({ x: newX, y: newY, width: newWidth, height: newHeight });
 
-      mainWindow.setBounds({ x: newX, y: newY, width: newWidth, height: newHeight });
-      
-      setTimeout(() => {
-        if (mainWindow && isMiniPlayer) {
-          mainWindow.setResizable(false);
+      state.resizeLockTimer = setTimeout(() => {
+        state.resizeLockTimer = null;
+        if (!window.isDestroyed() && state.isMiniPlayer) {
+          window.setResizable(false);
         }
-      }, 80);
+      }, 100);
 
-      mainWindow.webContents.send('mini-player-toggled', true);
-    } else {
-      mainWindow.setResizable(true);
-      mainWindow.setMinimumSize(800, 600);
-      mainWindow.setAlwaysOnTop(false);
-      
-      if (normalBounds) {
-        mainWindow.setBounds(normalBounds);
-      } else {
-        mainWindow.setSize(1100, 750);
-        mainWindow.center();
-      }
-      mainWindow.webContents.send('mini-player-toggled', false);
+      sendToWindow(window, 'mini-player-toggled', true);
+      return;
     }
+
+    window.setResizable(true);
+    window.setMinimumSize(...NORMAL_MINIMUM_SIZE);
+    window.setAlwaysOnTop(false);
+
+    if (state.normalBounds) {
+      window.setBounds(state.normalBounds);
+    } else {
+      window.setSize(1100, 750);
+      window.center();
+    }
+    sendToWindow(window, 'mini-player-toggled', false);
+
+    if (state.wasMaximized) {
+      setImmediate(() => {
+        if (!window.isDestroyed() && !state.isMiniPlayer) window.maximize();
+      });
+    }
+    state.wasMaximized = false;
   });
 
-  // Auto-Updater configuration
-  autoUpdater.autoDownload = false;
-
-  autoUpdater.on('checking-for-update', () => {
-    mainWindow.webContents.send('update-status', 'checking');
-  });
-
-  autoUpdater.on('update-available', (info) => {
-    mainWindow.webContents.send('update-status', 'available', info.version);
-  });
-
-  autoUpdater.on('update-not-available', () => {
-    mainWindow.webContents.send('update-status', 'not-available');
-  });
-
-  autoUpdater.on('error', (err) => {
-    mainWindow.webContents.send('update-status', 'error', err.message);
-  });
-
-  autoUpdater.on('download-progress', (progressObj) => {
-    mainWindow.webContents.send('update-progress', progressObj.percent);
-  });
-
-  autoUpdater.on('update-downloaded', () => {
-    mainWindow.webContents.send('update-ready');
-  });
-
-  // IPC listener for downloads and installation requests
   ipcMain.on('download-update', () => {
     autoUpdater.downloadUpdate();
   });
@@ -277,31 +261,106 @@ function createWindow() {
   ipcMain.on('install-update', () => {
     try {
       app.removeAllListeners('window-all-closed');
-      const browserWindows = BrowserWindow.getAllWindows();
-      browserWindows.forEach(win => {
-        if (!win.isDestroyed()) win.destroy();
+      BrowserWindow.getAllWindows().forEach(window => {
+        if (!window.isDestroyed()) window.destroy();
       });
-    } catch (e) {
-      console.error('[Auto-Updater] Error destroying windows prior to install:', e);
+    } catch (error) {
+      console.error('[Auto-Updater] Error destroying windows prior to install:', error);
     }
     setImmediate(() => {
       autoUpdater.quitAndInstall(false, true);
     });
   });
 
-  ipcMain.on('check-for-updates', () => {
+  ipcMain.on('check-for-updates', (event) => {
+    const window = getEventWindow(event);
     autoUpdater.checkForUpdates().catch(err => {
-      mainWindow.webContents.send('update-status', 'error', err.message);
+      sendToWindow(window, 'update-status', 'error', err.message);
     });
   });
 
-  // Check for updates shortly after app shows up
-  mainWindow.once('ready-to-show', () => {
-    setTimeout(() => {
+  autoUpdater.autoDownload = false;
+  autoUpdater.on('checking-for-update', () => {
+    sendToPrimaryWindow('update-status', 'checking');
+  });
+  autoUpdater.on('update-available', (info) => {
+    sendToPrimaryWindow('update-status', 'available', info.version);
+  });
+  autoUpdater.on('update-not-available', () => {
+    sendToPrimaryWindow('update-status', 'not-available');
+  });
+  autoUpdater.on('error', (err) => {
+    sendToPrimaryWindow('update-status', 'error', err.message);
+  });
+  autoUpdater.on('download-progress', (progressObj) => {
+    sendToPrimaryWindow('update-progress', progressObj.percent);
+  });
+  autoUpdater.on('update-downloaded', () => {
+    sendToPrimaryWindow('update-ready');
+  });
+}
+
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1100,
+    height: 750,
+    minWidth: 950,
+    minHeight: 650,
+    frame: false,            // Hides default OS frames for custom window layout
+    transparent: true,      // Allows desktop transparency for glassmorphism
+    backgroundColor: '#00000000', // Fully transparent background
+    hasShadow: false,       // Disable DWM shadow quad that creates black borders on Windows
+    thickFrame: false,      // Disable DWM thick frame that creates black quad margins
+    show: false,            // Prevent white flashes on load
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+  const window = mainWindow;
+  const state = {
+    isMiniPlayer: false,
+    normalBounds: null,
+    wasMaximized: false,
+    resizeLockTimer: null,
+    updateCheckTimer: null
+  };
+  windowStates.set(window, state);
+
+  window.loadFile('index.html');
+
+  window.once('ready-to-show', () => {
+    window.show();
+    state.updateCheckTimer = setTimeout(() => {
+      state.updateCheckTimer = null;
+      if (window.isDestroyed()) return;
       autoUpdater.checkForUpdatesAndNotify().catch(err => {
         console.error('[Auto-Updater Error] Fail to search for updates:', err);
       });
     }, 4000);
+  });
+
+  // Notify renderer of window maximize events to toggle rounded corners
+  window.on('maximize', () => {
+    sendToWindow(window, 'window-maximized-status', true);
+  });
+
+  window.on('unmaximize', () => {
+    sendToWindow(window, 'window-maximized-status', false);
+  });
+
+  // A renderer reload must not leave a 370x110 window showing the full layout.
+  window.webContents.on('did-finish-load', () => {
+    sendToWindow(window, 'mini-player-toggled', state.isMiniPlayer);
+  });
+
+  // Mini-player state is owned by the window and controlled by the one-time IPC handlers.
+  window.on('closed', () => {
+    if (state.resizeLockTimer) clearTimeout(state.resizeLockTimer);
+    if (state.updateCheckTimer) clearTimeout(state.updateCheckTimer);
+    windowStates.delete(window);
+    if (mainWindow === window) mainWindow = null;
   });
 }
 
@@ -312,9 +371,11 @@ app.whenReady().then(() => {
       app.configureHostResolver({
         secureDnsMode: 'secure',
         secureDnsServers: [
+          'https://cloudflare-dns.com/dns-query',
           'https://dns.google/dns-query',
           'https://common.dot.dns.yandex.net/dns-query',
-          'https://dns.adguard-dns.com/dns-query'
+          'https://dns.adguard-dns.com/dns-query',
+          'https://dns.quad9.net/dns-query'
         ]
       });
       console.log('[DNS-over-HTTPS] Secure DoH host resolver configured successfully.');
@@ -324,6 +385,7 @@ app.whenReady().then(() => {
   }
 
   initDiscordRPC();
+  registerIpcHandlers();
   createWindow();
 
   app.on('activate', () => {

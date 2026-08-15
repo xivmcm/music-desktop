@@ -478,6 +478,24 @@ const DirectSoundCloudEngine = {
       console.warn('[Direct SC Engine] Direct stream resolution failed:', err.message);
     }
     return null;
+  },
+
+  async getHomeSections() {
+    const categories = [
+      { key: 'trending', q: 'top tracks chart hits' },
+      { key: 'top', q: 'popular hits soundcloud' },
+      { key: 'electronic', q: 'phonk wave electronic dance' },
+      { key: 'rock', q: 'rock indie alternative' },
+      { key: 'pop', q: 'pop r&b acoustic chill' }
+    ];
+    const sections = { trending: [], top: [], electronic: [], rock: [], pop: [] };
+    await Promise.allSettled(categories.map(async (cat) => {
+      try {
+        const tracks = await this.search(cat.q, 14, 0);
+        sections[cat.key] = tracks;
+      } catch (e) {}
+    }));
+    return sections;
   }
 };
 
@@ -1445,7 +1463,7 @@ function initSplashScreen() {
       console.warn('[Splash Screen] Emergency safety timeout (10s). Forcing app entry.');
       splashEl.classList.add('fade-out');
       setTimeout(() => splashEl.style.display = 'none', 600);
-      showToastNotification('Сервер ответил с задержкой, попробуй перезайти в плеер пока он не заработает', 'warning', 'Подключение');
+      showToastNotification('Автономный режим активен', 'info', 'Плеер');
     }
   }, 10000);
 }
@@ -2131,15 +2149,28 @@ async function loadForYouTracks({ forceRefresh = false } = {}) {
   const selectedSeeds = rotatedSeeds.slice(0, Math.min(3, rotatedSeeds.length));
 
   const requests = selectedSeeds.map(async (seed) => {
-    const params = seed.trackId
-      ? `trackId=${encodeURIComponent(seed.trackId)}`
-      : seed.artistId
-        ? `artistId=${encodeURIComponent(seed.artistId)}`
-        : `q=${encodeURIComponent(seed.query)}`;
-    const response = await fetchWithTimeout(`${BACKEND_URL}/search/related?${params}`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json();
-    return data.status === 'success' && Array.isArray(data.results) ? data.results : [];
+    try {
+      const params = seed.trackId
+        ? `trackId=${encodeURIComponent(seed.trackId)}`
+        : seed.artistId
+          ? `artistId=${encodeURIComponent(seed.artistId)}`
+          : `q=${encodeURIComponent(seed.query)}`;
+      const response = await fetchWithTimeout(`${BACKEND_URL}/search/related?${params}`, {}, 2500);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'success' && Array.isArray(data.results) && data.results.length > 0) {
+          return data.results;
+        }
+      }
+    } catch (e) {}
+
+    // Fallback to direct SoundCloud search
+    try {
+      const searchQuery = seed.query || seed.title || seed.artist || 'trending music';
+      return await DirectSoundCloudEngine.search(searchQuery, 8);
+    } catch (err) {
+      return [];
+    }
   });
 
   const settled = await Promise.allSettled(requests);
@@ -3146,17 +3177,45 @@ async function loadHomeView({ forceRefresh = false } = {}) {
 
   try {
     const homeUrl = `${BACKEND_URL}/search/home${forceRefresh ? `?refresh=${Date.now()}` : ''}`;
-    const [homeResult, forYouResult] = await Promise.allSettled([
-      fetchWithTimeout(homeUrl).then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      }),
-      loadForYouTracks({ forceRefresh })
-    ]);
+    let homeRes = null;
+    let forYouData = null;
+
+    try {
+      const [homeResult, forYouResult] = await Promise.allSettled([
+        fetchWithTimeout(homeUrl, {}, 2500).then(r => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        }),
+        loadForYouTracks({ forceRefresh })
+      ]);
+      homeRes = homeResult.status === 'fulfilled' ? homeResult.value : null;
+      forYouData = forYouResult.status === 'fulfilled' ? forYouResult.value : cachedForYouData;
+    } catch (e) {}
+
+    // Fallback: If backend is slow, sleeping or blocked, load directly via DirectSoundCloudEngine
+    if (!homeRes || homeRes.status !== 'success' || !homeRes.results) {
+      console.log('[Home View] Backend unavailable, loading home sections directly from SoundCloud...');
+      try {
+        const directSections = await DirectSoundCloudEngine.getHomeSections();
+        homeRes = {
+          status: 'success',
+          results: directSections
+        };
+        if (!forYouData || !forYouData.tracks || forYouData.tracks.length === 0) {
+          forYouData = {
+            source: '🔥 Популярные треки прямо сейчас',
+            tracks: directSections.trending || directSections.top || [],
+            personalized: false,
+            signals: []
+          };
+        }
+      } catch (err) {
+        console.error('[Home View] DirectSoundCloudEngine home failed:', err.message);
+      }
+    }
+
     if (requestVersion !== homeLoadVersion || activeView !== 'home') return;
 
-    const homeRes = homeResult.status === 'fulfilled' ? homeResult.value : null;
-    const forYouData = forYouResult.status === 'fulfilled' ? forYouResult.value : cachedForYouData;
     loadingIndicator.classList.add('hidden');
 
     if (homeRes?.status === 'success' && homeRes.results) {
@@ -3168,9 +3227,8 @@ async function loadHomeView({ forceRefresh = false } = {}) {
       cachedForYouData = forYouData || cachedForYouData;
       renderHome(originalHomeData, cachedForYouData);
       tracksContainer.classList.remove('hidden');
-      showToastNotification('Показываем сохранённую подборку. Новые данные пока недоступны.', 'warning', 'Home');
     } else {
-      tracksContainer.innerHTML = '<div class="welcome-state"><h2>Не удалось загрузить рекомендации</h2><p>Пожалуйста, проверьте соединение с бэкендом</p></div>';
+      tracksContainer.innerHTML = '<div class="welcome-state"><h2>Не удалось загрузить рекомендации</h2><p>Пожалуйста, проверьте подключение к интернету</p></div>';
       tracksContainer.classList.remove('hidden');
     }
     updateActiveTab('home');
@@ -3178,7 +3236,7 @@ async function loadHomeView({ forceRefresh = false } = {}) {
     if (requestVersion !== homeLoadVersion || activeView !== 'home') return;
     console.error('[Renderer] Failed to load home screen recommendations:', error);
     loadingIndicator.classList.add('hidden');
-    tracksContainer.innerHTML = '<div class="welcome-state"><h2>Не удалось подключиться к серверу</h2><p>Проверьте соединение с интернетом</p></div>';
+    tracksContainer.innerHTML = '<div class="welcome-state"><h2>Не удалось загрузить рекомендации</h2><p>Проверьте соединение с интернетом</p></div>';
     tracksContainer.classList.remove('hidden');
     updateActiveTab('home');
   } finally {
@@ -3366,12 +3424,25 @@ function renderHome(sectionsData, forYouData) {
         contentArea.innerHTML = '<div style="display: flex; justify-content: center; padding: 50px;"><div class="spinner"></div></div>';
       }
       try {
-        const response = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(tag)}`);
+        let scTracks = [];
+        try {
+          const response = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(tag)}`, {}, 2500);
+          if (response.ok) {
+            const result = await response.json();
+            if (result.status === 'success' && result.results) {
+              scTracks = result.results.filter(t => t.source === activeHomeSource);
+            }
+          }
+        } catch (e) {}
+
+        if (scTracks.length === 0 && activeHomeSource === 'soundcloud') {
+          try {
+            scTracks = await DirectSoundCloudEngine.search(tag, 20);
+          } catch (scErr) {}
+        }
+
         if (genreRenderVersion !== myVersion || activeView !== 'home' || activeGenreChip !== tag || !contentArea?.isConnected) return;
-        const result = await response.json();
-        if (genreRenderVersion !== myVersion || activeView !== 'home' || activeGenreChip !== tag || !contentArea?.isConnected) return;
-        if (result.status === 'success' && result.results) {
-          const scTracks = result.results.filter(t => t.source === activeHomeSource);
+        if (scTracks.length > 0) {
           renderGenreTracks(scTracks, tag);
         } else {
           if (contentArea) {
@@ -3379,7 +3450,6 @@ function renderHome(sectionsData, forYouData) {
           }
         }
       } catch (err) {
-        console.error(err);
         if (genreRenderVersion === myVersion && activeView === 'home' && activeGenreChip === tag && contentArea?.isConnected) {
           contentArea.innerHTML = '<div class="inline-error-state">Не удалось загрузить жанр. Проверьте соединение и повторите попытку.</div>';
         }
@@ -8017,29 +8087,45 @@ async function loadSoundCloudDynamicRecommendations(containerEl, forceRefresh = 
 
   try {
     const hour = new Date().getHours();
-    const res = await fetchWithTimeout(`${BACKEND_URL}/spotify/recommendations?mood=dynamic&hour=${hour}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    
-    // Tag results as source: 'soundcloud' instead of 'spotify'
-    const tracks = (data.results || []).map(t => {
-      // If the ID contains the spotify composite prefix, extract the raw SoundCloud ID
-      const rawId = t.id.startsWith('spotify_track:') ? t.id.split(':').slice(3).join(':') : t.id;
-      return {
-        ...t,
-        id: rawId,
-        source: 'soundcloud'
-      };
-    });
+    let tracks = [];
+    try {
+      const res = await fetchWithTimeout(`${BACKEND_URL}/spotify/recommendations?mood=dynamic&hour=${hour}`, {}, 2500);
+      if (res.ok) {
+        const data = await res.json();
+        tracks = (data.results || []).map(t => {
+          const rawId = t.id.startsWith('spotify_track:') ? t.id.split(':').slice(3).join(':') : t.id;
+          return {
+            ...t,
+            id: rawId,
+            source: 'soundcloud'
+          };
+        });
+      }
+    } catch (e) {}
+
+    // Fallback to direct time-of-day search
+    if (tracks.length === 0) {
+      let timeQuery = 'chill beats';
+      if (hour >= 6 && hour < 12) timeQuery = 'morning acoustic chill';
+      else if (hour >= 12 && hour < 18) timeQuery = 'day electronic dance hits';
+      else if (hour >= 18 && hour < 24) timeQuery = 'evening chillout wave';
+      else timeQuery = 'night lofi beats';
+      try {
+        tracks = await DirectSoundCloudEngine.search(timeQuery, 10);
+      } catch (scErr) {}
+    }
 
     if (requestVersion !== soundCloudDynamicLoadVersion || ownerAtRequest !== getStorageOwnerSuffix() || activeView !== 'home' || activeHomeSource !== 'soundcloud' || !containerEl.isConnected) return;
-    cachedSoundCloudDynamicTracks = tracks;
-    cachedSoundCloudDynamicAt = Date.now();
-    renderSoundCloudDynamicSection(containerEl, tracks);
+    if (tracks.length > 0) {
+      cachedSoundCloudDynamicTracks = tracks;
+      cachedSoundCloudDynamicAt = Date.now();
+      renderSoundCloudDynamicSection(containerEl, tracks);
+    } else {
+      containerEl.innerHTML = '';
+    }
   } catch (err) {
-    console.error('[SoundCloud Dynamic Recs] Failed to load:', err.message);
     if (requestVersion !== soundCloudDynamicLoadVersion || activeView !== 'home' || activeHomeSource !== 'soundcloud' || !containerEl.isConnected) return;
-    containerEl.innerHTML = '<div class="inline-error-state compact">Не удалось обновить подборку под настроение.</div>';
+    containerEl.innerHTML = '';
   }
 }
 

@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.17.3';
+const APP_VERSION = '1.17.4';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -7946,8 +7946,13 @@ async function fetchGeniusLyrics(query) {
   return null;
 }
 
+const LRCLIB_HEADERS = {
+  'User-Agent': 'GlassPlayer/1.17.4 (https://github.com/xivmcm/music-desktop)',
+  'Lrclib-Client': 'GlassPlayer v1.17.4'
+};
+
 /**
- * Multi-tiered lyrics fetcher: LRCLIB (Synced) -> LRCLIB (Search) -> Genius -> SoundCloud Description
+ * Multi-tiered lyrics fetcher: SoundCloud Description -> LRCLIB (Direct) -> LRCLIB (Search) -> LRCLIB (Title-only)
  */
 async function fetchLyricsMultiSource(track) {
   if (!track) throw new Error('No track provided');
@@ -7960,65 +7965,55 @@ async function fetchLyricsMultiSource(track) {
     }
   } catch (e) {}
 
-  const terms = cleanLyricsQuery(track.title, track.artist);
-
-  // 1. LRCLIB direct get
-  try {
-    const params = new URLSearchParams({
-      track_name: terms.title,
-      artist_name: terms.artist
-    });
-    const res = await fetch(`https://lrclib.net/api/get?${params}`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data.syncedLyrics) {
-        const result = { format: 'lrc', lyrics: data.syncedLyrics, source: 'LRCLIB (Караоке)' };
-        try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
-        return result;
-      } else if (data.plainLyrics) {
-        const result = { format: 'plain', plainText: data.plainLyrics, source: 'LRCLIB' };
-        try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
-        return result;
-      }
-    }
-  } catch (e) {}
-
-  // 2. LRCLIB fuzzy search query
-  try {
-    const res = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(terms.query)}`);
-    if (res.ok) {
-      const list = await res.json();
-      if (Array.isArray(list) && list.length > 0) {
-        const best = list.find(item => item.syncedLyrics) || list[0];
-        if (best.syncedLyrics) {
-          const result = { format: 'lrc', lyrics: best.syncedLyrics, source: 'LRCLIB (Караоке)' };
-          try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
-          return result;
-        } else if (best.plainLyrics) {
-          const result = { format: 'plain', plainText: best.plainLyrics, source: 'LRCLIB' };
-          try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
-          return result;
-        }
-      }
-    }
-  } catch (e) {}
-
-  // 3. Genius lyrics search (massive coverage for Russian phonk, underground, rap, indie)
-  const geniusResult = await fetchGeniusLyrics(terms.query);
-  if (geniusResult) {
-    try { localStorage.setItem(cacheKey, JSON.stringify(geniusResult)); } catch (e) {}
-    return geniusResult;
-  }
-
-  // 4. SoundCloud track description
-  if (track.description && track.description.length > 30) {
+  // 1. Instant check: SoundCloud track description (0 ms)
+  if (track.description && track.description.length > 25) {
     const desc = track.description.trim();
-    const lines = desc.split('\n').filter(l => !l.startsWith('http') && !l.startsWith('t.me') && !l.startsWith('vk.com'));
+    const lines = desc.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('http') && !l.startsWith('t.me') && !l.startsWith('vk.com') && !l.startsWith('instagram'));
     if (lines.length >= 3) {
       const result = { format: 'plain', plainText: lines.join('\n'), source: 'SoundCloud Description' };
       try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
       return result;
     }
+  }
+
+  const terms = cleanLyricsQuery(track.title, track.artist);
+
+  // 2. Parallel Fast LRCLIB Queries (Direct Get + Search + Title-only)
+  const queries = [
+    `https://lrclib.net/api/get?${new URLSearchParams({ track_name: terms.title, artist_name: terms.artist })}`,
+    `https://lrclib.net/api/search?q=${encodeURIComponent(terms.query)}`,
+    `https://lrclib.net/api/search?q=${encodeURIComponent(terms.title)}`
+  ];
+
+  for (const url of queries) {
+    try {
+      const res = await fetchWithTimeout(url, { headers: LRCLIB_HEADERS }, 2200);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const best = data.find(item => item.syncedLyrics) || data[0];
+          if (best.syncedLyrics) {
+            const result = { format: 'lrc', lyrics: best.syncedLyrics, source: 'LRCLIB (Караоке)' };
+            try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
+            return result;
+          } else if (best.plainLyrics) {
+            const result = { format: 'plain', plainText: best.plainLyrics, source: 'LRCLIB' };
+            try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
+            return result;
+          }
+        } else if (data && !Array.isArray(data)) {
+          if (data.syncedLyrics) {
+            const result = { format: 'lrc', lyrics: data.syncedLyrics, source: 'LRCLIB (Караоке)' };
+            try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
+            return result;
+          } else if (data.plainLyrics) {
+            const result = { format: 'plain', plainText: data.plainLyrics, source: 'LRCLIB' };
+            try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
+            return result;
+          }
+        }
+      }
+    } catch (e) {}
   }
 
   throw new Error('Текст песни не найден');
@@ -8112,7 +8107,10 @@ async function openLyricsOverlay() {
 
   // Update header and ambient background
   const coverUrl = getOptimalCoverUrl(currentTrack.thumbnail, currentTrack.source);
+  const fallbackCoverUrl = getFallbackCoverUrl(currentTrack.thumbnail);
   if (lyricsCoverEl) {
+    lyricsCoverEl.crossOrigin = 'anonymous';
+    lyricsCoverEl.onerror = () => { lyricsCoverEl.onerror = null; lyricsCoverEl.src = fallbackCoverUrl; };
     lyricsCoverEl.src = coverUrl;
   }
   if (lyricsAmbientBg) {

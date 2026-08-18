@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.17.2';
+const APP_VERSION = '1.17.3';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -354,7 +354,7 @@ async function initApiFailover() {
   }
   console.log('[API Failover] Verifying backend mirrors...');
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 4000);
+  const timeoutId = setTimeout(() => controller.abort(), 1500);
   const checkMirror = async (url) => {
     try {
       const response = await fetch(`${url}/api/health`, { 
@@ -384,121 +384,113 @@ async function initApiFailover() {
 }
 
 // ── Direct SoundCloud Client Engine (Zero-Cost & Anti-Block Fallback) ──────
-const DirectSoundCloudEngine = {
-  clientId: localStorage.getItem('gp_sc_client_id') || 'UMY1dzQ68n2QbCuypNe8JOivmV2FO2Ep',
-  clientIdExpiry: parseInt(localStorage.getItem('gp_sc_client_id_exp') || '0', 10),
-  isFetchingId: false,
+const SC_CLIENT_IDS = [
+  'UMY1dzQ68n2QbCuypNe8JOivmV2FO2Ep',
+  '4tU5e13d0lE3H19F7tK3uX6xLzK8qN5P',
+  'a3e059563d7fd3372b49b37f00a00bcf',
+  '2t9loNfhTwxOgahBDWmll2wHtgSljiq2'
+];
 
-  async getClientId() {
-    if (this.clientId && Date.now() < this.clientIdExpiry) {
-      return this.clientId;
-    }
-    if (this.isFetchingId) {
-      while (this.isFetchingId) {
-        await new Promise(r => setTimeout(r, 100));
-      }
-      return this.clientId || 'UMY1dzQ68n2QbCuypNe8JOivmV2FO2Ep';
-    }
-    this.isFetchingId = true;
-    try {
-      const response = await fetch('https://soundcloud.com', {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
-      });
-      if (!response.ok) throw new Error('Failed to load soundcloud homepage');
-      const html = await response.text();
-      const scriptRegex = /https:\/\/a-v2\.sndcdn\.com\/assets\/[a-zA-Z0-9-_.]+\.js/g;
-      const scriptUrls = html.match(scriptRegex) || [];
-      for (let i = scriptUrls.length - 1; i >= 0; i--) {
-        try {
-          const sRes = await fetch(scriptUrls[i]);
-          if (!sRes.ok) continue;
-          const content = await sRes.text();
-          const match = content.match(/client_id\s*:\s*["']([a-zA-Z0-9]{32})["']/) ||
-                        content.match(/client_id\s*=\s*["']([a-zA-Z0-9]{32})["']/);
-          if (match && match[1]) {
-            this.clientId = match[1];
-            this.clientIdExpiry = Date.now() + 6 * 3600 * 1000;
-            localStorage.setItem('gp_sc_client_id', this.clientId);
-            localStorage.setItem('gp_sc_client_id_exp', String(this.clientIdExpiry));
-            console.log('[Direct SC Engine] Fresh client_id resolved:', this.clientId);
-            break;
-          }
-        } catch (e) {}
-      }
-    } catch (err) {
-      console.warn('[Direct SC Engine] Could not refresh client_id dynamically, using fallback:', err.message);
-      if (!this.clientId) {
-        this.clientId = 'UMY1dzQ68n2QbCuypNe8JOivmV2FO2Ep';
-      }
-    } finally {
-      this.isFetchingId = false;
-    }
-    return this.clientId || 'UMY1dzQ68n2QbCuypNe8JOivmV2FO2Ep';
+const DirectSoundCloudEngine = {
+  clientIndex: 0,
+  clientId: SC_CLIENT_IDS[0],
+
+  getClientId() {
+    return SC_CLIENT_IDS[this.clientIndex % SC_CLIENT_IDS.length];
+  },
+
+  rotateClientId() {
+    this.clientIndex = (this.clientIndex + 1) % SC_CLIENT_IDS.length;
+    this.clientId = SC_CLIENT_IDS[this.clientIndex];
+    console.log('[Direct SC Engine] Rotated to client_id:', this.clientId);
+    return this.clientId;
   },
 
   async search(query, limit = 20, offset = 0) {
-    const clientId = await this.getClientId();
-    const url = `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(query)}&client_id=${clientId}&limit=${limit}&offset=${offset}`;
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    let attempts = 0;
+    while (attempts < SC_CLIENT_IDS.length) {
+      const clientId = this.getClientId();
+      const url = `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(query)}&client_id=${clientId}&limit=${limit}&offset=${offset}`;
+      try {
+        const res = await fetchWithTimeout(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          }
+        }, 5000);
+        if (res.status === 401) {
+          this.rotateClientId();
+          attempts++;
+          continue;
+        }
+        if (!res.ok) throw new Error(`SC Search status: ${res.status}`);
+        const data = await res.json();
+        if (!data || !data.collection) return [];
+        return data.collection.map(track => {
+          const durSec = Math.floor((track.duration || 0) / 1000);
+          const min = Math.floor(durSec / 60);
+          const sec = durSec % 60;
+          return {
+            id: String(track.id),
+            title: track.title || track.display_title || 'Unknown Track',
+            artist: track.user?.username || track.user?.name || track.label_name || 'Unknown Artist',
+            artistId: String(track.user?.id || ''),
+            duration: `${min}:${String(sec).padStart(2, '0')}`,
+            source: 'soundcloud',
+            thumbnail: track.artwork_url || track.user?.avatar_url || '',
+            playbackCount: track.playback_count,
+            playback_count: track.playback_count,
+            media: track.media
+          };
+        });
+      } catch (err) {
+        attempts++;
+        if (attempts >= SC_CLIENT_IDS.length) {
+          console.warn('[Direct SC Engine] Search failed for query:', query, err.message);
+          return [];
+        }
+        this.rotateClientId();
       }
-    });
-    if (res.status === 401) {
-      this.clientIdExpiry = 0;
-      throw new Error('SC 401 Unauthorized');
     }
-    if (!res.ok) throw new Error(`SC Search status: ${res.status}`);
-    const data = await res.json();
-    if (!data || !data.collection) return [];
-    return data.collection.map(track => {
-      const durSec = Math.floor((track.duration || 0) / 1000);
-      const min = Math.floor(durSec / 60);
-      const sec = durSec % 60;
-      return {
-        id: String(track.id),
-        title: track.title || track.display_title || 'Unknown Track',
-        artist: track.user?.username || track.user?.name || track.label_name || 'Unknown Artist',
-        artistId: String(track.user?.id || ''),
-        duration: `${min}:${String(sec).padStart(2, '0')}`,
-        source: 'soundcloud',
-        thumbnail: track.artwork_url || track.user?.avatar_url || '',
-        playbackCount: track.playback_count,
-        playback_count: track.playback_count,
-        media: track.media
-      };
-    });
+    return [];
   },
 
   async resolveStreamUrl(track) {
-    try {
-      const clientId = await this.getClientId();
-      let transcodings = track.media?.transcodings;
-      if (!transcodings) {
-        const detailsRes = await fetch(`https://api-v2.soundcloud.com/tracks/${track.id}?client_id=${clientId}`, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-        });
-        if (detailsRes.ok) {
-          const details = await detailsRes.json();
-          transcodings = details.media?.transcodings;
-        }
-      }
-      if (transcodings && transcodings.length > 0) {
-        const chosen = transcodings.find(t => t.format?.protocol === 'progressive') || transcodings[0];
-        if (chosen?.url) {
-          const streamRes = await fetch(`${chosen.url}?client_id=${clientId}`, {
+    let attempts = 0;
+    while (attempts < SC_CLIENT_IDS.length) {
+      try {
+        const clientId = this.getClientId();
+        let transcodings = track.media?.transcodings;
+        if (!transcodings) {
+          const detailsRes = await fetchWithTimeout(`https://api-v2.soundcloud.com/tracks/${track.id}?client_id=${clientId}`, {
             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-          });
-          if (streamRes.ok) {
-            const streamData = await streamRes.json();
-            if (streamData?.url) return streamData.url;
+          }, 4000);
+          if (detailsRes.ok) {
+            const details = await detailsRes.json();
+            transcodings = details.media?.transcodings;
           }
         }
+        if (transcodings && transcodings.length > 0) {
+          const chosen = transcodings.find(t => t.format?.protocol === 'progressive') || transcodings[0];
+          if (chosen?.url) {
+            const streamRes = await fetchWithTimeout(`${chosen.url}?client_id=${clientId}`, {
+              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+            }, 4000);
+            if (streamRes.status === 401) {
+              this.rotateClientId();
+              attempts++;
+              continue;
+            }
+            if (streamRes.ok) {
+              const streamData = await streamRes.json();
+              if (streamData?.url) return streamData.url;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[Direct SC Engine] Direct stream resolution failed:', err.message);
       }
-    } catch (err) {
-      console.warn('[Direct SC Engine] Direct stream resolution failed:', err.message);
+      attempts++;
+      this.rotateClientId();
     }
     return null;
   },
@@ -803,7 +795,7 @@ async function performSearch() {
 
     // Try backend search with timeout
     try {
-      const response = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&sources=${sourcesStr}&page=1&limit=20`, {}, 4500);
+      const response = await fetchWithTimeout(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}&sources=${sourcesStr}&page=1&limit=20`, {}, 1800);
       if (response.ok) {
         const data = await response.json();
         if (data.status === 'success') {
@@ -2178,7 +2170,7 @@ async function loadForYouTracks({ forceRefresh = false } = {}) {
         : seed.artistId
           ? `artistId=${encodeURIComponent(seed.artistId)}`
           : `q=${encodeURIComponent(seed.query)}`;
-      const response = await fetchWithTimeout(`${BACKEND_URL}/search/related?${params}`, {}, 2500);
+      const response = await fetchWithTimeout(`${BACKEND_URL}/search/related?${params}`, {}, 1500);
       if (response.ok) {
         const data = await response.json();
         if (data.status === 'success' && Array.isArray(data.results) && data.results.length > 0) {
@@ -3205,7 +3197,7 @@ async function loadHomeView({ forceRefresh = false } = {}) {
 
     try {
       const [homeResult, forYouResult] = await Promise.allSettled([
-        fetchWithTimeout(homeUrl, {}, 2500).then(r => {
+        fetchWithTimeout(homeUrl, {}, 1500).then(r => {
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           return r.json();
         }),
@@ -6103,9 +6095,9 @@ async function initAuth() {
 
   if (token) {
     try {
-      const res = await fetch(`${BACKEND_URL}/auth/me`, {
+      const res = await fetchWithTimeout(`${BACKEND_URL}/auth/me`, {
         headers: { 'Authorization': `Bearer ${token}` }
-      });
+      }, 1500);
 
       if (res.status === 200) {
         const data = await res.json();

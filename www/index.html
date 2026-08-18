@@ -49,7 +49,7 @@
   <!-- Sliding Left Sidebar -->
   <aside id="sidebar" class="sidebar">
     <div class="sidebar-header">
-      <div class="sidebar-logo">GLASSPLAYER <span class="app-version-badge">v1.17.1</span></div>
+      <div class="sidebar-logo">GLASSPLAYER <span class="app-version-badge">v1.17.2</span></div>
     </div>
     <nav class="sidebar-menu">
       <button id="home-button" class="sidebar-btn active" title="Home">
@@ -254,15 +254,22 @@
   <!-- Audio Player Core Element -->
   <audio id="audio-player" crossorigin="anonymous"></audio>
 
-  <!-- Lyrics Overlay -->
+  <!-- Lyrics Overlay (Apple Music / Spotify Glassmorphic Style) -->
   <div id="lyrics-overlay" class="lyrics-overlay hidden">
+    <div id="lyrics-ambient-bg" class="lyrics-ambient-bg"></div>
     <div class="lyrics-overlay-header">
-      <div class="lyrics-track-info">
-        <span id="lyrics-track-title" class="lyrics-now-title"></span>
-        <span id="lyrics-track-artist" class="lyrics-now-artist"></span>
+      <div class="lyrics-header-left">
+        <img id="lyrics-track-cover" class="lyrics-header-cover" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23222'/></svg>" alt="">
+        <div class="lyrics-track-info">
+          <div class="lyrics-title-row">
+            <span id="lyrics-track-title" class="lyrics-now-title"></span>
+            <span id="lyrics-source-badge" class="lyrics-source-badge hidden">✨ LRC</span>
+          </div>
+          <span id="lyrics-track-artist" class="lyrics-now-artist"></span>
+        </div>
       </div>
-      <button id="lyrics-close-btn" class="lyrics-close-btn" title="Close Lyrics">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <button id="lyrics-close-btn" class="lyrics-close-btn" title="Закрыть текст песни" aria-label="Закрыть текст песни">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18"></line>
           <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
@@ -271,7 +278,7 @@
     <div id="lyrics-content" class="lyrics-content">
       <div class="lyrics-loading">
         <div class="spinner"></div>
-        <span>Loading lyrics...</span>
+        <span>Поиск текста песни...</span>
       </div>
     </div>
   </div>

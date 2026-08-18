@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.17.1';
+const APP_VERSION = '1.17.2';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -111,6 +111,29 @@ if ('serviceWorker' in navigator && !isElectron) {
       .then(() => console.log('[PWA] Service worker registered'))
       .catch((err) => console.warn('[PWA] Service worker registration failed:', err.message));
   });
+}
+
+// ── Cover Image Anti-Censorship & Zero-Cost CDN Engine ───────────
+const DEFAULT_TRACK_COVER_SVG = 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'><rect width=\'100\' height=\'100\' fill=\'%23222\'/><path d=\'M30 30 L70 50 L30 70 Z\' fill=\'%23444\'/></svg>';
+
+function getOptimalCoverUrl(rawUrl, source = 'soundcloud') {
+  if (!rawUrl) return DEFAULT_TRACK_COVER_SVG;
+  if (rawUrl.startsWith('data:') || rawUrl.startsWith('blob:') || rawUrl.startsWith('assets/')) return rawUrl;
+
+  let directUrl = rawUrl;
+  if (directUrl.includes('-large.')) {
+    directUrl = directUrl.replace('-large.', '-t500x500.');
+  }
+
+  // Primary: DuckDuckGo Image Proxy (extremely fast, stable in RF without VPN, unblocked, 0 bytes on Render)
+  return `https://external-content.duckduckgo.com/iu/?u=${encodeURIComponent(directUrl)}`;
+}
+
+function getFallbackCoverUrl(rawUrl) {
+  if (!rawUrl || rawUrl.startsWith('data:') || rawUrl.startsWith('blob:')) {
+    return DEFAULT_TRACK_COVER_SVG;
+  }
+  return `https://wsrv.nl/?url=${encodeURIComponent(rawUrl)}&w=300&output=webp`;
 }
 
 // App state variables
@@ -987,10 +1010,9 @@ function renderTracks(tracks, container = null, append = false) {
     card.setAttribute('aria-label', `${trackTitle} — ${trackArtist}`);
     const defaultSvgCover = track.source === 'local'
       ? 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'><defs><linearGradient id=\'g\' x1=\'0\' y1=\'0\' x2=\'1\' y2=\'1\'><stop stop-color=\'%23333a4a\'/><stop offset=\'1\' stop-color=\'%23181b24\'/></linearGradient></defs><rect width=\'100\' height=\'100\' rx=\'18\' fill=\'url(%23g)\'/><path d=\'M46 63V35l26-5v27\' fill=\'none\' stroke=\'%23d9dce7\' stroke-width=\'5\' stroke-linecap=\'round\'/><circle cx=\'37\' cy=\'65\' r=\'9\' fill=\'%23d9dce7\'/><circle cx=\'63\' cy=\'58\' r=\'9\' fill=\'%23d9dce7\'/></svg>'
-      : 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'><rect width=\'100\' height=\'100\' fill=\'%23222\'/><path d=\'M30 30 L70 50 L30 70 Z\' fill=\'%23444\'/></svg>';
-    const coverUrl = track.thumbnail
-      ? `${BACKEND_URL}/cover?url=${encodeURIComponent(track.thumbnail)}`
-      : defaultSvgCover;
+      : DEFAULT_TRACK_COVER_SVG;
+    const coverUrl = getOptimalCoverUrl(track.thumbnail, track.source);
+    const fallbackCoverUrl = getFallbackCoverUrl(track.thumbnail);
 
     const isLiked = likedTrackIds.has(track.id);
     const heartIcon = isLiked
@@ -1031,7 +1053,7 @@ function renderTracks(tracks, container = null, append = false) {
 
     card.innerHTML = `
       <div class="track-cover-container">
-        <img src="${coverUrl}" class="card-cover" alt="" loading="lazy" decoding="async">
+        <img src="${coverUrl}" class="card-cover" alt="" loading="lazy" decoding="async" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='${fallbackCoverUrl}';}">
         <div class="cover-overlay">
           <button class="cover-play-btn" title="Воспроизведение/Пауза" aria-label="Воспроизвести или приостановить ${escapeHTML(trackTitle)}">
             ${coverPlayIcon}
@@ -1252,15 +1274,16 @@ function playTrack(index) {
   }
   if (miniCurrentArtist) miniCurrentArtist.textContent = track.artist;
 
-  const coverUrl = track.thumbnail
-    ? (track.thumbnail.startsWith('http') ? track.thumbnail : `${BACKEND_URL}/cover?url=${encodeURIComponent(track.thumbnail)}`)
-    : 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23222"/><path d="M30 30 L70 50 L30 70 Z" fill="%23444"/></svg>';
+  const coverUrl = getOptimalCoverUrl(track.thumbnail, track.source);
+  const fallbackCoverUrl = getFallbackCoverUrl(track.thumbnail);
 
   currentCover.crossOrigin = 'anonymous';
+  currentCover.onerror = () => { currentCover.onerror = null; currentCover.src = fallbackCoverUrl; };
   currentCover.src = coverUrl;
 
   if (miniCurrentCover) {
     miniCurrentCover.crossOrigin = 'anonymous';
+    miniCurrentCover.onerror = () => { miniCurrentCover.onerror = null; miniCurrentCover.src = fallbackCoverUrl; };
     miniCurrentCover.src = coverUrl;
   }
 
@@ -3588,11 +3611,8 @@ function renderTrackCardHorizontal(track, index, sectionTracks) {
 
   const trackTitle = track.title ? track.title.trim() : "Unknown Track";
   const trackArtist = track.artist ? track.artist.trim() : "Unknown Artist";
-  card.setAttribute('aria-label', `${trackTitle} — ${trackArtist}`);
-  const defaultSvgCover = 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'><rect width=\'100\' height=\'100\' fill=\'%23222\'/><path d=\'M30 30 L70 50 L30 70 Z\' fill=\'%23444\'/></svg>';
-  const coverUrl = track.thumbnail
-    ? `${BACKEND_URL}/cover?url=${encodeURIComponent(track.thumbnail)}`
-    : defaultSvgCover;
+  const coverUrl = getOptimalCoverUrl(track.thumbnail, track.source);
+  const fallbackCoverUrl = getFallbackCoverUrl(track.thumbnail);
   
   const isLiked = likedTrackIds.has(track.id);
 
@@ -3606,7 +3626,7 @@ function renderTrackCardHorizontal(track, index, sectionTracks) {
     : `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="margin-left: 2px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
 
   card.innerHTML = `
-    <img src="${coverUrl}" class="card-cover-horizontal" alt="" loading="lazy" decoding="async">
+    <img src="${coverUrl}" class="card-cover-horizontal" alt="" loading="lazy" decoding="async" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='${fallbackCoverUrl}';}">
     <div class="card-details-horizontal">
       <div class="card-title-horizontal">${escapeHTML(trackTitle)}</div>
       <div class="card-artist-horizontal">${escapeHTML(trackArtist)}</div>
@@ -3848,12 +3868,11 @@ function renderArtistProfile(artistData) {
       card.style.flex = '0 0 220px';
       card.style.cursor = 'pointer';
 
-      const plThumbnail = pl.thumbnail
-        ? `${BACKEND_URL}/cover?url=${encodeURIComponent(pl.thumbnail)}`
-        : 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'><rect width=\'100\' height=\'100\' fill=\'%23222\'/></svg>';
+      const plThumbnail = getOptimalCoverUrl(pl.thumbnail);
+      const fallbackPlThumbnail = getFallbackCoverUrl(pl.thumbnail);
 
       card.innerHTML = `
-        <img src="${plThumbnail}" style="width:100%; height:120px; object-fit:cover; border-radius:8px;">
+        <img src="${plThumbnail}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='${fallbackPlThumbnail}';}" style="width:100%; height:120px; object-fit:cover; border-radius:8px;">
         <div class="playlist-card-title" style="margin-top:8px;">${pl.name}</div>
         <div class="playlist-card-count">${pl.tracksCount} треков</div>
       `;
@@ -4495,13 +4514,12 @@ function renderSettings(options = {}) {
       </div>
       <div style="display: flex; flex-direction: column; gap: 8px;">
         ${topTracks.length > 0 ? topTracks.map((track, i) => {
-    const trackCover = track.thumbnail
-      ? `${BACKEND_URL}/cover?url=${encodeURIComponent(track.thumbnail)}`
-      : 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'50\' height=\'50\' viewBox=\'0 0 100 100\'><rect width=\'100\' height=\'100\' fill=\'%23222\'/></svg>';
+    const trackCover = getOptimalCoverUrl(track.thumbnail);
+    const fallbackTrackCover = getFallbackCoverUrl(track.thumbnail);
     return `
             <div style="display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.03); padding: 6px 10px; border-radius: 6px;">
               <div style="font-weight: bold; color: #30d158; width: 15px;">${i + 1}</div>
-              <img src="${trackCover}" style="width: 32px; height: 32px; border-radius: 4px; object-fit: cover;">
+              <img src="${trackCover}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='${fallbackTrackCover}';}" style="width: 32px; height: 32px; border-radius: 4px; object-fit: cover;">
               <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                 <div style="font-weight: 500; font-size: 13px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${track.title}</div>
                 <div style="font-size: 11px; color: rgba(255,255,255,0.5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${track.artist}</div>
@@ -6936,9 +6954,8 @@ function renderCarousel(carouselTracks, container = null, recommendationReason =
   carouselTracks.forEach((track, idx) => {
     const trackTitle = track.title ? track.title.trim() : "Unknown Track";
     const trackArtist = track.artist ? track.artist.trim() : "Unknown Artist";
-    const coverUrl = track.thumbnail
-      ? `${BACKEND_URL}/cover?url=${encodeURIComponent(track.thumbnail)}`
-      : 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'><rect width=\'100\' height=\'100\' fill=\'%23222\'/><path d=\'M30 30 L70 50 L30 70 Z\' fill=\'%23444\'/></svg>';
+    const coverUrl = getOptimalCoverUrl(track.thumbnail, track.source);
+    const fallbackCoverUrl = getFallbackCoverUrl(track.thumbnail);
     const isLiked = likedTrackIds.has(track.id);
 
     const playsText = track.source === 'soundcloud' && (track.playbackCount !== undefined || track.playback_count !== undefined)
@@ -6948,7 +6965,7 @@ function renderCarousel(carouselTracks, container = null, recommendationReason =
     slidesHTML += `
       <div class="carousel-slide" role="group" aria-roledescription="слайд" aria-label="${idx + 1} из ${carouselTracks.length}">
         <div class="carousel-slide-content">
-          <img class="carousel-cover" src="${coverUrl}" alt="" loading="${idx === 0 ? 'eager' : 'lazy'}" decoding="async">
+          <img class="carousel-cover" src="${coverUrl}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='${fallbackCoverUrl}';}" alt="" loading="${idx === 0 ? 'eager' : 'lazy'}" decoding="async">
           <div class="carousel-details">
             <h3 class="carousel-title">${escapeHTML(trackTitle)}</h3>
             <p class="carousel-artist">${escapeHTML(trackArtist)}</p>
@@ -7018,7 +7035,7 @@ function renderCarousel(carouselTracks, container = null, recommendationReason =
   slides.forEach((slide, index) => {
     const thumbnail = carouselTracks[index]?.thumbnail;
     if (!thumbnail) return;
-    const artUrl = `${BACKEND_URL}/cover?url=${encodeURIComponent(thumbnail)}`;
+    const artUrl = getOptimalCoverUrl(thumbnail, carouselTracks[index]?.source);
     slide.style.setProperty('--carousel-art', `url("${artUrl}")`);
   });
 
@@ -7832,15 +7849,188 @@ async function loadSpotifyMoodTracks(moodKey, moodTitle, containerEl, useCacheOn
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  Lyrics Engine
+//  Enhanced Multi-Source Lyrics Engine (LRCLIB + Genius + SoundCloud)
 // ═══════════════════════════════════════════════════════════════════
 
-const lyricsOverlay  = document.getElementById('lyrics-overlay');
-const lyricsContent  = document.getElementById('lyrics-content');
-const lyricsTitleEl  = document.getElementById('lyrics-track-title');
-const lyricsArtistEl = document.getElementById('lyrics-track-artist');
-const lyricsCloseBtn = document.getElementById('lyrics-close-btn');
-const lyricsBtn      = document.getElementById('lyrics-btn');
+const lyricsOverlay       = document.getElementById('lyrics-overlay');
+const lyricsAmbientBg     = document.getElementById('lyrics-ambient-bg');
+const lyricsContent       = document.getElementById('lyrics-content');
+const lyricsTitleEl       = document.getElementById('lyrics-track-title');
+const lyricsArtistEl      = document.getElementById('lyrics-track-artist');
+const lyricsCoverEl       = document.getElementById('lyrics-track-cover');
+const lyricsSourceBadge   = document.getElementById('lyrics-source-badge');
+const lyricsCloseBtn      = document.getElementById('lyrics-close-btn');
+const lyricsBtn           = document.getElementById('lyrics-btn');
+
+/**
+ * Normalizes title and artist strings to maximize hit rate across lyric databases.
+ */
+function cleanLyricsQuery(rawTitle, rawArtist) {
+  let clean = (rawTitle || '').trim();
+  // Strip hashtags, mentions, audio artifacts
+  clean = clean.replace(/#[a-zA-Z0-9_\u0400-\u04FF-]+/g, '');
+  clean = clean.replace(/@([a-zA-Z0-9_.\u0400-\u04FF-]+)/g, '$1');
+  clean = clean.replace(/\((?:prod|feat|ft|prod\.|feat\.|ft\.)[^)]*\)/gi, '');
+  clean = clean.replace(/\[(?:prod|feat|ft|prod\.|feat\.|ft\.)[^\]]*\]/gi, '');
+  clean = clean.replace(/\((?:official|audio|video|lyrics|remix|slowed|reverb|sped up|nightcore)[^)]*\)/gi, '');
+  clean = clean.replace(/\[(?:official|audio|video|lyrics|remix|slowed|reverb|sped up|nightcore)[^\]]*\]/gi, '');
+
+  let parsedArtist = (rawArtist || '').trim();
+  let parsedTitle = clean;
+
+  if (clean.includes(' - ')) {
+    const parts = clean.split(' - ');
+    parsedArtist = parts[0].trim();
+    parsedTitle = parts.slice(1).join(' - ').trim();
+  } else if (clean.includes(' — ')) {
+    const parts = clean.split(' — ');
+    parsedArtist = parts[0].trim();
+    parsedTitle = parts.slice(1).join(' — ').trim();
+  }
+
+  parsedTitle = parsedTitle.replace(/^[+\s\-_/\\:]+/, '').trim();
+  parsedArtist = parsedArtist.replace(/^[+\s\-_/\\:]+/, '').trim();
+
+  return {
+    title: parsedTitle || rawTitle,
+    artist: parsedArtist || rawArtist,
+    query: `${parsedArtist} ${parsedTitle}`.trim()
+  };
+}
+
+/**
+ * Searches Genius for lyrics of underground, phonk, rap or pop songs.
+ */
+async function fetchGeniusLyrics(query) {
+  try {
+    const searchUrl = `https://genius.com/api/search/multi?per_page=5&q=${encodeURIComponent(query)}`;
+    const res = await fetch(searchUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const sections = data.response?.sections || [];
+    const songSection = sections.find(s => s.type === 'song' || s.type === 'top_hit');
+    const hits = songSection?.hits || [];
+    if (!hits.length) return null;
+
+    const bestHit = hits[0].result;
+    if (!bestHit?.url) return null;
+
+    // Fetch page HTML to extract lyrics
+    const pageRes = await fetch(bestHit.url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    });
+    if (!pageRes.ok) return null;
+
+    const html = await pageRes.text();
+    const containerRegex = /<div[^>]*data-lyrics-container="true"[^>]*>([\s\S]*?)<\/div>/g;
+    let match;
+    let lyricsText = '';
+    while ((match = containerRegex.exec(html)) !== null) {
+      let chunk = match[1];
+      chunk = chunk.replace(/<br\s*[\/]?>/gi, '\n');
+      chunk = chunk.replace(/<[^>]+>/g, '');
+      lyricsText += chunk + '\n';
+    }
+    lyricsText = lyricsText
+      .replace(/&#x27;/g, "'")
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .trim();
+
+    if (lyricsText && lyricsText.length > 20) {
+      return {
+        format: 'plain',
+        plainText: lyricsText,
+        source: 'Genius'
+      };
+    }
+  } catch (err) {
+    console.warn('[Lyrics] Genius search fallback error:', err.message);
+  }
+  return null;
+}
+
+/**
+ * Multi-tiered lyrics fetcher: LRCLIB (Synced) -> LRCLIB (Search) -> Genius -> SoundCloud Description
+ */
+async function fetchLyricsMultiSource(track) {
+  if (!track) throw new Error('No track provided');
+  const cacheKey = `gp_lyrics_${track.id || track.title}`;
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed && (parsed.lyrics || parsed.plainText)) return parsed;
+    }
+  } catch (e) {}
+
+  const terms = cleanLyricsQuery(track.title, track.artist);
+
+  // 1. LRCLIB direct get
+  try {
+    const params = new URLSearchParams({
+      track_name: terms.title,
+      artist_name: terms.artist
+    });
+    const res = await fetch(`https://lrclib.net/api/get?${params}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.syncedLyrics) {
+        const result = { format: 'lrc', lyrics: data.syncedLyrics, source: 'LRCLIB (Караоке)' };
+        try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
+        return result;
+      } else if (data.plainLyrics) {
+        const result = { format: 'plain', plainText: data.plainLyrics, source: 'LRCLIB' };
+        try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
+        return result;
+      }
+    }
+  } catch (e) {}
+
+  // 2. LRCLIB fuzzy search query
+  try {
+    const res = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(terms.query)}`);
+    if (res.ok) {
+      const list = await res.json();
+      if (Array.isArray(list) && list.length > 0) {
+        const best = list.find(item => item.syncedLyrics) || list[0];
+        if (best.syncedLyrics) {
+          const result = { format: 'lrc', lyrics: best.syncedLyrics, source: 'LRCLIB (Караоке)' };
+          try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
+          return result;
+        } else if (best.plainLyrics) {
+          const result = { format: 'plain', plainText: best.plainLyrics, source: 'LRCLIB' };
+          try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
+          return result;
+        }
+      }
+    }
+  } catch (e) {}
+
+  // 3. Genius lyrics search (massive coverage for Russian phonk, underground, rap, indie)
+  const geniusResult = await fetchGeniusLyrics(terms.query);
+  if (geniusResult) {
+    try { localStorage.setItem(cacheKey, JSON.stringify(geniusResult)); } catch (e) {}
+    return geniusResult;
+  }
+
+  // 4. SoundCloud track description
+  if (track.description && track.description.length > 30) {
+    const desc = track.description.trim();
+    const lines = desc.split('\n').filter(l => !l.startsWith('http') && !l.startsWith('t.me') && !l.startsWith('vk.com'));
+    if (lines.length >= 3) {
+      const result = { format: 'plain', plainText: lines.join('\n'), source: 'SoundCloud Description' };
+      try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
+      return result;
+    }
+  }
+
+  throw new Error('Текст песни не найден');
+}
 
 /**
  * Parses an LRC string into an array of { time (seconds), text } objects.
@@ -7858,31 +8048,6 @@ function parseLRC(lrcText) {
     if (text) lines.push({ time, text });
   }
   return lines;
-}
-
-/**
- * Fetches lyrics from the backend for the currently playing track.
- */
-async function fetchLyrics(title, artist) {
-  const cleanTitle = title ? String(title).replace(/@/g, '').replace(/\(.*\)|\[.*\]/g, '').trim() : '';
-  const cleanArtist = artist ? String(artist).replace(/@/g, '').replace(/\(.*\)|\[.*\]/g, '').trim() : '';
-
-  const params = new URLSearchParams({
-    track_name: cleanTitle,
-    artist_name: cleanArtist
-  });
-
-  const res = await fetch(`https://lrclib.net/api/get?${params.toString()}`);
-  if (!res.ok) {
-    throw new Error(`Lyrics not found (${res.status})`);
-  }
-  const data = await res.json();
-  if (data.syncedLyrics) {
-    return { format: 'lrc', lyrics: data.syncedLyrics };
-  } else if (data.plainLyrics) {
-    return { format: 'plain', plainText: data.plainLyrics };
-  }
-  throw new Error('No lyrics available in LRCLIB database');
 }
 
 /**
@@ -7908,7 +8073,6 @@ function renderLRCLines(lines) {
 
 /**
  * Updates which lyric line is active based on current audio time.
- * Called on timeupdate.
  */
 function syncLyricsToTime(currentTime) {
   let activeIdx = -1;
@@ -7935,7 +8099,7 @@ function syncLyricsToTime(currentTime) {
     else                      el.classList.add('upcoming');
   });
 
-  // Smooth-scroll active line into view
+  // Smooth-scroll active line into view with modern center alignment
   if (activeIdx >= 0 && linEls[activeIdx]) {
     linEls[activeIdx].scrollIntoView({
       behavior: 'smooth',
@@ -7950,13 +8114,24 @@ function syncLyricsToTime(currentTime) {
 async function openLyricsOverlay() {
   const currentTrack = playlist[currentTrackIndex];
   if (!currentTrack) {
-    showToastNotification('No track is currently playing');
+    showToastNotification('Сейчас ничего не играет');
     return;
   }
 
-  // Update header
-  if (lyricsTitleEl)  lyricsTitleEl.textContent  = currentTrack.title  || 'Unknown Track';
-  if (lyricsArtistEl) lyricsArtistEl.textContent = currentTrack.artist || 'Unknown Artist';
+  // Update header and ambient background
+  const coverUrl = getOptimalCoverUrl(currentTrack.thumbnail, currentTrack.source);
+  if (lyricsCoverEl) {
+    lyricsCoverEl.src = coverUrl;
+  }
+  if (lyricsAmbientBg) {
+    lyricsAmbientBg.style.backgroundImage = `url("${coverUrl}")`;
+  }
+  if (lyricsTitleEl)  lyricsTitleEl.textContent  = currentTrack.title  || 'Без названия';
+  if (lyricsArtistEl) lyricsArtistEl.textContent = currentTrack.artist || 'Неизвестный исполнитель';
+  if (lyricsSourceBadge) {
+    lyricsSourceBadge.classList.add('hidden');
+    lyricsSourceBadge.textContent = '';
+  }
 
   // Show overlay immediately with loading state
   lyricsOverlay.classList.remove('hidden');
@@ -7967,7 +8142,7 @@ async function openLyricsOverlay() {
   lyricsContent.innerHTML = `
     <div class="lyrics-loading">
       <div class="spinner"></div>
-      <span>Fetching lyrics...</span>
+      <span>Ищем текст песни (LRCLIB, Genius, SoundCloud)...</span>
     </div>
   `;
 
@@ -7982,10 +8157,15 @@ async function openLyricsOverlay() {
   lyricsState.lastActiveIdx = -1;
 
   try {
-    const data = await fetchLyrics(currentTrack.title, currentTrack.artist);
+    const data = await fetchLyricsMultiSource(currentTrack);
 
     // Check track didn't change while fetching
     if (lyricsState.currentTrackId !== currentTrack.id) return;
+
+    if (lyricsSourceBadge && data.source) {
+      lyricsSourceBadge.textContent = `✨ ${data.source}`;
+      lyricsSourceBadge.classList.remove('hidden');
+    }
 
     if (data.format === 'lrc' && data.lyrics) {
       // ── Synchronized LRC mode ────────────────────────────────
@@ -8001,7 +8181,7 @@ async function openLyricsOverlay() {
       syncHandler();
 
     } else if (data.plainText) {
-      // ── Plain text mode ───────────────────────────────────────
+      // ── Plain text mode (Genius / SoundCloud Description) ────
       lyricsState.format = 'plain';
       lyricsContent.innerHTML = `<div class="lyrics-plain">${escapeHTML(data.plainText)}</div>`;
     } else {
@@ -8011,9 +8191,9 @@ async function openLyricsOverlay() {
     if (lyricsState.currentTrackId !== currentTrack.id) return;
     lyricsContent.innerHTML = `
       <div class="lyrics-not-found">
-        <div style="font-size: 40px; margin-bottom: 16px;">🎤</div>
-        <div>Lyrics not found for this track.</div>
-        <div style="font-size: 12px; margin-top: 8px; opacity: 0.6;">${escapeHTML(currentTrack.title)} · ${escapeHTML(currentTrack.artist || '')}</div>
+        <div style="font-size: 44px; margin-bottom: 16px;">🎤</div>
+        <div style="font-weight: 600; font-size: 17px; color: #fff; margin-bottom: 8px;">Текст песни не найден</div>
+        <div style="font-size: 13px; opacity: 0.65; max-width: 360px; margin: 0 auto;">${escapeHTML(currentTrack.title)} · ${escapeHTML(currentTrack.artist || '')}</div>
       </div>
     `;
     console.warn('[Lyrics] Not found:', err.message);

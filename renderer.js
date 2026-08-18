@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.17.4';
+const APP_VERSION = '1.17.5';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -7858,101 +7858,54 @@ const lyricsBtn           = document.getElementById('lyrics-btn');
  * Normalizes title and artist strings to maximize hit rate across lyric databases.
  */
 function cleanLyricsQuery(rawTitle, rawArtist) {
-  let clean = (rawTitle || '').trim();
-  // Strip hashtags, mentions, audio artifacts
-  clean = clean.replace(/#[a-zA-Z0-9_\u0400-\u04FF-]+/g, '');
-  clean = clean.replace(/@([a-zA-Z0-9_.\u0400-\u04FF-]+)/g, '$1');
-  clean = clean.replace(/\((?:prod|feat|ft|prod\.|feat\.|ft\.)[^)]*\)/gi, '');
-  clean = clean.replace(/\[(?:prod|feat|ft|prod\.|feat\.|ft\.)[^\]]*\]/gi, '');
-  clean = clean.replace(/\((?:official|audio|video|lyrics|remix|slowed|reverb|sped up|nightcore)[^)]*\)/gi, '');
-  clean = clean.replace(/\[(?:official|audio|video|lyrics|remix|slowed|reverb|sped up|nightcore)[^\]]*\]/gi, '');
+  let title = (rawTitle || '').trim();
+  let uploader = (rawArtist || '').trim();
 
-  let parsedArtist = (rawArtist || '').trim();
-  let parsedTitle = clean;
+  // Normalize all unicode dash variants (hyphen, en-dash, em-dash, minus, etc.) to standard ' - '
+  title = title.replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D]/g, ' - ');
+  
+  // Clean junk tags, hashtags, mentions, audio labels
+  title = title.replace(/#[a-zA-Z0-9_\u0400-\u04FF-]+/g, '');
+  title = title.replace(/@([a-zA-Z0-9_.\u0400-\u04FF-]+)/g, '');
+  title = title.replace(/\((?:prod|feat|ft|prod\.|feat\.|ft\.)[^)]*\)/gi, '');
+  title = title.replace(/\[(?:prod|feat|ft|prod\.|feat\.|ft\.)[^\]]*\]/gi, '');
+  title = title.replace(/\((?:official|audio|video|lyrics|remix|slowed|reverb|sped up|nightcore|hq|hd)[^)]*\)/gi, '');
+  title = title.replace(/\[(?:official|audio|video|lyrics|remix|slowed|reverb|sped up|nightcore|hq|hd)[^\]]*\]/gi, '');
+  title = title.replace(/\s+/g, ' ').trim();
 
-  if (clean.includes(' - ')) {
-    const parts = clean.split(' - ');
-    parsedArtist = parts[0].trim();
-    parsedTitle = parts.slice(1).join(' - ').trim();
-  } else if (clean.includes(' — ')) {
-    const parts = clean.split(' — ');
-    parsedArtist = parts[0].trim();
-    parsedTitle = parts.slice(1).join(' — ').trim();
+  let artist = '';
+  let songName = title;
+
+  // Check if title has "Artist - Song" structure (e.g. "MAYOT - 21", "LXNER - Мрази")
+  if (title.includes(' - ')) {
+    const parts = title.split(' - ').map(s => s.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      artist = parts[0];
+      songName = parts.slice(1).join(' - ');
+    }
   }
 
-  parsedTitle = parsedTitle.replace(/^[+\s\-_/\\:]+/, '').trim();
-  parsedArtist = parsedArtist.replace(/^[+\s\-_/\\:]+/, '').trim();
+  // If no artist was inside the title, fallback to uploader
+  if (!artist) {
+    artist = uploader;
+  }
 
   return {
-    title: parsedTitle || rawTitle,
-    artist: parsedArtist || rawArtist,
-    query: `${parsedArtist} ${parsedTitle}`.trim()
+    artist,
+    songName,
+    directQuery: `${artist} ${songName}`.trim(),
+    titleOnlyQuery: songName.trim(),
+    rawCleanQuery: title.replace(/ - /g, ' ').trim()
   };
 }
 
-/**
- * Searches Genius for lyrics of underground, phonk, rap or pop songs.
- */
-async function fetchGeniusLyrics(query) {
-  try {
-    const searchUrl = `https://genius.com/api/search/multi?per_page=5&q=${encodeURIComponent(query)}`;
-    const res = await fetch(searchUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const sections = data.response?.sections || [];
-    const songSection = sections.find(s => s.type === 'song' || s.type === 'top_hit');
-    const hits = songSection?.hits || [];
-    if (!hits.length) return null;
-
-    const bestHit = hits[0].result;
-    if (!bestHit?.url) return null;
-
-    // Fetch page HTML to extract lyrics
-    const pageRes = await fetch(bestHit.url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-    });
-    if (!pageRes.ok) return null;
-
-    const html = await pageRes.text();
-    const containerRegex = /<div[^>]*data-lyrics-container="true"[^>]*>([\s\S]*?)<\/div>/g;
-    let match;
-    let lyricsText = '';
-    while ((match = containerRegex.exec(html)) !== null) {
-      let chunk = match[1];
-      chunk = chunk.replace(/<br\s*[\/]?>/gi, '\n');
-      chunk = chunk.replace(/<[^>]+>/g, '');
-      lyricsText += chunk + '\n';
-    }
-    lyricsText = lyricsText
-      .replace(/&#x27;/g, "'")
-      .replace(/&quot;/g, '"')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .trim();
-
-    if (lyricsText && lyricsText.length > 20) {
-      return {
-        format: 'plain',
-        plainText: lyricsText,
-        source: 'Genius'
-      };
-    }
-  } catch (err) {
-    console.warn('[Lyrics] Genius search fallback error:', err.message);
-  }
-  return null;
-}
-
 const LRCLIB_HEADERS = {
-  'User-Agent': 'GlassPlayer/1.17.4 (https://github.com/xivmcm/music-desktop)',
-  'Lrclib-Client': 'GlassPlayer v1.17.4'
+  'User-Agent': 'GlassPlayer/1.17.5 (https://github.com/xivmcm/music-desktop)',
+  'Lrclib-Client': 'GlassPlayer v1.17.5'
 };
 
 /**
- * Multi-tiered lyrics fetcher: SoundCloud Description -> LRCLIB (Direct) -> LRCLIB (Search) -> LRCLIB (Title-only)
+ * Multi-tiered lyrics fetcher: SoundCloud Description -> LRCLIB (Direct) -> LRCLIB (Search) -> LRCLIB (Clean Query) -> LRCLIB (Title-only)
  */
 async function fetchLyricsMultiSource(track) {
   if (!track) throw new Error('No track provided');
@@ -7978,11 +7931,12 @@ async function fetchLyricsMultiSource(track) {
 
   const terms = cleanLyricsQuery(track.title, track.artist);
 
-  // 2. Parallel Fast LRCLIB Queries (Direct Get + Search + Title-only)
+  // 2. Parallel Fast LRCLIB Queries (Direct Get + Combined Search + Clean Search + Title-only)
   const queries = [
-    `https://lrclib.net/api/get?${new URLSearchParams({ track_name: terms.title, artist_name: terms.artist })}`,
-    `https://lrclib.net/api/search?q=${encodeURIComponent(terms.query)}`,
-    `https://lrclib.net/api/search?q=${encodeURIComponent(terms.title)}`
+    `https://lrclib.net/api/get?${new URLSearchParams({ track_name: terms.songName, artist_name: terms.artist })}`,
+    `https://lrclib.net/api/search?q=${encodeURIComponent(terms.directQuery)}`,
+    `https://lrclib.net/api/search?q=${encodeURIComponent(terms.rawCleanQuery)}`,
+    `https://lrclib.net/api/search?q=${encodeURIComponent(terms.titleOnlyQuery)}`
   ];
 
   for (const url of queries) {

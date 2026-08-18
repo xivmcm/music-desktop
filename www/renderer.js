@@ -7930,6 +7930,7 @@ async function fetchLyricsMultiSource(track) {
   }
 
   const terms = cleanLyricsQuery(track.title, track.artist);
+  console.log(`[Lyrics] Searching lyrics for: "${terms.directQuery}" (Artist: ${terms.artist}, Song: ${terms.songName})`);
 
   // 2. Parallel Fast LRCLIB Queries (Direct Get + Combined Search + Clean Search + Title-only)
   const queries = [
@@ -7948,20 +7949,24 @@ async function fetchLyricsMultiSource(track) {
           const best = data.find(item => item.syncedLyrics) || data[0];
           if (best.syncedLyrics) {
             const result = { format: 'lrc', lyrics: best.syncedLyrics, source: 'LRCLIB (Караоке)' };
+            console.log(`[Lyrics] Loaded synced lyrics for "${terms.directQuery}" from ${result.source}`);
             try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
             return result;
           } else if (best.plainLyrics) {
             const result = { format: 'plain', plainText: best.plainLyrics, source: 'LRCLIB' };
+            console.log(`[Lyrics] Loaded plain lyrics for "${terms.directQuery}" from ${result.source}`);
             try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
             return result;
           }
         } else if (data && !Array.isArray(data)) {
           if (data.syncedLyrics) {
             const result = { format: 'lrc', lyrics: data.syncedLyrics, source: 'LRCLIB (Караоке)' };
+            console.log(`[Lyrics] Loaded synced lyrics for "${terms.directQuery}" from ${result.source}`);
             try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
             return result;
           } else if (data.plainLyrics) {
             const result = { format: 'plain', plainText: data.plainLyrics, source: 'LRCLIB' };
+            console.log(`[Lyrics] Loaded plain lyrics for "${terms.directQuery}" from ${result.source}`);
             try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
             return result;
           }
@@ -7970,6 +7975,7 @@ async function fetchLyricsMultiSource(track) {
     } catch (e) {}
   }
 
+  console.warn(`[Lyrics] No lyrics found across queries for "${terms.directQuery}"`);
   throw new Error('Текст песни не найден');
 }
 

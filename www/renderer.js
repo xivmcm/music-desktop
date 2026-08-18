@@ -5718,50 +5718,57 @@ const updateInstallBtn = document.getElementById('update-install-btn');
 const updateCloseBtn = document.getElementById('update-close-btn');
 const updateProgressBar = document.getElementById('update-progress-bar');
 
+let currentUpdateInfo = null;
+
 if (isElectron && window.electronAPI && window.electronAPI.onUpdateStatus) {
-  window.electronAPI.onUpdateStatus((status, version) => {
-    console.log(`[Auto-Updater] Status changed: ${status}, Version: ${version}`);
+  window.electronAPI.onUpdateStatus((status, payload) => {
+    console.log(`[Auto-Updater] Status changed: ${status}`, payload);
     if (status === 'checking') {
-      // Checked in console
+      // Background check
     } else if (status === 'available') {
-      updateBannerText.textContent = `Доступна новая версия: ${version}!`;
+      currentUpdateInfo = payload;
+      const verText = typeof payload === 'object' ? payload.version : payload;
+      updateBannerText.textContent = `Доступна новая версия GlassPlayer: v${verText}!`;
       updateDownloadBtn.classList.remove('hidden');
       updateInstallBtn.classList.add('hidden');
-      bannerLoader.classList.add('hidden');
-      updateProgressBar.style.width = '0%';
-      updateBanner.classList.remove('hidden');
+      if (bannerLoader) bannerLoader.classList.add('hidden');
+      if (updateProgressBar) updateProgressBar.style.width = '0%';
+      if (updateBanner) updateBanner.classList.remove('hidden');
     } else if (status === 'not-available') {
-       showToastNotification('У вас установлена последняя версия приложения.', 'success', 'Обновления');
+      showToastNotification('У вас установлена самая актуальная версия GlassPlayer.', 'success', 'Обновления');
     } else if (status === 'error') {
-      console.error('[Auto-Updater] Error searching for updates:', version);
-       showToastNotification('Не удалось проверить наличие новой версии.', 'error', 'Обновления');
+      console.error('[Auto-Updater Error]:', payload);
+      showToastNotification(`Ошибка проверки обновлений: ${payload || 'Сервер недоступен'}`, 'error', 'Обновления');
     }
   });
 
   window.electronAPI.onUpdateProgress((percent) => {
-    updateBannerText.textContent = `Загрузка обновления... ${Math.round(percent)}%`;
-    updateProgressBar.style.width = `${percent}%`;
+    const rounded = Math.round(percent);
+    updateBannerText.textContent = `Загрузка обновления: ${rounded}%`;
+    if (updateProgressBar) updateProgressBar.style.width = `${rounded}%`;
   });
 
   window.electronAPI.onUpdateReady(() => {
-    updateBannerText.textContent = 'Обновление загружено и готово к установке!';
+    updateBannerText.textContent = 'Обновление скачано и готово к установке!';
     updateDownloadBtn.classList.add('hidden');
     updateInstallBtn.classList.remove('hidden');
-    bannerLoader.classList.add('hidden');
-    updateProgressBar.style.width = '100%';
+    if (bannerLoader) bannerLoader.classList.add('hidden');
+    if (updateProgressBar) updateProgressBar.style.width = '100%';
   });
 
   if (updateDownloadBtn) {
     updateDownloadBtn.addEventListener('click', () => {
       updateDownloadBtn.classList.add('hidden');
       if (bannerLoader) bannerLoader.classList.remove('hidden');
-      if (updateBannerText) updateBannerText.textContent = 'Начало загрузки обновления...';
-      window.electronAPI.downloadUpdate();
+      updateBannerText.textContent = 'Загрузка обновления...';
+      const downloadUrl = currentUpdateInfo?.downloadUrl || null;
+      window.electronAPI.downloadUpdate(downloadUrl);
     });
   }
 
   if (updateInstallBtn) {
     updateInstallBtn.addEventListener('click', () => {
+      updateBannerText.textContent = 'Перезапуск и установка...';
       window.electronAPI.installUpdate();
     });
   }

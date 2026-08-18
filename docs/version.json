@@ -1,0 +1,13 @@
+{
+  "version": "1.18.0",
+  "releaseDate": "2026-08-18",
+  "changelog": "• Живые локальные видео и GIF фоны с аппаратным ускорением (0% нагрузки на сервер)\n• Надежный вход в аккаунты с защитой от спящего режима Render\n• Новый нативный высокоскоростной движок автообновлений\n• Мгновенный поиск синхронизированных караоке-текстов песен",
+  "windows": {
+    "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.18.0.exe",
+    "filename": "GlassPlayer-Setup-1.18.0.exe"
+  },
+  "android": {
+    "url": "https://xivmcm.github.io/music-desktop/GlassPlayer-1.18.0.apk",
+    "filename": "GlassPlayer-1.18.0.apk"
+  }
+}

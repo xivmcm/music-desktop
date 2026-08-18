@@ -2,7 +2,8 @@ const DISCORD_CLIENT_ID = "1525029080615882772";
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { autoUpdater } = require('electron-updater');
+const https = require('https');
+const { spawn } = require('child_process');
 const DiscordRPC = require('discord-rpc');
 
 // Configure Chromium DNS-over-HTTPS (DoH) before app ready to bypass DNS blocking in RU (Cloudflare + Google + Yandex + AdGuard + Quad9)
@@ -333,51 +334,194 @@ function registerIpcHandlers() {
     return null;
   });
 
-  ipcMain.on('download-update', () => {
-    autoUpdater.downloadUpdate();
+  ipcMain.on('download-update', (event, targetUrl) => {
+    glassUpdater.downloadUpdate(targetUrl);
   });
 
   ipcMain.on('install-update', () => {
-    try {
-      app.removeAllListeners('window-all-closed');
-      BrowserWindow.getAllWindows().forEach(window => {
-        if (!window.isDestroyed()) window.destroy();
-      });
-    } catch (error) {
-      console.error('[Auto-Updater] Error destroying windows prior to install:', error);
-    }
-    setImmediate(() => {
-      autoUpdater.quitAndInstall(false, true);
-    });
+    glassUpdater.installUpdate();
   });
 
-  ipcMain.on('check-for-updates', (event) => {
-    const window = getEventWindow(event);
-    autoUpdater.checkForUpdates().catch(err => {
-      sendToWindow(window, 'update-status', 'error', err.message);
-    });
-  });
-
-  autoUpdater.autoDownload = false;
-  autoUpdater.on('checking-for-update', () => {
-    sendToPrimaryWindow('update-status', 'checking');
-  });
-  autoUpdater.on('update-available', (info) => {
-    sendToPrimaryWindow('update-status', 'available', info.version);
-  });
-  autoUpdater.on('update-not-available', () => {
-    sendToPrimaryWindow('update-status', 'not-available');
-  });
-  autoUpdater.on('error', (err) => {
-    sendToPrimaryWindow('update-status', 'error', err.message);
-  });
-  autoUpdater.on('download-progress', (progressObj) => {
-    sendToPrimaryWindow('update-progress', progressObj.percent);
-  });
-  autoUpdater.on('update-downloaded', () => {
-    sendToPrimaryWindow('update-ready');
+  ipcMain.on('check-for-updates', () => {
+    glassUpdater.checkForUpdates();
   });
 }
+
+class GlassUpdater {
+  constructor() {
+    this.currentVersion = app.getVersion();
+    this.latestUpdate = null;
+    this.downloadedInstallerPath = null;
+    this.isDownloading = false;
+  }
+
+  isNewerVersion(remoteVersion, localVersion = this.currentVersion) {
+    const parse = (v) => String(v).replace(/^[^\d]*/, '').split('.').map(n => parseInt(n, 10) || 0);
+    const [rMajor = 0, rMinor = 0, rPatch = 0] = parse(remoteVersion);
+    const [lMajor = 0, lMinor = 0, lPatch = 0] = parse(localVersion);
+    if (rMajor !== lMajor) return rMajor > lMajor;
+    if (rMinor !== lMinor) return rMinor > lMinor;
+    return rPatch > lPatch;
+  }
+
+  async checkForUpdates() {
+    sendToPrimaryWindow('update-status', 'checking');
+    try {
+      let updateInfo = await this.checkGitHubReleases();
+      if (!updateInfo) {
+        updateInfo = await this.checkVersionJson();
+      }
+
+      if (updateInfo && this.isNewerVersion(updateInfo.version)) {
+        this.latestUpdate = updateInfo;
+        sendToPrimaryWindow('update-status', 'available', updateInfo);
+      } else {
+        this.latestUpdate = null;
+        sendToPrimaryWindow('update-status', 'not-available');
+      }
+    } catch (err) {
+      console.error('[GlassUpdater] Update check error:', err.message);
+      sendToPrimaryWindow('update-status', 'error', err.message);
+    }
+  }
+
+  async checkGitHubReleases() {
+    try {
+      const res = await fetch('https://api.github.com/repos/xivmcm/music-desktop/releases/latest', {
+        headers: { 'User-Agent': 'GlassPlayer-Desktop-App' },
+        signal: AbortSignal.timeout(6000)
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const version = String(data.tag_name || data.name || '').replace(/^v/, '');
+      const exeAsset = (data.assets || []).find(a => a.name.endsWith('.exe'));
+      const downloadUrl = exeAsset ? exeAsset.browser_download_url : `https://github.com/xivmcm/music-desktop/releases/download/v${version}/GlassPlayer-Setup-${version}.exe`;
+      return {
+        version,
+        changelog: data.body || 'Новые улучшения и исправления ошибок',
+        downloadUrl,
+        filename: exeAsset?.name || `GlassPlayer-Setup-${version}.exe`,
+        size: exeAsset?.size || 0
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async checkVersionJson() {
+    try {
+      const res = await fetch('https://xivmcm.github.io/music-desktop/version.json', {
+        headers: { 'Cache-Control': 'no-cache' },
+        signal: AbortSignal.timeout(6000)
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return {
+        version: data.version,
+        changelog: data.changelog || 'Обновление GlassPlayer',
+        downloadUrl: data.windows?.url || `https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-${data.version}.exe`,
+        filename: data.windows?.filename || `GlassPlayer-Setup-${data.version}.exe`
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async downloadUpdate(targetUrl) {
+    const url = targetUrl || this.latestUpdate?.downloadUrl;
+    if (!url) {
+      sendToPrimaryWindow('update-status', 'error', 'No download URL provided');
+      return;
+    }
+
+    if (this.isDownloading) return;
+    this.isDownloading = true;
+
+    const tempPath = path.join(app.getPath('temp'), `GlassPlayer-Setup-${this.latestUpdate?.version || Date.now()}.exe`);
+    this.downloadedInstallerPath = tempPath;
+
+    const downloadStream = (fileUrl) => new Promise((resolve, reject) => {
+      const file = fs.createWriteStream(tempPath);
+      const req = https.get(fileUrl, { headers: { 'User-Agent': 'GlassPlayer-Desktop' } }, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          file.close();
+          fs.unlink(tempPath, () => {});
+          return downloadStream(res.headers.location).then(resolve).catch(reject);
+        }
+
+        if (res.statusCode !== 200) {
+          file.close();
+          fs.unlink(tempPath, () => {});
+          return reject(new Error(`HTTP ${res.statusCode}`));
+        }
+
+        const totalBytes = parseInt(res.headers['content-length'], 10) || 0;
+        let downloadedBytes = 0;
+        let lastReportTime = 0;
+
+        res.on('data', (chunk) => {
+          downloadedBytes += chunk.length;
+          const now = Date.now();
+          if (now - lastReportTime > 150 || downloadedBytes === totalBytes) {
+            lastReportTime = now;
+            const percent = totalBytes > 0 ? Math.min(99, (downloadedBytes / totalBytes) * 100) : 0;
+            sendToPrimaryWindow('update-progress', percent);
+          }
+        });
+
+        res.pipe(file);
+
+        file.on('finish', () => {
+          file.close(() => {
+            resolve(tempPath);
+          });
+        });
+      });
+
+      req.on('error', (err) => {
+        file.close();
+        fs.unlink(tempPath, () => {});
+        reject(err);
+      });
+    });
+
+    try {
+      await downloadStream(url);
+      this.isDownloading = false;
+      sendToPrimaryWindow('update-progress', 100);
+      sendToPrimaryWindow('update-ready');
+    } catch (err) {
+      this.isDownloading = false;
+      console.error('[GlassUpdater Download Error]:', err.message);
+      sendToPrimaryWindow('update-status', 'error', `Ошибка загрузки: ${err.message}`);
+    }
+  }
+
+  installUpdate() {
+    if (!this.downloadedInstallerPath || !fs.existsSync(this.downloadedInstallerPath)) {
+      console.error('[GlassUpdater] Installer file not found:', this.downloadedInstallerPath);
+      return;
+    }
+
+    try {
+      const installer = spawn(this.downloadedInstallerPath, [], {
+        detached: true,
+        stdio: 'ignore'
+      });
+      installer.unref();
+
+      app.removeAllListeners('window-all-closed');
+      BrowserWindow.getAllWindows().forEach(w => {
+        if (!w.isDestroyed()) w.destroy();
+      });
+      app.quit();
+    } catch (e) {
+      console.error('[GlassUpdater Launch Error]:', e);
+    }
+  }
+}
+
+const glassUpdater = new GlassUpdater();
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -414,9 +558,7 @@ function createWindow() {
     state.updateCheckTimer = setTimeout(() => {
       state.updateCheckTimer = null;
       if (window.isDestroyed()) return;
-      autoUpdater.checkForUpdatesAndNotify().catch(err => {
-        console.error('[Auto-Updater Error] Fail to search for updates:', err);
-      });
+      glassUpdater.checkForUpdates();
     }, 4000);
   });
 

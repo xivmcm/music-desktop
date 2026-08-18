@@ -16,5 +16,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleMiniPlayer: () => ipcRenderer.send('toggle-mini-player'),
   onMiniPlayerToggled: (callback) => ipcRenderer.on('mini-player-toggled', (event, active) => callback(active)),
   onWindowMaximizedStatus: (callback) => ipcRenderer.on('window-maximized-status', (event, maximized) => callback(maximized)),
-  fetchLyrics: (payload) => ipcRenderer.invoke('fetch-lyrics', payload)
+  fetchLyrics: (payload) => ipcRenderer.invoke('fetch-lyrics', payload),
+  nativeAuthRequest: (payload) => ipcRenderer.invoke('native-auth-request', payload)
 });

@@ -1,6 +1,6 @@
 {
   "name": "music-desktop",
-  "version": "1.17.6",
+  "version": "1.18.0",
   "description": "Cross-platform music player aggregator desktop application",
   "author": "GlassPlayer",
   "main": "main.js",

@@ -108,6 +108,7 @@ ipcMain.handle('save-theme-background', async (event, payload = {}) => {
   const originalName = payload.name || payload.sourcePath || 'theme-background';
   const extFromName = path.extname(originalName).toLowerCase();
   const safeExt = extFromName && extFromName.length <= 8 ? extFromName : '.png';
+  const isVideo = ['.mp4', '.webm', '.mov'].includes(safeExt);
   const id = `theme_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const targetPath = path.join(themesDir, `${id}${safeExt}`);
 
@@ -123,8 +124,46 @@ ipcMain.handle('save-theme-background', async (event, payload = {}) => {
   return {
     id,
     bgPath: targetPath,
-    bgUrl: `file://${targetPath.replace(/\\/g, '/')}`
+    bgUrl: `file://${targetPath.replace(/\\/g, '/')}`,
+    isVideo
   };
+});
+
+ipcMain.handle('native-auth-request', async (event, { url, method = 'GET', headers = {}, body = null, timeoutMs = 45000 }) => {
+  try {
+    const options = {
+      method,
+      headers: {
+        'User-Agent': 'GlassPlayer/1.18.0 (Windows NT 10.0; Win64; x64)',
+        ...headers
+      },
+      signal: AbortSignal.timeout(timeoutMs)
+    };
+    if (body) {
+      options.body = typeof body === 'object' ? JSON.stringify(body) : body;
+    }
+    const response = await fetch(url, options);
+    let data;
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      data = await response.text();
+    }
+    return {
+      ok: response.ok,
+      status: response.status,
+      statusText: response.statusText,
+      data
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      status: 0,
+      statusText: err.message,
+      error: err.message
+    };
+  }
 });
 
 function registerIpcHandlers() {

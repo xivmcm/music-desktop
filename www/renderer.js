@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.17.6';
+const APP_VERSION = '1.18.0';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -4401,17 +4401,20 @@ function renderSettings(options = {}) {
     </div>
 
     <div class="settings-section ${currentTheme !== 'custom' ? 'disabled-customizer' : ''}" data-section="background-image" id="background-image-section">
-      <h3>Фоновое изображение</h3>
+      <h3>Фон интерфейса (Фото / GIF / Видео)</h3>
+      <div style="font-size: 11px; opacity: 0.65; margin-bottom: 12px; line-height: 1.4;">
+        Загружайте собственные фото, анимированные GIF или зацикленные видео (MP4 / WebM до 8 сек, до 25 МБ). Работает 100% локально с нулевым расходом трафика.
+      </div>
       <div style="display: flex; flex-direction: column; gap: 12px;">
         <div style="display: flex; gap: 10px; align-items: center;">
           <button id="bg-image-upload-btn" class="view-btn" style="flex: 1; justify-content: center;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-            <span style="margin-left: 6px;">Выбрать фото</span>
+            <span style="margin-left: 6px;">Выбрать медиа (Фото/GIF/Видео)</span>
           </button>
           <button id="bg-image-clear-btn" class="view-btn danger ${localStorage.getItem('gp_bg_image') ? '' : 'hidden'}" style="justify-content: center;">
             <span>Сбросить</span>
           </button>
-          <input type="file" id="bg-image-file-input" accept="image/*" style="display: none;">
+          <input type="file" id="bg-image-file-input" accept="image/*,video/mp4,video/webm,video/quicktime,.mp4,.webm,.gif,.mov" style="display: none;">
         </div>
         
         <div style="display: flex; flex-direction: column; gap: 6px;">
@@ -4739,7 +4742,7 @@ function renderSettings(options = {}) {
     if (themeBgEffectSelect) themeBgEffectSelect.addEventListener('change', updateCustomThemeFromUI);
   }
 
-  // Background Image bindings
+  // Background Media (Image / GIF / Video) bindings
   const bgImageUploadBtn = panel.querySelector('#bg-image-upload-btn');
   const bgImageClearBtn = panel.querySelector('#bg-image-clear-btn');
   const bgImageFileInput = panel.querySelector('#bg-image-file-input');
@@ -4749,14 +4752,50 @@ function renderSettings(options = {}) {
   if (bgImageUploadBtn && bgImageFileInput) {
     bgImageUploadBtn.addEventListener('click', () => bgImageFileInput.click());
     
-    bgImageFileInput.addEventListener('change', (e) => {
+    bgImageFileInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
+
+      const isVideo = file.type.startsWith('video/') || 
+                      ['.mp4', '.webm', '.mov'].some(ext => file.name.toLowerCase().endsWith(ext));
+
+      // Size check (Limit: 25 MB)
+      const MAX_SIZE = 25 * 1024 * 1024;
+      if (file.size > MAX_SIZE) {
+        showToastNotification('Файл слишком большой (максимум 25 МБ)', 'warning', 'Фон');
+        bgImageFileInput.value = '';
+        return;
+      }
+
+      // If video, check duration limit (<= 8.5 seconds)
+      if (isVideo) {
+        try {
+          const duration = await new Promise((resolve, reject) => {
+            const tempVideo = document.createElement('video');
+            tempVideo.preload = 'metadata';
+            tempVideo.onloadedmetadata = () => {
+              window.URL.revokeObjectURL(tempVideo.src);
+              resolve(tempVideo.duration);
+            };
+            tempVideo.onerror = () => reject(new Error('Не удалось прочитать видео'));
+            tempVideo.src = URL.createObjectURL(file);
+          });
+
+          if (duration > 8.5) {
+            showToastNotification(`Видео слишком длинное (${Math.round(duration)} сек). Максимальная длина фонового видео — 8 секунд для плавной работы.`, 'warning', 'Фон');
+            bgImageFileInput.value = '';
+            return;
+          }
+        } catch (err) {
+          console.warn('[Video Check Error]:', err.message);
+        }
+      }
       
       const reader = new FileReader();
       reader.onload = async function(evt) {
         const base64Str = evt.target.result;
         let bgRef = base64Str;
+        let isVideoSaved = isVideo;
         try {
           if (isElectron && window.electronAPI?.saveThemeBackground) {
             const saved = await window.electronAPI.saveThemeBackground({
@@ -4765,14 +4804,16 @@ function renderSettings(options = {}) {
               name: file.name
             });
             bgRef = saved.bgUrl || saved.bgPath || base64Str;
+            if (saved.isVideo !== undefined) isVideoSaved = saved.isVideo;
           }
         } catch (err) {
-          console.warn('[Theme Background] Falling back to inline image:', err.message);
+          console.warn('[Theme Background] Falling back to inline media:', err.message);
         }
         localStorage.setItem('gp_bg_image', bgRef);
-        applyBackgroundImage(bgRef);
-        bgImageClearBtn.classList.remove('hidden');
-        showToastNotification('Фоновое изображение установлено!');
+        localStorage.setItem('gp_bg_is_video', String(isVideoSaved));
+        applyBackgroundImage(bgRef, isVideoSaved);
+        if (bgImageClearBtn) bgImageClearBtn.classList.remove('hidden');
+        showToastNotification(isVideoSaved ? 'Живой видеофон установлен!' : 'Фоновое изображение установлено!');
       };
       reader.readAsDataURL(file);
     });
@@ -4781,6 +4822,7 @@ function renderSettings(options = {}) {
   if (bgImageClearBtn) {
     bgImageClearBtn.addEventListener('click', () => {
       localStorage.removeItem('gp_bg_image');
+      localStorage.removeItem('gp_bg_is_video');
       applyBackgroundImage(null);
       bgImageClearBtn.classList.add('hidden');
       bgImageFileInput.value = '';
@@ -5262,12 +5304,47 @@ function mixHexColors(color1, color2, weight) {
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
-function applyBackgroundImage(base64Str) {
+function applyBackgroundImage(mediaRef, isVideoFlag) {
   const root = document.documentElement;
-  if (base64Str) {
-    root.style.setProperty('--bg-image', `url("${base64Str}")`);
-  } else {
+  const bgVideo = document.getElementById('bg-video-element');
+  
+  const isVideo = isVideoFlag !== undefined 
+    ? Boolean(isVideoFlag)
+    : (Boolean(mediaRef) && (
+        String(mediaRef).toLowerCase().endsWith('.mp4') ||
+        String(mediaRef).toLowerCase().endsWith('.webm') ||
+        String(mediaRef).toLowerCase().endsWith('.mov') ||
+        String(mediaRef).startsWith('data:video/')
+      ));
+
+  if (!mediaRef) {
     root.style.removeProperty('--bg-image');
+    if (bgVideo) {
+      bgVideo.pause();
+      bgVideo.removeAttribute('src');
+      bgVideo.load();
+      bgVideo.classList.add('hidden');
+    }
+    return;
+  }
+
+  if (isVideo) {
+    root.style.removeProperty('--bg-image');
+    if (bgVideo) {
+      if (bgVideo.src !== mediaRef) {
+        bgVideo.src = mediaRef;
+        bgVideo.load();
+      }
+      bgVideo.classList.remove('hidden');
+      bgVideo.play().catch(e => console.warn('[Video Background] Autoplay:', e.message));
+    }
+  } else {
+    if (bgVideo) {
+      bgVideo.pause();
+      bgVideo.removeAttribute('src');
+      bgVideo.classList.add('hidden');
+    }
+    root.style.setProperty('--bg-image', `url("${mediaRef}")`);
   }
 }
 
@@ -5602,13 +5679,25 @@ if (savedTheme === 'custom') {
   applyBgEffect('static');
 }
 
-// Apply Saved Background Image & Opacity on Startup
+// Apply Saved Background Media (Image / GIF / Video) & Opacity on Startup
 const savedBgImage = localStorage.getItem('gp_bg_image');
+const savedBgIsVideo = localStorage.getItem('gp_bg_is_video') === 'true';
 if (savedBgImage) {
-  applyBackgroundImage(savedBgImage);
+  applyBackgroundImage(savedBgImage, savedBgIsVideo);
 }
 const savedBgOpacity = localStorage.getItem('gp_bg_image_opacity') || '0';
 document.documentElement.style.setProperty('--bg-image-opacity', parseFloat(savedBgOpacity) / 100);
+
+// Performance lifecycle for live video background
+document.addEventListener('visibilitychange', () => {
+  const bgVideo = document.getElementById('bg-video-element');
+  if (!bgVideo || bgVideo.classList.contains('hidden')) return;
+  if (document.hidden) {
+    bgVideo.pause();
+  } else {
+    bgVideo.play().catch(() => {});
+  }
+});
 
 // Apply Saved Volume on Startup
 const savedVolume = localStorage.getItem('gp_volume');
@@ -6766,18 +6855,41 @@ async function handleModalAuthSubmit() {
   const submitBtn = document.getElementById('auth-modal-submit-btn');
   if (submitBtn) {
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Загрузка...';
+    submitBtn.textContent = 'Подключение... (пробуждение сервера)';
   }
 
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+  let data = null;
+  let isSuccess = false;
 
-    const data = await res.json();
-    if (data.status === 'success') {
+  try {
+    // 1. Native Electron request (Bypasses Chromium sandbox and connects reliably to Render with 50s timeout)
+    if (window.electronAPI && typeof window.electronAPI.nativeAuthRequest === 'function') {
+      console.log('[Auth Modal] Attempting native auth request to:', url);
+      const res = await window.electronAPI.nativeAuthRequest({
+        url,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        timeoutMs: 50000
+      });
+      if (res && res.data) {
+        data = res.data;
+        isSuccess = Boolean(res.ok && data.status === 'success');
+      } else {
+        throw new Error(res?.error || 'Сервер не отвечает');
+      }
+    } else {
+      // 2. Standard fetch with 45s timeout for mobile/web
+      const res = await fetchWithTimeout(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }, 45000);
+      data = await res.json();
+      isSuccess = Boolean(res.ok && data.status === 'success');
+    }
+
+    if (isSuccess && data && data.user) {
       token = data.token;
       currentUser = data.user;
       invalidateHomeRecommendations();
@@ -6802,14 +6914,14 @@ async function handleModalAuthSubmit() {
       }
     } else {
       if (errorEl) {
-        errorEl.textContent = data.message || 'Произошла ошибка';
+        errorEl.textContent = data?.message || 'Неверный логин или пароль';
         errorEl.classList.remove('hidden');
       }
     }
   } catch (err) {
-    console.error(err);
+    console.error('[Auth Error]:', err);
     if (errorEl) {
-      errorEl.textContent = 'Не удалось подключиться к серверу';
+      errorEl.textContent = 'Сервер недоступен или пробуждается. Попробуйте еще раз через несколько секунд.';
       errorEl.classList.remove('hidden');
     }
   } finally {

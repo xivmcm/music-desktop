@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.18.0';
+const APP_VERSION = '1.18.1';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -4759,15 +4759,15 @@ function renderSettings(options = {}) {
       const isVideo = file.type.startsWith('video/') || 
                       ['.mp4', '.webm', '.mov'].some(ext => file.name.toLowerCase().endsWith(ext));
 
-      // Size check (Limit: 25 MB)
-      const MAX_SIZE = 25 * 1024 * 1024;
+      // Size check (Limit: 35 MB)
+      const MAX_SIZE = 35 * 1024 * 1024;
       if (file.size > MAX_SIZE) {
-        showToastNotification('Файл слишком большой (максимум 25 МБ)', 'warning', 'Фон');
+        showToastNotification('Файл слишком большой (максимум 35 МБ)', 'warning', 'Фон');
         bgImageFileInput.value = '';
         return;
       }
 
-      // If video, check duration limit (<= 8.5 seconds)
+      let wasAutoTrimmed = false;
       if (isVideo) {
         try {
           const duration = await new Promise((resolve, reject) => {
@@ -4781,10 +4781,8 @@ function renderSettings(options = {}) {
             tempVideo.src = URL.createObjectURL(file);
           });
 
-          if (duration > 8.5) {
-            showToastNotification(`Видео слишком длинное (${Math.round(duration)} сек). Максимальная длина фонового видео — 8 секунд для плавной работы.`, 'warning', 'Фон');
-            bgImageFileInput.value = '';
-            return;
+          if (duration > 8.0) {
+            wasAutoTrimmed = true;
           }
         } catch (err) {
           console.warn('[Video Check Error]:', err.message);
@@ -4813,7 +4811,15 @@ function renderSettings(options = {}) {
         localStorage.setItem('gp_bg_is_video', String(isVideoSaved));
         applyBackgroundImage(bgRef, isVideoSaved);
         if (bgImageClearBtn) bgImageClearBtn.classList.remove('hidden');
-        showToastNotification(isVideoSaved ? 'Живой видеофон установлен!' : 'Фоновое изображение установлено!');
+        if (isVideoSaved) {
+          if (wasAutoTrimmed) {
+            showToastNotification('Видео установлено и зациклено на первых 8 секундах.', 'success', 'Фон');
+          } else {
+            showToastNotification('Живой видеофон установлен!', 'success', 'Фон');
+          }
+        } else {
+          showToastNotification('Фоновое изображение установлено!', 'success', 'Фон');
+        }
       };
       reader.readAsDataURL(file);
     });
@@ -5335,6 +5341,12 @@ function applyBackgroundImage(mediaRef, isVideoFlag) {
         bgVideo.src = mediaRef;
         bgVideo.load();
       }
+      bgVideo.ontimeupdate = () => {
+        // Smart 8-second loop clamp for ultra-smooth playback & zero CPU overhead
+        if (bgVideo.currentTime >= 8.0) {
+          bgVideo.currentTime = 0;
+        }
+      };
       bgVideo.classList.remove('hidden');
       bgVideo.play().catch(e => console.warn('[Video Background] Autoplay:', e.message));
     }
@@ -5688,16 +5700,28 @@ if (savedBgImage) {
 const savedBgOpacity = localStorage.getItem('gp_bg_image_opacity') || '0';
 document.documentElement.style.setProperty('--bg-image-opacity', parseFloat(savedBgOpacity) / 100);
 
-// Performance lifecycle for live video background
-document.addEventListener('visibilitychange', () => {
+// Performance lifecycle for live video background (0% CPU/GPU when idle/minimized/in other apps)
+function pauseBackgroundMedia() {
   const bgVideo = document.getElementById('bg-video-element');
-  if (!bgVideo || bgVideo.classList.contains('hidden')) return;
-  if (document.hidden) {
+  if (bgVideo && !bgVideo.classList.contains('hidden')) {
     bgVideo.pause();
-  } else {
+  }
+}
+
+function resumeBackgroundMedia() {
+  const bgVideo = document.getElementById('bg-video-element');
+  if (bgVideo && !bgVideo.classList.contains('hidden') && !document.hidden) {
     bgVideo.play().catch(() => {});
   }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) pauseBackgroundMedia();
+  else resumeBackgroundMedia();
 });
+
+window.addEventListener('blur', pauseBackgroundMedia);
+window.addEventListener('focus', resumeBackgroundMedia);
 
 // Apply Saved Volume on Startup
 const savedVolume = localStorage.getItem('gp_volume');
@@ -8169,9 +8193,12 @@ function renderLRCLines(lines) {
  * Updates which lyric line is active based on current audio time.
  */
 function syncLyricsToTime(currentTime) {
+  if (!lyricsState.lrcLines || !lyricsState.lrcLines.length) return;
+
   let activeIdx = -1;
-  for (let i = 0; i < lyricsState.lrcLines.length; i++) {
-    if (lyricsState.lrcLines[i].time <= currentTime) {
+  const lines = lyricsState.lrcLines;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].time <= currentTime) {
       activeIdx = i;
     } else {
       break;
@@ -8181,23 +8208,38 @@ function syncLyricsToTime(currentTime) {
   if (activeIdx === lyricsState.lastActiveIdx) {
     return;
   }
+  
+  const prevIdx = lyricsState.lastActiveIdx;
   lyricsState.lastActiveIdx = activeIdx;
 
-  const linEls = lyricsContent.querySelectorAll('.lyrics-line');
-  if (!linEls.length) return;
+  const linEls = lyricsContent.children;
+  if (!linEls || !linEls.length) return;
 
-  linEls.forEach((el, i) => {
-    el.classList.remove('active', 'past', 'upcoming');
-    if (i < activeIdx)       el.classList.add('past');
-    else if (i === activeIdx) el.classList.add('active');
-    else                      el.classList.add('upcoming');
-  });
+  // Update previous active line
+  if (prevIdx >= 0 && prevIdx < linEls.length) {
+    const prevEl = linEls[prevIdx];
+    prevEl.classList.remove('active');
+    if (prevIdx < activeIdx) {
+      prevEl.classList.add('past');
+      prevEl.classList.remove('upcoming');
+    } else {
+      prevEl.classList.add('upcoming');
+      prevEl.classList.remove('past');
+    }
+  }
 
-  // Smooth-scroll active line into view with modern center alignment
-  if (activeIdx >= 0 && linEls[activeIdx]) {
-    linEls[activeIdx].scrollIntoView({
-      behavior: 'smooth',
-      block: 'center',
+  // Update new active line
+  if (activeIdx >= 0 && activeIdx < linEls.length) {
+    const activeEl = linEls[activeIdx];
+    activeEl.classList.remove('past', 'upcoming');
+    activeEl.classList.add('active');
+
+    // Smooth-scroll container without layout reflow spikes
+    const containerHeight = lyricsContent.clientHeight;
+    const targetScrollTop = activeEl.offsetTop - (containerHeight / 2) + (activeEl.clientHeight / 2);
+    lyricsContent.scrollTo({
+      top: Math.max(0, targetScrollTop),
+      behavior: 'smooth'
     });
   }
 }

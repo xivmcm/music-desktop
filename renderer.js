@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.17.5';
+const APP_VERSION = '1.17.6';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -7932,7 +7932,35 @@ async function fetchLyricsMultiSource(track) {
   const terms = cleanLyricsQuery(track.title, track.artist);
   console.log(`[Lyrics] Searching lyrics for: "${terms.directQuery}" (Artist: ${terms.artist}, Song: ${terms.songName})`);
 
-  // 2. Parallel Fast LRCLIB Queries (Direct Get + Combined Search + Clean Search + Title-only)
+  // 2. Desktop native Node IPC fetch (Bypasses all Chromium browser/CORS/header blocks in РФ)
+  if (window.electronAPI && typeof window.electronAPI.fetchLyrics === 'function') {
+    try {
+      const nativeResult = await window.electronAPI.fetchLyrics(terms);
+      if (nativeResult && (nativeResult.lyrics || nativeResult.plainText)) {
+        console.log(`[Lyrics] Loaded lyrics via Electron Native Engine from ${nativeResult.source}`);
+        try { localStorage.setItem(cacheKey, JSON.stringify(nativeResult)); } catch (e) {}
+        return nativeResult;
+      }
+    } catch (err) {
+      console.warn('[Lyrics] Native fetch error:', err.message);
+    }
+  }
+
+  // 3. Backend Proxy Lyrics Fetch
+  try {
+    const backendUrl = getBackendUrl();
+    const res = await fetchWithTimeout(`${backendUrl}/api/lyrics?title=${encodeURIComponent(terms.songName)}&artist=${encodeURIComponent(terms.artist)}&query=${encodeURIComponent(terms.directQuery)}`, {}, 2500);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && (data.lyrics || data.plainText)) {
+        console.log(`[Lyrics] Loaded lyrics via Backend Proxy from ${data.source}`);
+        try { localStorage.setItem(cacheKey, JSON.stringify(data)); } catch (e) {}
+        return data;
+      }
+    }
+  } catch (e) {}
+
+  // 4. Parallel Fast LRCLIB Queries (Direct Get + Combined Search + Clean Search + Title-only)
   const queries = [
     `https://lrclib.net/api/get?${new URLSearchParams({ track_name: terms.songName, artist_name: terms.artist })}`,
     `https://lrclib.net/api/search?q=${encodeURIComponent(terms.directQuery)}`,

@@ -254,6 +254,46 @@ function registerIpcHandlers() {
     state.wasMaximized = false;
   });
 
+  ipcMain.handle('fetch-lyrics', async (event, terms) => {
+    if (!terms) return null;
+    const { artist, songName, directQuery, rawCleanQuery, titleOnlyQuery } = terms;
+    const LRCLIB_HEADERS = {
+      'User-Agent': 'GlassPlayer/1.17.6 (https://github.com/xivmcm/music-desktop)',
+      'Lrclib-Client': 'GlassPlayer v1.17.6'
+    };
+
+    const queries = [
+      `https://lrclib.net/api/get?${new URLSearchParams({ track_name: songName, artist_name: artist })}`,
+      `https://lrclib.net/api/search?q=${encodeURIComponent(directQuery)}`,
+      `https://lrclib.net/api/search?q=${encodeURIComponent(rawCleanQuery)}`,
+      `https://lrclib.net/api/search?q=${encodeURIComponent(titleOnlyQuery)}`
+    ];
+
+    for (const url of queries) {
+      try {
+        const res = await fetch(url, { headers: LRCLIB_HEADERS, signal: AbortSignal.timeout(2500) });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            const best = data.find(item => item.syncedLyrics) || data[0];
+            if (best.syncedLyrics) {
+              return { format: 'lrc', lyrics: best.syncedLyrics, source: 'LRCLIB (Караоке)' };
+            } else if (best.plainLyrics) {
+              return { format: 'plain', plainText: best.plainLyrics, source: 'LRCLIB' };
+            }
+          } else if (data && !Array.isArray(data)) {
+            if (data.syncedLyrics) {
+              return { format: 'lrc', lyrics: data.syncedLyrics, source: 'LRCLIB (Караоке)' };
+            } else if (data.plainLyrics) {
+              return { format: 'plain', plainText: data.plainLyrics, source: 'LRCLIB' };
+            }
+          }
+        }
+      } catch (e) {}
+    }
+    return null;
+  });
+
   ipcMain.on('download-update', () => {
     autoUpdater.downloadUpdate();
   });

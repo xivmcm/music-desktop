@@ -137,6 +137,33 @@ function initDiscordRPC() {
   }
 }
 
+// ── Mini-player: pinned above all OS windows ───────────────────────────────
+function enforceMiniPlayerOnTop(window) {
+  if (!window || window.isDestroyed()) return;
+  try {
+    // 'screen-saver' is the highest z-order level — stays above taskbar & other topmost windows.
+    window.setAlwaysOnTop(true, 'screen-saver', 1);
+    if (typeof window.setVisibleOnAllWorkspaces === 'function') {
+      window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+    }
+    if (typeof window.moveTop === 'function') window.moveTop();
+  } catch (err) {
+    console.warn('[Mini-player] Failed to pin window on top:', err.message);
+  }
+}
+
+function releaseMiniPlayerOnTop(window) {
+  if (!window || window.isDestroyed()) return;
+  try {
+    window.setAlwaysOnTop(false);
+    if (typeof window.setVisibleOnAllWorkspaces === 'function') {
+      window.setVisibleOnAllWorkspaces(false, { skipTransformProcessType: true });
+    }
+  } catch (err) {
+    console.warn('[Mini-player] Failed to release always-on-top:', err.message);
+  }
+}
+
 function smoothResize(window, targetWidth, targetHeight, duration = 200, callback) {
   const startBounds = window.getBounds();
   const startTime = Date.now();
@@ -323,7 +350,7 @@ function registerIpcHandlers() {
 
       window.setResizable(true);
       window.setMinimumSize(370, 110);
-      window.setAlwaysOnTop(true, 'floating');
+      enforceMiniPlayerOnTop(window);
 
       const currentBounds = window.getBounds();
       const newWidth = 370;
@@ -345,7 +372,7 @@ function registerIpcHandlers() {
 
     window.setResizable(true);
     window.setMinimumSize(...NORMAL_MINIMUM_SIZE);
-    window.setAlwaysOnTop(false);
+    releaseMiniPlayerOnTop(window);
 
     if (state.normalBounds) {
       window.setBounds(state.normalBounds);
@@ -638,6 +665,20 @@ function createWindow() {
 
   window.on('unmaximize', () => {
     sendToWindow(window, 'window-maximized-status', false);
+  });
+
+  // Windows can silently drop the topmost flag (focus loss, restore, other topmost apps).
+  // While in mini-player mode, re-pin it on every such event.
+  const reassertMiniPlayerOnTop = () => {
+    if (state.isMiniPlayer) enforceMiniPlayerOnTop(window);
+  };
+  window.on('blur', reassertMiniPlayerOnTop);
+  window.on('restore', reassertMiniPlayerOnTop);
+  window.on('show', reassertMiniPlayerOnTop);
+  window.on('always-on-top-changed', (event, isAlwaysOnTop) => {
+    if (!isAlwaysOnTop && state.isMiniPlayer) {
+      setImmediate(reassertMiniPlayerOnTop);
+    }
   });
 
   // A renderer reload must not leave a 370x110 window showing the full layout.

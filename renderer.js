@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.18.1';
+const APP_VERSION = '1.18.5';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -701,6 +701,14 @@ window.addEventListener('drop', async (e) => {
     loadFavorites('local');
   }
 });
+
+// Prevent native drag-and-drop of track covers / images inside the app
+document.addEventListener('dragstart', (e) => {
+  const target = e.target;
+  if (target instanceof HTMLImageElement || target?.closest?.('.track-cover-container, .card-cover, .mini-cover, #current-cover')) {
+    e.preventDefault();
+  }
+}, true);
 
 // Helper to construct audio stream URL
 function getAudioStreamUrl(track, seekTime) {
@@ -2720,9 +2728,13 @@ function addToHistory(track) {
   savePlayHistory(history);
   invalidateHomeRecommendations();
 
-  // Refresh if viewing history
+  // Refresh if viewing history — but never reorder the queue that is currently
+  // being played from History (that caused next() to bounce between two tracks).
   if (activeView === 'history') {
-    renderHistory();
+    const isPlayingFromHistoryQueue = playlist.some(t => t && t.id === track.id);
+    if (!isPlayingFromHistoryQueue) {
+      renderHistory();
+    }
   }
 }
 
@@ -3059,17 +3071,13 @@ function showPlaylistMenu(e, track) {
     });
   } else {
     const noPlaylists = document.createElement('div');
-    noPlaylists.className = 'playlist-menu-item';
-    noPlaylists.style.cursor = 'default';
-    noPlaylists.innerHTML = '<span style="color:rgba(255,255,255,0.4);">No Playlists</span>';
+    noPlaylists.className = 'playlist-menu-item playlist-menu-empty';
+    noPlaylists.innerHTML = '<span>No Playlists</span>';
     playlistMenuList.appendChild(noPlaylists);
   }
 
   const createNewItem = document.createElement('button');
-  createNewItem.className = 'playlist-menu-item';
-  createNewItem.style.color = '#30d158';
-  createNewItem.style.borderTop = '1px solid rgba(255,255,255,0.06)';
-  createNewItem.style.marginTop = '4px';
+  createNewItem.className = 'playlist-menu-item playlist-menu-create';
   createNewItem.innerHTML = '<span>+ New Playlist</span>';
   createNewItem.addEventListener('click', () => {
     playlistMenu.classList.add('hidden');

@@ -17,5 +17,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onMiniPlayerToggled: (callback) => ipcRenderer.on('mini-player-toggled', (event, active) => callback(active)),
   onWindowMaximizedStatus: (callback) => ipcRenderer.on('window-maximized-status', (event, maximized) => callback(maximized)),
   fetchLyrics: (payload) => ipcRenderer.invoke('fetch-lyrics', payload),
-  nativeAuthRequest: (payload) => ipcRenderer.invoke('native-auth-request', payload)
+  nativeAuthRequest: (payload) => ipcRenderer.invoke('native-auth-request', payload),
+  onOpenShareLink: (callback) => ipcRenderer.on('open-share-link', (event, link) => callback(link)),
+  consumePendingShareLink: () => ipcRenderer.invoke('consume-pending-share-link')
 });

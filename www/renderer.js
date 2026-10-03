@@ -327,9 +327,14 @@ let cachedForYouData = null;
 
 // Base Server API URL Configuration
 const DEFAULT_MIRRORS = [
-  'https://music-backend-gwga.onrender.com' // Primary Render backend
+  'https://music-backend-iyni.onrender.com' // Primary Render backend
 ];
-let API_URL = localStorage.getItem('gp_backend_url') || DEFAULT_MIRRORS[0];
+let savedBackend = localStorage.getItem('gp_backend_url');
+if (savedBackend && savedBackend.includes('gwga')) {
+  localStorage.removeItem('gp_backend_url');
+  savedBackend = null;
+}
+let API_URL = savedBackend || DEFAULT_MIRRORS[0];
 let BACKEND_URL = `${API_URL}/api`;
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 7000) {
@@ -3072,6 +3077,7 @@ function showPlaylistMenu(e, track) {
     newPlaylistInput.focus();
   });
   playlistMenuList.appendChild(createNewItem);
+  appendShareItemToTrackMenu(track);
 
   playlistMenu.style.top = `${rect.bottom + window.scrollY + 6}px`;
   playlistMenu.style.left = `${Math.min(rect.left + window.scrollX, window.innerWidth - 200)}px`;
@@ -5678,6 +5684,7 @@ function clearCustomThemeProperties() {
   updateSplashStatus('Загрузка рекомендаций...', 85);
   await loadHomeView();
   hideSplashScreen();
+  window.dispatchEvent(new CustomEvent('gp:app-ready'));
 })();
 
 // Apply Saved Theme on Startup
@@ -8639,4 +8646,240 @@ if (playerBarEl) {
     if (e.touches.length === 1) onDragMove(e.touches[0].clientY);
   }, { passive: true });
   window.addEventListener('touchend', onDragEnd);
+}
+
+// ── Track Share Links ──────────────────────────────────────────────────────
+// Self-contained feature: copy a public link to a track and open incoming
+// glassplayer:// links. Reuses playTrack()/showToastNotification() as-is and
+// never mutates existing playlist arrays (appends via concat so card indices stay valid).
+const SHARE_LINK_BASE_URL = `${DEFAULT_MIRRORS[0]}/share/track`;
+const SHARE_ALLOWED_SOURCES = new Set(['soundcloud', 'spotify']);
+const SHARE_MAX_TEXT_LENGTH = 200;
+const SHARE_LINK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+
+let shareLinksAppReady = false;
+const pendingIncomingShareLinks = [];
+
+// Sanitizers mirror music-backend/src/routes/share.routes.js
+function shareCleanText(value) {
+  return String(value ?? '')
+    .replace(/[\u0000-\u001f\u007f<>]/g, '')
+    .replace(/"/g, '”')
+    .replace(/[`']/g, '’')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, SHARE_MAX_TEXT_LENGTH);
+}
+
+function shareCleanId(value) {
+  const id = String(value ?? '').trim()
+    .replace(/'/g, '%27')
+    .replace(/\(/g, '%28')
+    .replace(/\)/g, '%29');
+  return /^[\w:.%\-!*~]{1,300}$/.test(id) ? id : '';
+}
+
+function shareCleanImage(value) {
+  if (!value) return '';
+  try {
+    const url = new URL(String(value));
+    if (url.protocol !== 'https:') return '';
+    const href = url.href;
+    if (href.length > 600 || /['"<>\s\\`]/.test(href)) return '';
+    return href;
+  } catch {
+    return '';
+  }
+}
+
+function shareCleanDuration(value) {
+  const d = String(value ?? '').trim();
+  return /^\d{1,2}(:\d{2}){1,2}$/.test(d) ? d : '';
+}
+
+function isTrackShareable(track) {
+  return Boolean(track && !track.blobUrl && SHARE_ALLOWED_SOURCES.has(track.source) && shareCleanId(track.id));
+}
+
+function buildTrackShareUrl(track) {
+  if (!isTrackShareable(track)) return null;
+  const params = new URLSearchParams();
+  params.set('src', track.source);
+  params.set('id', shareCleanId(track.id));
+  params.set('t', shareCleanText(track.title) || 'Unknown Track');
+  const artist = shareCleanText(track.artist);
+  if (artist) params.set('a', artist);
+  const image = shareCleanImage(track.thumbnail);
+  if (image) params.set('img', image);
+  const duration = shareCleanDuration(track.duration);
+  if (duration) params.set('d', duration);
+  const artistId = String(track.artistId || '');
+  if (/^\d{1,20}$/.test(artistId)) params.set('aid', artistId);
+  return `${SHARE_LINK_BASE_URL}?${params.toString()}`;
+}
+
+async function writeTextToClipboard(text) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (err) {
+    console.warn('[Share Links] Clipboard API failed, using fallback:', err.message);
+  }
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const ok = document.execCommand('copy');
+    textarea.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+async function copyTrackShareLink(track) {
+  if (!track) {
+    showToastNotification('Сначала включите трек', 'info', 'Поделиться');
+    return;
+  }
+  if (track.source === 'local' || track.blobUrl) {
+    showToastNotification('Локальные треки с устройства нельзя отправить ссылкой', 'warning', 'Поделиться');
+    return;
+  }
+  const url = buildTrackShareUrl(track);
+  if (!url) {
+    showToastNotification('Для этого трека ссылка недоступна', 'warning', 'Поделиться');
+    return;
+  }
+  const copied = await writeTextToClipboard(url);
+  if (copied) {
+    showToastNotification(`Ссылка на «${shareCleanText(track.title)}» скопирована — отправьте её другу`, 'success', 'Поделиться');
+  } else {
+    showToastNotification('Не удалось скопировать ссылку в буфер обмена', 'error', 'Поделиться');
+  }
+}
+
+function parseIncomingShareLink(rawLink) {
+  let url;
+  try {
+    url = new URL(String(rawLink));
+  } catch {
+    return null;
+  }
+
+  if (url.protocol === 'glassplayer:') {
+    const target = (url.hostname || url.pathname.replace(/^\/+/, '')).replace(/\/+$/, '').toLowerCase();
+    if (target !== 'track') return null;
+  } else if (url.protocol === 'https:') {
+    if (url.pathname.replace(/\/+$/, '') !== '/share/track') return null;
+  } else {
+    return null;
+  }
+
+  const p = url.searchParams;
+  const source = String(p.get('src') || '').toLowerCase();
+  const id = shareCleanId(p.get('id'));
+  const title = shareCleanText(p.get('t'));
+  if (!SHARE_ALLOWED_SOURCES.has(source) || !id || !title) return null;
+
+  const artistId = String(p.get('aid') || '');
+  return {
+    id,
+    title,
+    artist: shareCleanText(p.get('a')) || 'Unknown Artist',
+    artistId: /^\d{1,20}$/.test(artistId) ? artistId : '',
+    source,
+    thumbnail: shareCleanImage(p.get('img')),
+    duration: shareCleanDuration(p.get('d')) || '-:-',
+    sharedViaLink: true
+  };
+}
+
+function playSharedTrack(track) {
+  let index = playlist.findIndex(t => t && t.id === track.id);
+  if (index === -1) {
+    // New array (no mutation of likes/playlists/history arrays) appended at the end,
+    // so indices of already rendered cards remain correct.
+    playlist = playlist.concat([track]);
+    index = playlist.length - 1;
+  }
+  playTrack(index);
+  showToastNotification(`${track.artist} — ${track.title}`, 'info', 'Трек по ссылке');
+}
+
+function handleIncomingShareLink(rawLink) {
+  const track = parseIncomingShareLink(rawLink);
+  if (!track) {
+    showToastNotification('Ссылка на трек повреждена или устарела', 'warning', 'Поделиться');
+    return;
+  }
+  if (!shareLinksAppReady) {
+    pendingIncomingShareLinks.length = 0; // only the latest link matters
+    pendingIncomingShareLinks.push(track);
+    return;
+  }
+  playSharedTrack(track);
+}
+
+function flushPendingShareLinks() {
+  if (shareLinksAppReady) return;
+  shareLinksAppReady = true;
+  const track = pendingIncomingShareLinks.pop();
+  pendingIncomingShareLinks.length = 0;
+  if (track) playSharedTrack(track);
+
+  if (isElectron && window.electronAPI?.consumePendingShareLink) {
+    window.electronAPI.consumePendingShareLink()
+      .then(link => { if (link) handleIncomingShareLink(link); })
+      .catch(err => console.warn('[Share Links] Failed to read launch link:', err.message));
+  }
+}
+
+// Called from showPlaylistMenu() — adds "Скопировать ссылку" to the per-track menu.
+function appendShareItemToTrackMenu(track) {
+  if (!playlistMenuList || !isTrackShareable(track)) return;
+  const shareItem = document.createElement('button');
+  shareItem.type = 'button';
+  shareItem.className = 'playlist-menu-item share-link-menu-item';
+  shareItem.innerHTML = `<span class="share-link-menu-label">${SHARE_LINK_ICON}Скопировать ссылку</span>`;
+  shareItem.addEventListener('click', () => {
+    playlistMenu?.classList.add('hidden');
+    copyTrackShareLink(track);
+  });
+  playlistMenuList.appendChild(shareItem);
+}
+
+function initPlayerShareButton() {
+  const likeBtn = document.getElementById('player-like-btn');
+  if (!likeBtn || document.getElementById('player-share-btn')) return;
+  const shareBtn = document.createElement('button');
+  shareBtn.id = 'player-share-btn';
+  shareBtn.type = 'button';
+  shareBtn.className = 'player-share-btn';
+  shareBtn.title = 'Скопировать ссылку на трек';
+  shareBtn.setAttribute('aria-label', 'Скопировать ссылку на трек');
+  shareBtn.innerHTML = SHARE_LINK_ICON;
+  shareBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    copyTrackShareLink(activePlayingTrack);
+  });
+  likeBtn.insertAdjacentElement('afterend', shareBtn);
+}
+
+try {
+  initPlayerShareButton();
+  if (isElectron && window.electronAPI?.onOpenShareLink) {
+    window.electronAPI.onOpenShareLink(handleIncomingShareLink);
+  }
+  window.addEventListener('gp:app-ready', flushPendingShareLinks, { once: true });
+  // Safety net: if startup stalled (offline / home view error), still honour the link.
+  setTimeout(flushPendingShareLinks, 15000);
+} catch (err) {
+  console.error('[Share Links] Init failed (player unaffected):', err);
 }

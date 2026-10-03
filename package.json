@@ -1,6 +1,6 @@
 {
   "name": "music-desktop",
-  "version": "1.18.1",
+  "version": "1.18.2",
   "description": "Cross-platform music player aggregator desktop application",
   "author": "GlassPlayer",
   "main": "main.js",
@@ -18,6 +18,12 @@
   "build": {
     "appId": "com.glassplayer.app",
     "productName": "GlassPlayer",
+    "protocols": [
+      {
+        "name": "GlassPlayer Track Link",
+        "schemes": ["glassplayer"]
+      }
+    ],
     "directories": {
       "output": "dist"
     },

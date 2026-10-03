@@ -38,6 +38,75 @@ function sendToPrimaryWindow(channel, ...args) {
   sendToWindow(getPrimaryWindow(), channel, ...args);
 }
 
+// ── Track Share Links: glassplayer:// protocol ─────────────────────────────
+const SHARE_PROTOCOL = 'glassplayer';
+const SHARE_LINK_MAX_LENGTH = 4096;
+let pendingShareLink = null;
+
+function extractShareLink(argv) {
+  if (!Array.isArray(argv)) return null;
+  const link = argv.find(arg => typeof arg === 'string' && arg.toLowerCase().startsWith(`${SHARE_PROTOCOL}://`));
+  return link && link.length <= SHARE_LINK_MAX_LENGTH ? link : null;
+}
+
+function registerShareProtocol() {
+  try {
+    if (process.defaultApp && process.argv.length >= 2) {
+      // Dev mode (`electron .`): register electron.exe + app path so links still open this project.
+      app.setAsDefaultProtocolClient(SHARE_PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
+    } else {
+      app.setAsDefaultProtocolClient(SHARE_PROTOCOL);
+    }
+  } catch (err) {
+    console.warn('[Share Links] Failed to register protocol:', err.message);
+  }
+}
+
+function focusPrimaryWindow() {
+  const window = getPrimaryWindow();
+  if (!window) return;
+  if (window.isMinimized()) window.restore();
+  if (!window.isVisible()) window.show();
+  window.focus();
+}
+
+function deliverShareLink(link) {
+  if (!link) return;
+  const window = getPrimaryWindow();
+  if (window && !window.webContents.isDestroyed() && !window.webContents.isLoading()) {
+    sendToWindow(window, 'open-share-link', link);
+    focusPrimaryWindow();
+  } else {
+    // Renderer not ready yet — it will pull this via 'consume-pending-share-link'.
+    pendingShareLink = link;
+  }
+}
+
+pendingShareLink = extractShareLink(process.argv);
+
+// Only one GlassPlayer instance: a clicked link must open in the already running player.
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (event, argv) => {
+    focusPrimaryWindow();
+    deliverShareLink(extractShareLink(argv));
+  });
+}
+
+// macOS delivers protocol links via 'open-url' instead of argv.
+app.on('open-url', (event, link) => {
+  event.preventDefault();
+  if (typeof link === 'string' && link.length <= SHARE_LINK_MAX_LENGTH) deliverShareLink(link);
+});
+
+ipcMain.handle('consume-pending-share-link', () => {
+  const link = pendingShareLink;
+  pendingShareLink = null;
+  return link;
+});
+
 function initDiscordRPC() {
   const isValidId = DISCORD_CLIENT_ID && /^\d+$/.test(DISCORD_CLIENT_ID) && DISCORD_CLIENT_ID !== "ЗАМЕНИ_МЕНЯ";
   if (!isValidId) {
@@ -586,6 +655,11 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Duplicate instance: link was forwarded to the running player via 'second-instance'.
+  if (!hasSingleInstanceLock) return;
+
+  registerShareProtocol();
+
   // Configure native DNS-over-HTTPS (DoH) in Electron to bypass DNS blocking in RU
   try {
     if (typeof app.configureHostResolver === 'function') {

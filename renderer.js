@@ -6503,7 +6503,7 @@ async function initAuth() {
     try {
       const res = await fetchWithTimeout(`${BACKEND_URL}/auth/me`, {
         headers: { 'Authorization': `Bearer ${token}` }
-      }, 1500);
+      }, 4500);
 
       if (res.status === 200) {
         const data = await res.json();
@@ -6869,6 +6869,13 @@ async function loadFriendProfile(userId) {
       tracksContainer.innerHTML = '';
 
       const avatarSrc = friend.avatarBase64 || DEFAULT_AVATAR_100;
+      const liveStatus = friendStatuses.get(friend.id);
+      const isOnline = liveStatus ? Boolean(liveStatus.isOnline) : Boolean(friend.isOnline);
+      const lastSeen = (liveStatus && liveStatus.lastSeen) || friend.lastSeen;
+      const fullDate = getFullDateTooltip(lastSeen);
+      const presenceHtml = isOnline
+        ? '<div class="friend-profile-presence online"><span class="presence-dot"></span><span>В сети</span></div>'
+        : `<div class="friend-profile-presence offline" title="${escapeHTML(fullDate)}"><span class="presence-dot"></span><span>${escapeHTML(formatLastSeen(lastSeen))}</span></div>`;
 
       const headerCard = document.createElement('div');
       headerCard.className = 'friend-profile-banner';
@@ -6876,6 +6883,7 @@ async function loadFriendProfile(userId) {
         <img class="friend-profile-avatar" src="${avatarSrc}" alt="Avatar">
         <h2 class="friend-profile-name">${escapeHTML(friend.displayName)}</h2>
         <p class="friend-profile-username">@${escapeHTML(friend.username)}</p>
+        <div class="friend-profile-presence-wrap">${presenceHtml}</div>
         <p class="friend-profile-bio">${escapeHTML(friend.bio || 'Нет описания')}</p>
         <div class="friend-profile-stats">
           <span><strong>${friend.likedTracks ? friend.likedTracks.length : 0}</strong> лайков</span>
@@ -7272,14 +7280,94 @@ if (authModalSubmitBtn) {
 }
 
 // ==========================================================================
+// ==========================================================================
 // RELEASE 1.5.0: The Social Engine Websocket & Collaboration Logic
 // ==========================================================================
+
+let wsPingInterval = null;
+let friendActivityRefreshTimer = null;
+
+function formatLastSeen(dateInput) {
+  if (!dateInput) return 'не в сети';
+  const date = new Date(dateInput);
+  if (isNaN(date.getTime())) return 'не в сети';
+
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.max(0, Math.floor(diffMs / 1000));
+
+  if (diffSec < 60) {
+    return 'был(а) только что';
+  }
+
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) {
+    const lastDigit = diffMin % 10;
+    const lastTwo = diffMin % 100;
+    let minWord = 'минут';
+    if (lastTwo < 11 || lastTwo > 19) {
+      if (lastDigit === 1) minWord = 'минуту';
+      else if (lastDigit >= 2 && lastDigit <= 4) minWord = 'минуты';
+    }
+    return `был(а) ${diffMin} ${minWord} назад`;
+  }
+
+  const pad = (n) => String(n).padStart(2, '0');
+  const timeStr = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+
+  const isToday = now.getFullYear() === date.getFullYear() &&
+                  now.getMonth() === date.getMonth() &&
+                  now.getDate() === date.getDate();
+  if (isToday) {
+    return `был(а) сегодня в ${timeStr}`;
+  }
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday = yesterday.getFullYear() === date.getFullYear() &&
+                      yesterday.getMonth() === date.getMonth() &&
+                      yesterday.getDate() === date.getDate();
+  if (isYesterday) {
+    return `был(а) вчера в ${timeStr}`;
+  }
+
+  const months = ['янв.', 'февр.', 'мар.', 'апр.', 'мая', 'июн.', 'июл.', 'авг.', 'сент.', 'окт.', 'нояб.', 'дек.'];
+  const day = date.getDate();
+  const month = months[date.getMonth()];
+
+  if (now.getFullYear() === date.getFullYear()) {
+    return `был(а) ${day} ${month} в ${timeStr}`;
+  }
+
+  return `был(а) ${pad(day)}.${pad(date.getMonth() + 1)}.${date.getFullYear()}`;
+}
+
+function getFullDateTooltip(dateInput) {
+  if (!dateInput) return '';
+  const date = new Date(dateInput);
+  if (isNaN(date.getTime())) return '';
+  try {
+    return date.toLocaleString('ru-RU', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch (e) {
+    return String(dateInput);
+  }
+}
 
 function connectWS() {
   if (ws) {
     try {
       ws.close();
     } catch(e){}
+  }
+  if (wsPingInterval) {
+    clearInterval(wsPingInterval);
+    wsPingInterval = null;
   }
   if (!currentUser || !token) return;
 
@@ -7291,6 +7379,23 @@ function connectWS() {
     ws.send(JSON.stringify({ type: 'auth', userId: currentUser.id }));
     broadcastPlayerStatus();
     loadMutualFriends();
+
+    // Send heartbeat every 25 seconds to keep connection alive through Render/proxies
+    if (wsPingInterval) clearInterval(wsPingInterval);
+    wsPingInterval = setInterval(() => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, 25000);
+
+    // Refresh friend activity timestamps every 30 seconds
+    if (!friendActivityRefreshTimer) {
+      friendActivityRefreshTimer = setInterval(() => {
+        if (currentUser && mutualFriends && mutualFriends.length > 0) {
+          renderFriendActivity();
+        }
+      }, 30000);
+    }
   };
 
   ws.onmessage = (event) => {
@@ -7316,6 +7421,10 @@ function connectWS() {
 
   ws.onclose = () => {
     console.log('[WS] Disconnected, reconnecting in 5s...');
+    if (wsPingInterval) {
+      clearInterval(wsPingInterval);
+      wsPingInterval = null;
+    }
     if (wsReconnectTimeout) clearTimeout(wsReconnectTimeout);
     wsReconnectTimeout = setTimeout(() => {
       if (currentUser && token) connectWS();
@@ -7617,50 +7726,69 @@ function renderFriendActivity() {
   containerEl.innerHTML = '';
   
   mutualFriends.forEach(friend => {
-    const status = friendStatuses.get(friend.id) || { isOnline: false, isPlaying: false };
-    const isOnline = status.isOnline;
-    const isPlaying = status.isPlaying && status.trackName;
+    const liveStatus = friendStatuses.get(friend.id);
+    const isOnline = liveStatus ? Boolean(liveStatus.isOnline) : Boolean(friend.isOnline);
+    const isPlaying = isOnline && liveStatus && liveStatus.isPlaying && liveStatus.trackName;
+    const lastSeen = (liveStatus && liveStatus.lastSeen) || friend.lastSeen;
+    const fullDate = getFullDateTooltip(lastSeen);
 
     const item = document.createElement('div');
     item.className = 'friend-activity-item';
+    item.dataset.friendId = friend.id;
 
     // Status avatar
     const avatarHtml = friend.avatarBase64
-      ? `<img src="${friend.avatarBase64}" class="friend-avatar" />`
+      ? `<img src="${friend.avatarBase64}" class="friend-avatar" alt="${escapeHTML(friend.displayName)}" />`
       : `<div class="friend-avatar-placeholder">${friend.displayName[0].toUpperCase()}</div>`;
 
     // Status description
-    let statusText = 'Offline';
+    let statusText = '';
     if (isOnline) {
       if (isPlaying) {
         statusText = `
-          <div class="friend-marquee">
-            <span>Listening to: ${escapeHTML(status.trackName)} - ${escapeHTML(status.artist)}</span>
+          <div class="friend-marquee" title="Слушает: ${escapeHTML(liveStatus.trackName)} — ${escapeHTML(liveStatus.artist)} (нажмите, чтобы включить)">
+            <span>Слушает: ${escapeHTML(liveStatus.trackName)} — ${escapeHTML(liveStatus.artist)}</span>
           </div>
         `;
       } else {
-        statusText = '<span style="color: #30d158; font-weight: 500;">Online</span>';
+        statusText = '<span class="friend-status-badge online">В сети</span>';
       }
+    } else {
+      const formatted = formatLastSeen(lastSeen);
+      statusText = `<span class="friend-status-badge offline" title="${escapeHTML(fullDate)}">${escapeHTML(formatted)}</span>`;
     }
 
     item.innerHTML = `
-      <div class="friend-avatar-container">
+      <div class="friend-avatar-container" title="${isOnline ? 'В сети' : (fullDate ? 'Был(а) в сети: ' + fullDate : 'Не в сети')}">
         ${avatarHtml}
         <div class="friend-status-dot ${isOnline ? 'online' : ''} ${isPlaying ? 'playing' : ''}"></div>
       </div>
       <div class="friend-info">
-        <div class="friend-name">${escapeHTML(friend.displayName)}</div>
+        <div class="friend-name" title="${escapeHTML(friend.displayName)} (@${escapeHTML(friend.username)}) — нажать для просмотра профиля">${escapeHTML(friend.displayName)}</div>
         <div class="friend-status-text">${statusText}</div>
       </div>
     `;
+
+    // Make clicking on avatar or name open friend's profile
+    const avatarEl = item.querySelector('.friend-avatar-container');
+    const nameEl = item.querySelector('.friend-name');
+    const openProfile = () => loadFriendProfile(friend.id);
+    if (avatarEl) {
+      avatarEl.style.cursor = 'pointer';
+      avatarEl.addEventListener('click', openProfile);
+    }
+    if (nameEl) {
+      nameEl.style.cursor = 'pointer';
+      nameEl.addEventListener('click', openProfile);
+    }
 
     if (isPlaying) {
       const marqueeEl = item.querySelector('.friend-marquee');
       if (marqueeEl) {
         marqueeEl.style.cursor = 'pointer';
-        marqueeEl.title = 'Нажмите, чтобы включить этот трек';
-        marqueeEl.addEventListener('click', () => {
-          playFriendTrack(status.trackName, status.artist);
+        marqueeEl.addEventListener('click', (e) => {
+          e.stopPropagation();
+          playFriendTrack(liveStatus.trackName, liveStatus.artist);
         });
       }
     }
@@ -7777,6 +7905,14 @@ function renderFindFriendsList(users) {
   findFriendsList.innerHTML = '';
   users.forEach(user => {
     const isFollowing = currentUser.following && currentUser.following.includes(user.id);
+    const liveStatus = friendStatuses.get(user.id);
+    const isOnline = liveStatus ? Boolean(liveStatus.isOnline) : Boolean(user.isOnline);
+    const lastSeen = (liveStatus && liveStatus.lastSeen) || user.lastSeen;
+    const fullDate = getFullDateTooltip(lastSeen);
+    const statusHtml = isOnline
+      ? '<span style="color: #30d158; font-weight: 500;">в сети</span>'
+      : `<span style="opacity: 0.65;" title="${escapeHTML(fullDate)}">${escapeHTML(formatLastSeen(lastSeen))}</span>`;
+
     const row = document.createElement('div');
     row.className = 'user-search-row';
     row.innerHTML = `
@@ -7784,7 +7920,7 @@ function renderFindFriendsList(users) {
         ${user.avatarBase64 ? `<img src="${user.avatarBase64}" class="user-search-avatar" alt="">` : `<div class="user-search-avatar user-search-avatar-placeholder">${user.displayName[0].toUpperCase()}</div>`}
         <div class="user-search-copy">
           <span class="user-search-name">${escapeHTML(user.displayName)}</span>
-          <span class="user-search-username">@${escapeHTML(user.username)}</span>
+          <span class="user-search-username">@${escapeHTML(user.username)} • ${statusHtml}</span>
         </div>
       </div>
       <button class="follow-btn ${isFollowing ? 'following' : ''}" data-user-id="${user.id}">

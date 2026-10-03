@@ -3930,6 +3930,58 @@ body.mini-player-active .mini-player-block {
   text-overflow: ellipsis;
 }
 
+.friend-status-badge {
+  display: inline-block;
+  font-size: 11px;
+}
+
+.friend-status-badge.online {
+  color: #30d158;
+  font-weight: 500;
+}
+
+.friend-status-badge.offline {
+  color: var(--text-dim);
+  opacity: 0.85;
+}
+
+.friend-profile-presence-wrap {
+  margin: 4px 0 10px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.friend-profile-presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-dim);
+}
+
+.friend-profile-presence.online {
+  color: #30d158;
+  background: rgba(48, 209, 88, 0.1);
+  border-color: rgba(48, 209, 88, 0.25);
+  font-weight: 500;
+}
+
+.friend-profile-presence .presence-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8e8e93;
+}
+
+.friend-profile-presence.online .presence-dot {
+  background: #30d158;
+  box-shadow: 0 0 6px #30d158;
+}
+
 /* Marquee Scrolling Status */
 .friend-marquee {
   width: 100%;

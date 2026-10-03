@@ -1,10 +1,10 @@
 {
-  "version": "1.18.1",
-  "releaseDate": "2026-08-18",
-  "changelog": "• Оптимизация 60 FPS караоке-текстов без рывков и лагов\n• Ускорение скролла треков в 5-10 раз (Chromium CSS Containment)\n• Автоматическое зацикливание видеофона на первых 8 секундах\n• 0% нагрузки процессора/видеокарты в фоне (умная пауза при потере фокуса)\n• Нативный надежный движок автообновлений",
+  "version": "1.18.5",
+  "releaseDate": "2026-10-03",
+  "changelog": "• Динамическая адаптация контекстного меню «+» под кастомные темы\n• Исправлено переключение треков в очереди раздела History\n• Режим Always on Top для мини-плеера (зафиксирован поверх всех окон)\n• Запрет смещения и drag-and-drop обложек треков\n• Нативные ссылки на треки (glassplayer://)",
   "windows": {
-    "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.18.1.exe",
-    "filename": "GlassPlayer-Setup-1.18.1.exe"
+    "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.18.5.exe",
+    "filename": "GlassPlayer-Setup-1.18.5.exe"
   },
   "android": {
     "url": "https://xivmcm.github.io/music-desktop/GlassPlayer-1.18.1.apk",

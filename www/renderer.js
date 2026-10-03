@@ -6882,7 +6882,7 @@ async function loadFriendProfile(userId) {
       headerCard.innerHTML = `
         <img class="friend-profile-avatar" src="${avatarSrc}" alt="Avatar">
         <h2 class="friend-profile-name">${escapeHTML(friend.displayName)}</h2>
-        <p class="friend-profile-username">@${escapeHTML(friend.username)}</p>
+        <p class="friend-profile-username">${formatUsername(escapeHTML(friend.username))}</p>
         <div class="friend-profile-presence-wrap">${presenceHtml}</div>
         <p class="friend-profile-bio">${escapeHTML(friend.bio || 'Нет описания')}</p>
         <div class="friend-profile-stats">
@@ -7287,10 +7287,16 @@ if (authModalSubmitBtn) {
 let wsPingInterval = null;
 let friendActivityRefreshTimer = null;
 
+function formatUsername(username) {
+  if (!username) return '';
+  const clean = String(username).trim();
+  return clean.startsWith('@') ? clean : `@${clean}`;
+}
+
 function formatLastSeen(dateInput) {
-  if (!dateInput) return 'не в сети';
+  if (!dateInput) return 'был(а) давно';
   const date = new Date(dateInput);
-  if (isNaN(date.getTime())) return 'не в сети';
+  if (isNaN(date.getTime())) return 'был(а) давно';
 
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -7764,7 +7770,7 @@ function renderFriendActivity() {
         <div class="friend-status-dot ${isOnline ? 'online' : ''} ${isPlaying ? 'playing' : ''}"></div>
       </div>
       <div class="friend-info">
-        <div class="friend-name" title="${escapeHTML(friend.displayName)} (@${escapeHTML(friend.username)}) — нажать для просмотра профиля">${escapeHTML(friend.displayName)}</div>
+        <div class="friend-name" title="${escapeHTML(friend.displayName)} (${formatUsername(escapeHTML(friend.username))}) — нажать для просмотра профиля">${escapeHTML(friend.displayName)}</div>
         <div class="friend-status-text">${statusText}</div>
       </div>
     `;
@@ -7920,7 +7926,7 @@ function renderFindFriendsList(users) {
         ${user.avatarBase64 ? `<img src="${user.avatarBase64}" class="user-search-avatar" alt="">` : `<div class="user-search-avatar user-search-avatar-placeholder">${user.displayName[0].toUpperCase()}</div>`}
         <div class="user-search-copy">
           <span class="user-search-name">${escapeHTML(user.displayName)}</span>
-          <span class="user-search-username">@${escapeHTML(user.username)} • ${statusHtml}</span>
+          <span class="user-search-username">${formatUsername(escapeHTML(user.username))} • ${statusHtml}</span>
         </div>
       </div>
       <button class="follow-btn ${isFollowing ? 'following' : ''}" data-user-id="${user.id}">

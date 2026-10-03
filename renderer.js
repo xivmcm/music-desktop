@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.18.5';
+const APP_VERSION = '1.19.0';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -4274,120 +4274,220 @@ function renderSettings(options = {}) {
     </div>
 
     <div class="settings-section ${currentTheme !== 'custom' ? 'disabled-customizer' : ''}" data-section="theme-constructor" id="theme-constructor-section" style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 20px;">
-      <h3>Конструктор темы</h3>
-      
-      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 15px;">
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Цвет фона 1:</span>
-          <input type="color" id="theme-bg-color1" value="${customTheme.bgColor1 || customTheme.bgColor || '#1e1e24'}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <h3 style="margin: 0;">Конструктор темы</h3>
+        <button id="theme-reset-btn" class="view-btn" style="padding: 4px 10px; font-size: 11px; height: auto;">
+          <span>Сброс темы</span>
+        </button>
+      </div>
+
+      <!-- Группа 1: Палитра и цвета -->
+      <div class="theme-constructor-group" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 14px; margin-bottom: 14px;">
+        <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; margin-bottom: 12px;">
+          Палитра и цвета
         </div>
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Цвет фона 2:</span>
-          <input type="color" id="theme-bg-color2" value="${customTheme.bgColor2 || customTheme.bgColor || '#0a0a0c'}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 6px; grid-column: span 2;">
-          <div style="display: flex; justify-content: space-between; font-size: 12px;">
-            <span style="color: rgba(255,255,255,0.5);">Угол градиента:</span>
-            <span id="angle-val-text" style="color: #fff;">${customTheme.bgAngle !== undefined ? customTheme.bgAngle : 135}°</span>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Цвет фона 1:</span>
+            <input type="color" id="theme-bg-color1" value="${customTheme.bgColor1 || '#1e1e24'}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
           </div>
-          <input type="range" id="theme-bg-angle" min="0" max="360" value="${customTheme.bgAngle !== undefined ? customTheme.bgAngle : 135}" style="width: 100%; accent-color: #30d158; cursor: pointer;">
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Цвет текста:</span>
-          <input type="color" id="theme-text-color" value="${customTheme.textColor}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Нижняя панель:</span>
-          <input type="color" id="theme-player-color" value="${customTheme.playerBg || '#050505'}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Фон карточек:</span>
-          <input type="color" id="theme-card-color" value="${customTheme.cardBg || '#ffffff'}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Акцентный цвет:</span>
-          <input type="color" id="theme-accent-color" value="${customTheme.accentColor || '#ffffff'}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Шрифт:</span>
-          <select id="theme-font-family" style="width: 100%; height: 36px; padding: 0 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: #fff; font-size: 13px; cursor: pointer;">
-            ${['Inter', 'Outfit', 'Montserrat', 'Fira Code', 'Playfair Display'].map(font => `
-              <option value="${font}" ${customTheme.fontFamily === font ? 'selected' : ''}>${font}</option>
-            `).join('')}
-          </select>
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <div style="display: flex; justify-content: space-between; font-size: 12px;">
-            <span style="color: rgba(255,255,255,0.5);">Толщина границ:</span>
-            <span id="border-width-val-text" style="color: #fff;">${customTheme.borderWidth !== undefined ? customTheme.borderWidth : '1px'}</span>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Цвет фона 2:</span>
+            <input type="color" id="theme-bg-color2" value="${customTheme.bgColor2 || '#0a0a0c'}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
           </div>
-          <input type="range" id="theme-border-width" min="0" max="4" step="0.5" value="${parseFloat(customTheme.borderWidth !== undefined ? customTheme.borderWidth : 1)}" style="width: 100%; accent-color: #30d158; cursor: pointer;">
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Цвет свечения:</span>
-          <input type="color" id="theme-glow-color" value="${customTheme.glowColor || '#ffffff'}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Стиль карточек:</span>
-          <select id="theme-card-style" style="width: 100%; height: 36px; padding: 0 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: #fff; font-size: 13px; cursor: pointer;">
-            ${[
-              { val: 'default', text: 'Default' },
-              { val: 'frosted', text: 'Frosted Glass' },
-              { val: 'material', text: 'Material solid' },
-              { val: 'flat', text: 'Flat glass' }
-            ].map(opt => `
-              <option value="${opt.val}" ${customTheme.cardStyle === opt.val ? 'selected' : ''}>${opt.text}</option>
-            `).join('')}
-          </select>
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 6px; grid-column: span 2;">
-          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Фоновый эффект:</span>
-          <select id="theme-bg-effect" style="width: 100%; height: 36px; padding: 0 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: #fff; font-size: 13px; cursor: pointer;">
-            ${[
-              { val: 'none', text: 'None' },
-              { val: 'liquid', text: 'Liquid Sphere' },
-              { val: 'particles', text: 'Ambient Particles' }
-            ].map(opt => `
-              <option value="${opt.val}" ${customTheme.bgEffect === opt.val ? 'selected' : ''}>${opt.text}</option>
-            `).join('')}
-          </select>
+          <div style="display: flex; flex-direction: column; gap: 6px; grid-column: span 2;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px;">
+              <span style="color: rgba(255,255,255,0.5);">Угол градиента:</span>
+              <span id="angle-val-text" style="color: #fff;">${customTheme.bgAngle !== undefined ? customTheme.bgAngle : 135}°</span>
+            </div>
+            <input type="range" id="theme-bg-angle" min="0" max="360" value="${customTheme.bgAngle !== undefined ? customTheme.bgAngle : 135}" style="width: 100%; accent-color: var(--accent-color, #30d158); cursor: pointer;">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Цвет текста:</span>
+            <input type="color" id="theme-text-color" value="${customTheme.textColor || '#f5f5f7'}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Акцентный цвет:</span>
+            <input type="color" id="theme-accent-color" value="${customTheme.accentColor || '#ffffff'}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Нижняя панель:</span>
+            <input type="color" id="theme-player-color" value="${customTheme.playerBg || '#050505'}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Фон карточек:</span>
+            <input type="color" id="theme-card-color" value="${customTheme.cardBg || '#ffffff'}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px; grid-column: span 2;">
+            <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Шрифт:</span>
+            <select id="theme-font-family" style="width: 100%; height: 36px; padding: 0 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: #fff; font-size: 13px; cursor: pointer;">
+              ${['Inter', 'Outfit', 'Montserrat', 'Fira Code', 'Playfair Display'].map(font => `
+                <option value="${font}" ${customTheme.fontFamily === font ? 'selected' : ''}>${font}</option>
+              `).join('')}
+            </select>
+          </div>
         </div>
       </div>
 
-      <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 15px;">
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <div style="display: flex; justify-content: space-between; font-size: 12px;">
-            <span style="color: rgba(255,255,255,0.5);">Размытие стекла (blur):</span>
-            <span id="blur-val-text" style="color: #fff;">${customTheme.blur}px</span>
+      <!-- Группа 2: Стекло и прозрачность -->
+      <div class="theme-constructor-group" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 14px; margin-bottom: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7;">
+            Стекло и прозрачность (Glassmorphism)
           </div>
-          <input type="range" id="theme-blur-slider" min="0" max="80" value="${customTheme.blur}" style="width: 100%; accent-color: #30d158; cursor: pointer;">
-        </div>
-        
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <div style="display: flex; justify-content: space-between; font-size: 12px;">
-            <span style="color: rgba(255,255,255,0.5);">Интенсивность свечения (glow):</span>
-            <span id="glow-val-text" style="color: #fff;">${customTheme.glow !== undefined ? Math.round(customTheme.glow * 100) : 5}%</span>
-          </div>
-          <input type="range" id="theme-glow-slider" min="0" max="100" value="${customTheme.glow !== undefined ? Math.round(customTheme.glow * 100) : 5}" style="width: 100%; accent-color: #30d158; cursor: pointer;">
+          <label class="switch" style="transform: scale(0.85); transform-origin: right center;">
+            <input type="checkbox" id="theme-glass-enabled" ${customTheme.glassEnabled !== false ? 'checked' : ''}>
+            <span class="slider round"></span>
+          </label>
         </div>
 
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <div style="display: flex; justify-content: space-between; font-size: 12px;">
-            <span style="color: rgba(255,255,255,0.5);">Прозрачность панелей:</span>
-            <span id="opacity-val-text" style="color: #fff;">${Math.round(customTheme.opacity * 100)}%</span>
+        <div id="theme-glass-controls" style="display: flex; flex-direction: column; gap: 12px; transition: opacity 0.2s ease;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px;">
+              <span style="color: rgba(255,255,255,0.5);">Размытие стекла (blur):</span>
+              <span id="blur-val-text" style="color: #fff;">${customTheme.blur}px</span>
+            </div>
+            <input type="range" id="theme-blur-slider" min="0" max="60" value="${customTheme.blur}" style="width: 100%; accent-color: var(--accent-color, #30d158); cursor: pointer;">
           </div>
-          <input type="range" id="theme-opacity-slider" min="0" max="100" value="${Math.round(customTheme.opacity * 100)}" style="width: 100%; accent-color: #30d158; cursor: pointer;">
-        </div>
 
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <div style="display: flex; justify-content: space-between; font-size: 12px;">
-            <span style="color: rgba(255,255,255,0.5);">Скругление углов (radius):</span>
-            <span id="radius-val-text" style="color: #fff;">${customTheme.windowRadius !== undefined ? customTheme.windowRadius : 12}px</span>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px;">
+              <span style="color: rgba(255,255,255,0.5);">Насыщенность под стеклом (saturation):</span>
+              <span id="sat-val-text" style="color: #fff;">${customTheme.saturation || 140}%</span>
+            </div>
+            <input type="range" id="theme-saturation-slider" min="100" max="200" value="${customTheme.saturation || 140}" style="width: 100%; accent-color: var(--accent-color, #30d158); cursor: pointer;">
           </div>
-          <input type="range" id="theme-radius-slider" min="0" max="30" value="${customTheme.windowRadius !== undefined ? customTheme.windowRadius : 12}" style="width: 100%; accent-color: #30d158; cursor: pointer;">
+
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px;">
+              <span style="color: rgba(255,255,255,0.5);">Прозрачность панелей (0% сплошные, 100% стекло):</span>
+              <span id="transparency-val-text" style="color: #fff;">${Math.round((customTheme.panelTransparency ?? 0.55) * 100)}%</span>
+            </div>
+            <input type="range" id="theme-transparency-slider" min="0" max="100" value="${Math.round((customTheme.panelTransparency ?? 0.55) * 100)}" style="width: 100%; accent-color: var(--accent-color, #30d158); cursor: pointer;">
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 6px; border-top: 1px dashed rgba(255,255,255,0.06);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div style="display: flex; justify-content: space-between; width: 100%; font-size: 12px;">
+                <span style="color: rgba(255,255,255,0.5);">Прозрачность мини-плеера:</span>
+                <span id="mini-transparency-val-text" style="color: #fff;">${customTheme.miniTransparency !== null && customTheme.miniTransparency !== undefined ? Math.round(customTheme.miniTransparency * 100) + '%' : 'Как у панелей'}</span>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
+              <input type="checkbox" id="theme-mini-trans-sync" ${customTheme.miniTransparency === null || customTheme.miniTransparency === undefined ? 'checked' : ''} style="accent-color: var(--accent-color, #30d158); cursor: pointer;">
+              <label for="theme-mini-trans-sync" style="font-size: 11px; opacity: 0.6; cursor: pointer;">Синхронизировать с основными панелями</label>
+            </div>
+            <input type="range" id="theme-mini-transparency-slider" min="0" max="100" value="${customTheme.miniTransparency !== null && customTheme.miniTransparency !== undefined ? Math.round(customTheme.miniTransparency * 100) : Math.round((customTheme.panelTransparency ?? 0.55) * 100)}" style="width: 100%; accent-color: var(--accent-color, #30d158); cursor: pointer; ${customTheme.miniTransparency === null || customTheme.miniTransparency === undefined ? 'opacity: 0.4; pointer-events: none;' : ''}">
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Стиль поверхностей:</span>
+            <select id="theme-card-style" style="width: 100%; height: 36px; padding: 0 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: #fff; font-size: 13px; cursor: pointer;">
+              ${[
+                { val: 'glass', text: 'Стекло (Glass — по слайдеру)' },
+                { val: 'frosted', text: 'Матовое стекло (Frosted — глубокий блюр)' },
+                { val: 'solid', text: 'Плотные панели (Solid — без блюра)' },
+                { val: 'flat', text: 'Плоский минимализм (Flat — без теней и блюра)' }
+              ].map(opt => `
+                <option value="${opt.val}" ${customTheme.cardStyle === opt.val ? 'selected' : ''}>${opt.text}</option>
+              `).join('')}
+            </select>
+          </div>
         </div>
       </div>
 
+      <!-- Группа 3: Свечение и геометрия -->
+      <div class="theme-constructor-group" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 14px; margin-bottom: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7;">
+            Свечение и геометрия
+          </div>
+          <label class="switch" style="transform: scale(0.85); transform-origin: right center;">
+            <input type="checkbox" id="theme-glow-enabled" ${customTheme.glowEnabled !== false ? 'checked' : ''}>
+            <span class="slider round"></span>
+          </label>
+        </div>
+
+        <div id="theme-glow-controls" style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px;">
+              <span style="color: rgba(255,255,255,0.5);">Интенсивность свечения (glow):</span>
+              <span id="glow-val-text" style="color: #fff;">${customTheme.glow !== undefined ? Math.round(customTheme.glow * 100) : 25}%</span>
+            </div>
+            <input type="range" id="theme-glow-slider" min="0" max="100" value="${customTheme.glow !== undefined ? Math.round(customTheme.glow * 100) : 25}" style="width: 100%; accent-color: var(--accent-color, #30d158); cursor: pointer;">
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Цвет свечения:</span>
+            <input type="color" id="theme-glow-color" value="${customTheme.glowColor || '#ffffff'}" style="width: 100%; height: 36px; border: none; border-radius: 6px; background: transparent; cursor: pointer;">
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 6px; border-top: 1px dashed rgba(255,255,255,0.06);">
+            <span style="font-size: 12px; color: rgba(255,255,255,0.7);">Объёмные тени (Shadows):</span>
+            <label class="switch" style="transform: scale(0.85); transform-origin: right center;">
+              <input type="checkbox" id="theme-shadows-enabled" ${customTheme.shadowsEnabled !== false ? 'checked' : ''}>
+              <span class="slider round"></span>
+            </label>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px;">
+              <span style="color: rgba(255,255,255,0.5);">Скругление углов (radius):</span>
+              <span id="radius-val-text" style="color: #fff;">${customTheme.windowRadius !== undefined ? customTheme.windowRadius : 12}px</span>
+            </div>
+            <input type="range" id="theme-radius-slider" min="0" max="32" value="${customTheme.windowRadius !== undefined ? customTheme.windowRadius : 12}" style="width: 100%; accent-color: var(--accent-color, #30d158); cursor: pointer;">
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px;">
+              <span style="color: rgba(255,255,255,0.5);">Толщина границ:</span>
+              <span id="border-width-val-text" style="color: #fff;">${customTheme.borderWidth !== undefined ? customTheme.borderWidth : '1px'}</span>
+            </div>
+            <input type="range" id="theme-border-width" min="0" max="4" step="0.5" value="${parseFloat(customTheme.borderWidth !== undefined ? customTheme.borderWidth : 1)}" style="width: 100%; accent-color: var(--accent-color, #30d158); cursor: pointer;">
+          </div>
+        </div>
+      </div>
+
+      <!-- Группа 4: Фоновые эффекты и подложка -->
+      <div class="theme-constructor-group" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 14px; margin-bottom: 14px;">
+        <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; margin-bottom: 12px;">
+          Фоновые эффекты и подложка
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Фоновый эффект:</span>
+            <select id="theme-bg-effect" style="width: 100%; height: 36px; padding: 0 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: #fff; font-size: 13px; cursor: pointer;">
+              ${[
+                { val: 'none', text: 'Без эффекта (Статичный)' },
+                { val: 'aurora', text: 'Северное сияние (Aurora)' },
+                { val: 'liquid', text: 'Жидкие сферы (Liquid Sphere)' },
+                { val: 'particles', text: 'Атмосферные частицы (Particles)' }
+              ].map(opt => `
+                <option value="${opt.val}" ${customTheme.bgEffect === opt.val ? 'selected' : ''}>${opt.text}</option>
+              `).join('')}
+            </select>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 12px; color: rgba(255,255,255,0.7);">Анимация фона:</span>
+            <label class="switch" style="transform: scale(0.85); transform-origin: right center;">
+              <input type="checkbox" id="theme-animations-enabled" ${customTheme.animationsEnabled !== false ? 'checked' : ''}>
+              <span class="slider round"></span>
+            </label>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px;">
+              <span style="color: rgba(255,255,255,0.5);">Затемнение обоев (scrim):</span>
+              <span id="scrim-val-text" style="color: #fff;">${Math.round((customTheme.wallpaperDim ?? 0.45) * 100)}%</span>
+            </div>
+            <input type="range" id="theme-scrim-slider" min="0" max="80" value="${Math.round((customTheme.wallpaperDim ?? 0.45) * 100)}" style="width: 100%; accent-color: var(--accent-color, #30d158); cursor: pointer;">
+          </div>
+        </div>
+      </div>
+
+      <!-- Инструменты темы: экспорт, импорт, сохранение -->
       <div style="display: flex; gap: 10px; margin-top: 15px;">
         <button id="theme-export-btn" class="view-btn" style="flex: 1; justify-content: center;">
           <span>Скопировать код темы</span>
@@ -4395,9 +4495,9 @@ function renderSettings(options = {}) {
       </div>
 
       <div class="saved-theme-tools">
-        <input type="text" id="theme-save-name-input" class="theme-save-name-input" placeholder="Theme name">
+        <input type="text" id="theme-save-name-input" class="theme-save-name-input" placeholder="Название темы">
         <button id="theme-save-btn" class="view-btn">
-          <span>Save Theme</span>
+          <span>Сохранить</span>
         </button>
       </div>
 
@@ -4433,10 +4533,10 @@ function renderSettings(options = {}) {
         
         <div style="display: flex; flex-direction: column; gap: 6px;">
           <div style="display: flex; justify-content: space-between; font-size: 12px;">
-            <span style="color: rgba(255,255,255,0.5);">Прозрачность фона:</span>
+            <span style="color: rgba(255,255,255,0.5);">Видимость обоев:</span>
             <span id="bg-opacity-val-text" style="color: #fff;">${localStorage.getItem('gp_bg_image_opacity') || 0}%</span>
           </div>
-          <input type="range" id="bg-opacity-slider" min="0" max="100" value="${localStorage.getItem('gp_bg_image_opacity') || 0}" style="width: 100%; accent-color: #30d158; cursor: pointer;">
+          <input type="range" id="bg-opacity-slider" min="0" max="100" value="${localStorage.getItem('gp_bg_image_opacity') || 0}" style="width: 100%; accent-color: var(--accent-color, #30d158); cursor: pointer;">
         </div>
       </div>
     </div>
@@ -4628,43 +4728,6 @@ function renderSettings(options = {}) {
   });
 
   // Custom Theme Constructor bindings
-  const themeBgColor1Input = panel.querySelector('#theme-bg-color1');
-  const themeBgColor2Input = panel.querySelector('#theme-bg-color2');
-  const themeBgAngleSlider = panel.querySelector('#theme-bg-angle');
-  const themeTextInput = panel.querySelector('#theme-text-color');
-  const themePlayerInput = panel.querySelector('#theme-player-color');
-  const themeCardInput = panel.querySelector('#theme-card-color');
-  const themeAccentInput = panel.querySelector('#theme-accent-color');
-  const themeBlurSlider = panel.querySelector('#theme-blur-slider');
-  const themeGlowSlider = panel.querySelector('#theme-glow-slider');
-  const themeOpacitySlider = panel.querySelector('#theme-opacity-slider');
-  const themeRadiusSlider = panel.querySelector('#theme-radius-slider');
-  const themeFontFamilySelect = panel.querySelector('#theme-font-family');
-  const themeBorderWidthSlider = panel.querySelector('#theme-border-width');
-  const themeGlowColorInput = panel.querySelector('#theme-glow-color');
-  const themeCardStyleSelect = panel.querySelector('#theme-card-style');
-  const themeBgEffectSelect = panel.querySelector('#theme-bg-effect');
-
-  const themeControlLabels = new Map([
-    [themeBgColor1Input, 'Первый цвет фона'],
-    [themeBgColor2Input, 'Второй цвет фона'],
-    [themeBgAngleSlider, 'Угол градиента'],
-    [themeTextInput, 'Цвет основного текста'],
-    [themePlayerInput, 'Цвет нижней панели и мини-плеера'],
-    [themeCardInput, 'Цвет карточек'],
-    [themeAccentInput, 'Акцентный цвет'],
-    [themeBlurSlider, 'Интенсивность размытия'],
-    [themeGlowSlider, 'Интенсивность свечения'],
-    [themeOpacitySlider, 'Прозрачность поверхностей'],
-    [themeRadiusSlider, 'Скругление окна'],
-    [themeFontFamilySelect, 'Шрифт интерфейса'],
-    [themeBorderWidthSlider, 'Толщина границ'],
-    [themeGlowColorInput, 'Цвет свечения'],
-    [themeCardStyleSelect, 'Стиль поверхностей'],
-    [themeBgEffectSelect, 'Эффект фона']
-  ]);
-  themeControlLabels.forEach((label, control) => control?.setAttribute('aria-label', label));
-
   const customControlsEnabled = currentTheme === 'custom';
   ['#theme-constructor-section', '#background-image-section'].forEach((selector) => {
     const section = panel.querySelector(selector);
@@ -4677,83 +4740,133 @@ function renderSettings(options = {}) {
     });
   });
 
-  function updateCustomThemeFromUI() {
-    const customThemeVal = {
-      bgColor1: themeBgColor1Input.value,
-      bgColor2: themeBgColor2Input.value,
-      bgAngle: parseInt(themeBgAngleSlider.value, 10),
-      textColor: themeTextInput.value,
-      playerBg: themePlayerInput.value,
-      cardBg: themeCardInput.value,
-      accentColor: themeAccentInput.value,
-      blur: parseInt(themeBlurSlider.value, 10),
-      glow: parseFloat(themeGlowSlider.value) / 100,
-      opacity: parseFloat(themeOpacitySlider.value) / 100,
-      windowRadius: themeRadiusSlider ? parseInt(themeRadiusSlider.value, 10) : 12,
-      fontFamily: themeFontFamilySelect ? themeFontFamilySelect.value : 'Inter',
-      borderWidth: themeBorderWidthSlider ? `${themeBorderWidthSlider.value}px` : '1px',
-      glowColor: themeGlowColorInput ? themeGlowColorInput.value : '#ffffff',
-      cardStyle: themeCardStyleSelect ? themeCardStyleSelect.value : 'default',
-      bgEffect: themeBgEffectSelect ? themeBgEffectSelect.value : 'liquid'
+  function readThemeFromControls() {
+    const stored = getStoredCustomTheme();
+    const val = (id, fallback) => {
+      const el = panel.querySelector(id);
+      return el ? el.value : fallback;
+    };
+    const checked = (id, fallback) => {
+      const el = panel.querySelector(id);
+      return el ? el.checked : fallback;
     };
 
-    panel.querySelector('#angle-val-text').textContent = `${customThemeVal.bgAngle}°`;
-    panel.querySelector('#blur-val-text').textContent = `${customThemeVal.blur}px`;
-    panel.querySelector('#glow-val-text').textContent = `${Math.round(customThemeVal.glow * 100)}%`;
-    panel.querySelector('#opacity-val-text').textContent = `${Math.round(customThemeVal.opacity * 100)}%`;
-    if (themeRadiusSlider) {
-      panel.querySelector('#radius-val-text').textContent = `${customThemeVal.windowRadius}px`;
-    }
-    if (themeBorderWidthSlider) {
-      panel.querySelector('#border-width-val-text').textContent = `${themeBorderWidthSlider.value}px`;
+    const isGlass = checked('#theme-glass-enabled', stored.glassEnabled);
+    const isGlow = checked('#theme-glow-enabled', stored.glowEnabled);
+    const isShadows = checked('#theme-shadows-enabled', stored.shadowsEnabled);
+    const isAnimations = checked('#theme-animations-enabled', stored.animationsEnabled);
+
+    const blurVal = panel.querySelector('#theme-blur-slider') ? parseInt(panel.querySelector('#theme-blur-slider').value, 10) : stored.blur;
+    const satVal = panel.querySelector('#theme-saturation-slider') ? parseInt(panel.querySelector('#theme-saturation-slider').value, 10) : (stored.saturation || 140);
+    const transVal = panel.querySelector('#theme-transparency-slider') ? parseFloat(panel.querySelector('#theme-transparency-slider').value) / 100 : stored.panelTransparency;
+
+    const syncMini = checked('#theme-mini-trans-sync', true);
+    let miniTransVal = null;
+    if (!syncMini && panel.querySelector('#theme-mini-transparency-slider')) {
+      miniTransVal = parseFloat(panel.querySelector('#theme-mini-transparency-slider').value) / 100;
     }
 
-    applyCustomTheme(customThemeVal);
-    applyBgEffect(customThemeVal.bgEffect);
-    localStorage.setItem('gp_custom_theme', JSON.stringify(customThemeVal));
-    localStorage.setItem('gp_theme', 'custom');
+    const glowVal = panel.querySelector('#theme-glow-slider') ? parseFloat(panel.querySelector('#theme-glow-slider').value) / 100 : stored.glow;
+    const angleVal = panel.querySelector('#theme-bg-angle') ? parseInt(panel.querySelector('#theme-bg-angle').value, 10) : stored.bgAngle;
+    const radiusVal = panel.querySelector('#theme-radius-slider') ? parseInt(panel.querySelector('#theme-radius-slider').value, 10) : stored.windowRadius;
+    const borderVal = panel.querySelector('#theme-border-width') ? `${panel.querySelector('#theme-border-width').value}px` : stored.borderWidth;
+    const scrimVal = panel.querySelector('#theme-scrim-slider') ? parseFloat(panel.querySelector('#theme-scrim-slider').value) / 100 : stored.wallpaperDim;
+
+    return normalizeCustomTheme({
+      version: 2,
+      bgColor1: val('#theme-bg-color1', stored.bgColor1),
+      bgColor2: val('#theme-bg-color2', stored.bgColor2),
+      bgAngle: angleVal,
+      textColor: val('#theme-text-color', stored.textColor),
+      playerBg: val('#theme-player-color', stored.playerBg),
+      cardBg: val('#theme-card-color', stored.cardBg),
+      accentColor: val('#theme-accent-color', stored.accentColor),
+      fontFamily: val('#theme-font-family', stored.fontFamily),
+      glassEnabled: isGlass,
+      blur: blurVal,
+      saturation: satVal,
+      panelTransparency: transVal,
+      miniTransparency: miniTransVal,
+      cardStyle: val('#theme-card-style', stored.cardStyle),
+      glowEnabled: isGlow,
+      glow: glowVal,
+      glowColor: val('#theme-glow-color', stored.glowColor),
+      shadowsEnabled: isShadows,
+      windowRadius: radiusVal,
+      borderWidth: borderVal,
+      bgEffect: val('#theme-bg-effect', stored.bgEffect),
+      animationsEnabled: isAnimations,
+      wallpaperDim: scrimVal
+    });
+  }
+
+  function updateCustomThemeFromUI() {
+    const theme = readThemeFromControls();
+
+    const setText = (id, text) => {
+      const el = panel.querySelector(id);
+      if (el) el.textContent = text;
+    };
+
+    setText('#angle-val-text', `${theme.bgAngle}°`);
+    setText('#blur-val-text', `${theme.blur}px`);
+    setText('#sat-val-text', `${theme.saturation}%`);
+    setText('#transparency-val-text', `${Math.round(theme.panelTransparency * 100)}%`);
+    setText('#mini-transparency-val-text', theme.miniTransparency !== null ? `${Math.round(theme.miniTransparency * 100)}%` : 'Как у панелей');
+    setText('#glow-val-text', `${Math.round(theme.glow * 100)}%`);
+    setText('#radius-val-text', `${theme.windowRadius}px`);
+    setText('#border-width-val-text', theme.borderWidth);
+    setText('#scrim-val-text', `${Math.round(theme.wallpaperDim * 100)}%`);
+
+    commitCustomTheme(theme, { persist: true });
 
     btns.forEach(b => {
       if (b.dataset.theme === 'custom') {
         b.classList.add('active');
+        b.setAttribute('aria-pressed', 'true');
       } else {
         b.classList.remove('active');
+        b.setAttribute('aria-pressed', 'false');
       }
     });
   }
 
-  const hasThemeConstructor = [
-    themeBgColor1Input,
-    themeBgColor2Input,
-    themeBgAngleSlider,
-    themeTextInput,
-    themePlayerInput,
-    themeCardInput,
-    themeAccentInput,
-    themeBlurSlider,
-    themeGlowSlider,
-    themeOpacitySlider
-  ].every(Boolean);
-
-  if (hasThemeConstructor) {
-    themeBgColor1Input.addEventListener('input', updateCustomThemeFromUI);
-    themeBgColor2Input.addEventListener('input', updateCustomThemeFromUI);
-    themeBgAngleSlider.addEventListener('input', updateCustomThemeFromUI);
-    themeTextInput.addEventListener('input', updateCustomThemeFromUI);
-    themePlayerInput.addEventListener('input', updateCustomThemeFromUI);
-    themeCardInput.addEventListener('input', updateCustomThemeFromUI);
-    themeAccentInput.addEventListener('input', updateCustomThemeFromUI);
-    themeBlurSlider.addEventListener('input', updateCustomThemeFromUI);
-    themeGlowSlider.addEventListener('input', updateCustomThemeFromUI);
-    themeOpacitySlider.addEventListener('input', updateCustomThemeFromUI);
-    if (themeRadiusSlider) {
-      themeRadiusSlider.addEventListener('input', updateCustomThemeFromUI);
+  // Bind all constructor input controls
+  const constructorInputs = panel.querySelectorAll('#theme-constructor-section input, #theme-constructor-section select');
+  constructorInputs.forEach(input => {
+    if (input.type === 'color' || input.type === 'range') {
+      input.addEventListener('input', updateCustomThemeFromUI);
+    } else if (input.type === 'checkbox' || input.tagName === 'SELECT') {
+      input.addEventListener('change', updateCustomThemeFromUI);
     }
-    if (themeFontFamilySelect) themeFontFamilySelect.addEventListener('change', updateCustomThemeFromUI);
-    if (themeBorderWidthSlider) themeBorderWidthSlider.addEventListener('input', updateCustomThemeFromUI);
-    if (themeGlowColorInput) themeGlowColorInput.addEventListener('input', updateCustomThemeFromUI);
-    if (themeCardStyleSelect) themeCardStyleSelect.addEventListener('change', updateCustomThemeFromUI);
-    if (themeBgEffectSelect) themeBgEffectSelect.addEventListener('change', updateCustomThemeFromUI);
+  });
+
+  // Sync Mini Player Transparency toggle
+  const themeMiniTransSyncCheck = panel.querySelector('#theme-mini-trans-sync');
+  const themeMiniTransparencySlider = panel.querySelector('#theme-mini-transparency-slider');
+  if (themeMiniTransSyncCheck && themeMiniTransparencySlider) {
+    themeMiniTransSyncCheck.addEventListener('change', () => {
+      if (themeMiniTransSyncCheck.checked) {
+        themeMiniTransparencySlider.style.opacity = '0.4';
+        themeMiniTransparencySlider.style.pointerEvents = 'none';
+        const transSlider = panel.querySelector('#theme-transparency-slider');
+        if (transSlider) themeMiniTransparencySlider.value = transSlider.value;
+      } else {
+        themeMiniTransparencySlider.style.opacity = '';
+        themeMiniTransparencySlider.style.pointerEvents = '';
+      }
+      updateCustomThemeFromUI();
+    });
+  }
+
+  // Reset Theme to Default
+  const themeResetBtn = panel.querySelector('#theme-reset-btn');
+  if (themeResetBtn) {
+    themeResetBtn.addEventListener('click', () => {
+      commitCustomTheme(DEFAULT_CUSTOM_THEME, { persist: true });
+      showToastNotification('Тема сброшена к стандартной.', 'info', 'Тема оформления');
+      renderSettings({ scope, studioTab });
+    });
   }
 
   // Background Media (Image / GIF / Video) bindings
@@ -4825,6 +4938,16 @@ function renderSettings(options = {}) {
         localStorage.setItem('gp_bg_is_video', String(isVideoSaved));
         applyBackgroundImage(bgRef, isVideoSaved);
         if (bgImageClearBtn) bgImageClearBtn.classList.remove('hidden');
+
+        // If background opacity was 0% or unset, default to 65% so the user immediately sees their wallpaper
+        const currentBgOpacity = localStorage.getItem('gp_bg_image_opacity');
+        if (!currentBgOpacity || currentBgOpacity === '0') {
+          localStorage.setItem('gp_bg_image_opacity', '65');
+          document.documentElement.style.setProperty('--bg-image-opacity', '0.65');
+          if (bgOpacitySlider) bgOpacitySlider.value = 65;
+          if (bgOpacityValText) bgOpacityValText.textContent = '65%';
+        }
+
         if (isVideoSaved) {
           if (wasAutoTrimmed) {
             showToastNotification('Видео установлено и зациклено на первых 8 секундах.', 'success', 'Фон');
@@ -4860,82 +4983,43 @@ function renderSettings(options = {}) {
   }
 
   const themeExportBtn = panel.querySelector('#theme-export-btn');
-  if (themeExportBtn && hasThemeConstructor) {
+  if (themeExportBtn) {
     themeExportBtn.addEventListener('click', async () => {
-    const customThemeVal = {
-      bgColor1: themeBgColor1Input.value,
-      bgColor2: themeBgColor2Input.value,
-      bgAngle: parseInt(themeBgAngleSlider.value, 10),
-      textColor: themeTextInput.value,
-      playerBg: themePlayerInput.value,
-      cardBg: themeCardInput.value,
-      accentColor: themeAccentInput.value,
-      blur: parseInt(themeBlurSlider.value, 10),
-      glow: parseFloat(themeGlowSlider.value) / 100,
-      opacity: parseFloat(themeOpacitySlider.value) / 100,
-      windowRadius: themeRadiusSlider ? parseInt(themeRadiusSlider.value, 10) : 12,
-      fontFamily: themeFontFamilySelect ? themeFontFamilySelect.value : 'Inter',
-      borderWidth: themeBorderWidthSlider ? `${themeBorderWidthSlider.value}px` : '1px',
-      glowColor: themeGlowColorInput ? themeGlowColorInput.value : '#ffffff',
-      cardStyle: themeCardStyleSelect ? themeCardStyleSelect.value : 'default',
-      bgEffect: themeBgEffectSelect ? themeBgEffectSelect.value : 'liquid'
-    };
-    try {
-      const code = btoa(JSON.stringify(customThemeVal));
-      await navigator.clipboard.writeText(code);
-      showToastNotification('Код темы скопирован в буфер обмена.', 'success', 'Тема оформления');
-    } catch (err) {
-      console.error(err);
-      showToastNotification('Не удалось скопировать код темы.', 'error', 'Тема оформления');
-    }
-  });
+      const customThemeVal = readThemeFromControls();
+      try {
+        const code = btoa(JSON.stringify(customThemeVal));
+        await navigator.clipboard.writeText(code);
+        showToastNotification('Код темы скопирован в буфер обмена.', 'success', 'Тема оформления');
+      } catch (err) {
+        console.error(err);
+        showToastNotification('Не удалось скопировать код темы.', 'error', 'Тема оформления');
+      }
+    });
   }
 
   const themeImportBtn = panel.querySelector('#theme-import-btn');
   if (themeImportBtn) {
     themeImportBtn.addEventListener('click', () => {
-    const input = panel.querySelector('#theme-import-input');
-    const code = input.value.trim();
-    if (!code) return;
-    try {
-      const decoded = JSON.parse(atob(code));
-      if (decoded && typeof decoded === 'object' && (decoded.bgColor || decoded.bgColor1)) {
-        const normalized = normalizeCustomTheme(decoded);
-        applyCustomTheme(normalized);
-        applyBgEffect(normalized.bgEffect);
-        localStorage.setItem('gp_custom_theme', JSON.stringify(normalized));
-        localStorage.setItem('gp_theme', 'custom');
-        input.value = '';
-        showToastNotification('Тема проверена и применена.', 'success', 'Тема оформления');
-        renderSettings({ scope, studioTab });
-      } else {
-        showToastNotification('В коде нет обязательных параметров темы.', 'error', 'Тема оформления');
+      const input = panel.querySelector('#theme-import-input');
+      const code = input?.value.trim();
+      if (!code) return;
+      try {
+        const decoded = JSON.parse(atob(code));
+        if (decoded && typeof decoded === 'object' && (decoded.bgColor || decoded.bgColor1 || decoded.version)) {
+          const normalized = normalizeCustomTheme(decoded);
+          commitCustomTheme(normalized, { persist: true });
+          input.value = '';
+          showToastNotification('Тема проверена и применена.', 'success', 'Тема оформления');
+          renderSettings({ scope, studioTab });
+        } else {
+          showToastNotification('В коде нет обязательных параметров темы.', 'error', 'Тема оформления');
+        }
+      } catch (err) {
+        console.error(err);
+        showToastNotification('Не удалось прочитать код темы.', 'error', 'Тема оформления');
       }
-    } catch (err) {
-      console.error(err);
-      showToastNotification('Не удалось прочитать код темы.', 'error', 'Тема оформления');
-    }
-  });
+    });
   }
-
-  const getCurrentThemeColors = () => ({
-    bgColor1: themeBgColor1Input?.value || customTheme.bgColor1 || customTheme.bgColor || '#1e1e24',
-    bgColor2: themeBgColor2Input?.value || customTheme.bgColor2 || customTheme.bgColor || '#0a0a0c',
-    bgAngle: parseInt(themeBgAngleSlider?.value || customTheme.bgAngle || 135, 10),
-    textColor: themeTextInput?.value || customTheme.textColor || '#f5f5f7',
-    playerBg: themePlayerInput?.value || customTheme.playerBg || '#050505',
-    cardBg: themeCardInput?.value || customTheme.cardBg || '#ffffff',
-    accentColor: themeAccentInput?.value || customTheme.accentColor || '#ffffff',
-    blur: parseInt(themeBlurSlider?.value || customTheme.blur || 28, 10),
-    glow: parseFloat(themeGlowSlider?.value || ((customTheme.glow || 0.05) * 100)) / 100,
-    opacity: parseFloat(themeOpacitySlider?.value || ((customTheme.opacity || 0.45) * 100)) / 100,
-    windowRadius: parseInt(themeRadiusSlider?.value || customTheme.windowRadius || 12, 10),
-    fontFamily: themeFontFamilySelect?.value || customTheme.fontFamily || 'Inter',
-    borderWidth: themeBorderWidthSlider ? `${themeBorderWidthSlider.value}px` : (customTheme.borderWidth || '1px'),
-    glowColor: themeGlowColorInput?.value || customTheme.glowColor || '#ffffff',
-    cardStyle: themeCardStyleSelect?.value || customTheme.cardStyle || 'default',
-    bgEffect: themeBgEffectSelect?.value || customTheme.bgEffect || 'liquid'
-  });
 
   function getSavedThemes() {
     try {
@@ -4976,19 +5060,20 @@ function renderSettings(options = {}) {
         const id = btn.closest('.saved-theme-item')?.dataset.themeId;
         const selected = getSavedThemes().find(theme => theme.id === id);
         if (!selected) return;
-        applyCustomTheme(selected.colors);
-        applyBgEffect(selected.colors.bgEffect || 'liquid');
-        localStorage.setItem('gp_custom_theme', JSON.stringify(selected.colors));
-        localStorage.setItem('gp_theme', 'custom');
+        const migrated = normalizeCustomTheme(selected.colors);
+        commitCustomTheme(migrated, { persist: true });
         if (selected.bgUrl || selected.bgPath) {
           const bgRef = selected.bgUrl || selected.bgPath;
+          const isVideoSaved = Boolean(selected.isVideo || (selected.bgPath && selected.bgPath.match(/\.(mp4|webm|mov)$/i)));
           localStorage.setItem('gp_bg_image', bgRef);
-          applyBackgroundImage(bgRef);
+          localStorage.setItem('gp_bg_is_video', String(isVideoSaved));
+          applyBackgroundImage(bgRef, isVideoSaved);
         } else {
           localStorage.removeItem('gp_bg_image');
+          localStorage.removeItem('gp_bg_is_video');
           applyBackgroundImage(null);
         }
-        showToastNotification('Theme applied');
+        showToastNotification('Тема применена', 'success', 'Тема оформления');
         renderSettings({ scope, studioTab });
       });
     });
@@ -5004,28 +5089,30 @@ function renderSettings(options = {}) {
 
   const themeSaveBtn = panel.querySelector('#theme-save-btn');
   const themeSaveNameInput = panel.querySelector('#theme-save-name-input');
-  if (themeSaveBtn && themeSaveNameInput && hasThemeConstructor) {
+  if (themeSaveBtn && themeSaveNameInput) {
     themeSaveBtn.addEventListener('click', () => {
       const name = themeSaveNameInput.value.trim();
       if (!name) {
-        showToastNotification('Enter theme name');
+        showToastNotification('Введите название темы', 'warning', 'Тема оформления');
         return;
       }
 
       const id = `theme_${Date.now()}`;
       const bgRef = localStorage.getItem('gp_bg_image') || '';
+      const isVideo = localStorage.getItem('gp_bg_is_video') === 'true';
       const themes = getSavedThemes();
       themes.unshift({
         id,
         name,
         bgPath: bgRef,
         bgUrl: bgRef,
-        colors: getCurrentThemeColors()
+        isVideo,
+        colors: readThemeFromControls()
       });
       setSavedThemes(themes);
       themeSaveNameInput.value = '';
       renderSavedThemesList();
-      showToastNotification('Theme saved');
+      showToastNotification('Тема сохранена!', 'success', 'Тема оформления');
     });
     renderSavedThemesList();
   }
@@ -5188,6 +5275,7 @@ function renderSettings(options = {}) {
 }
 
 const DEFAULT_CUSTOM_THEME = Object.freeze({
+  version: 2,
   bgColor1: '#1e1e24',
   bgColor2: '#0a0a0c',
   bgAngle: 135,
@@ -5195,21 +5283,29 @@ const DEFAULT_CUSTOM_THEME = Object.freeze({
   playerBg: '#050505',
   cardBg: '#ffffff',
   accentColor: '#ffffff',
+  glassEnabled: true,
   blur: 28,
-  glow: 0.05,
-  opacity: 0.45,
-  windowRadius: 12,
-  fontFamily: 'Inter',
-  borderWidth: '1px',
+  saturation: 140,
+  panelTransparency: 0.55,
+  miniTransparency: null,
+  cardStyle: 'glass',
+  glowEnabled: true,
+  glow: 0.25,
   glowColor: '#ffffff',
-  cardStyle: 'default',
-  bgEffect: 'liquid'
+  windowRadius: 12,
+  borderWidth: '1px',
+  shadowsEnabled: true,
+  bgEffect: 'none',
+  animationsEnabled: true,
+  fontFamily: 'Inter',
+  wallpaperDim: 0.45
 });
 
 const CUSTOM_THEME_FONTS = new Set(['Inter', 'Outfit', 'Montserrat', 'Fira Code', 'Playfair Display']);
-const CUSTOM_THEME_CARD_STYLES = new Set(['default', 'frosted', 'material', 'flat']);
-const CUSTOM_THEME_BG_EFFECTS = new Set(['static', 'aurora', 'liquid', 'particles']);
+const CUSTOM_THEME_CARD_STYLES = new Set(['glass', 'frosted', 'solid', 'flat', 'default', 'material']);
+const CUSTOM_THEME_BG_EFFECTS = new Set(['none', 'aurora', 'liquid', 'particles', 'static']);
 let customThemeRecoveryNotified = false;
+let activeAccentOverride = null;
 
 function isValidHexColor(value) {
   return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
@@ -5220,28 +5316,144 @@ function clampThemeNumber(value, fallback, min, max) {
   return Number.isFinite(number) ? Math.min(max, Math.max(min, number)) : fallback;
 }
 
+function normalizeBorderWidth(bw) {
+  if (typeof bw === 'number') return `${Math.max(0, Math.min(4, bw))}px`;
+  if (typeof bw === 'string') {
+    const num = parseFloat(bw);
+    if (!isNaN(num)) return `${Math.max(0, Math.min(4, num))}px`;
+  }
+  return '1px';
+}
+
+function hexToRgbTriplet(hex) {
+  let c;
+  if (/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)) {
+    c = hex.substring(1).split('');
+    if (c.length === 3) {
+      c = [c[0], c[0], c[1], c[1], c[2], c[2]];
+    }
+    c = '0x' + c.join('');
+    return `${(c >> 16) & 255}, ${(c >> 8) & 255}, ${c & 255}`;
+  }
+  return '255, 255, 255';
+}
+
+function migrateThemeV1(source) {
+  if (!source || typeof source !== 'object') return {};
+  const migrated = { ...source };
+  if (migrated.version !== 2) {
+    if (migrated.panelTransparency === undefined && migrated.opacity !== undefined) {
+      migrated.panelTransparency = Math.round((1 - clampThemeNumber(migrated.opacity, 0.45, 0, 1)) * 100) / 100;
+    }
+    if (migrated.cardStyle === 'default') migrated.cardStyle = 'glass';
+    if (migrated.cardStyle === 'material') migrated.cardStyle = 'solid';
+    if (migrated.bgEffect === 'static') migrated.bgEffect = 'none';
+    if (migrated.glassEnabled === undefined) migrated.glassEnabled = true;
+    if (migrated.glowEnabled === undefined) migrated.glowEnabled = true;
+    if (migrated.shadowsEnabled === undefined) migrated.shadowsEnabled = true;
+    if (migrated.animationsEnabled === undefined) migrated.animationsEnabled = true;
+    migrated.version = 2;
+  }
+  return migrated;
+}
+
 function normalizeCustomTheme(value) {
-  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const source = migrateThemeV1(raw);
   const legacyBg = isValidHexColor(source.bgColor) ? source.bgColor : null;
   const color = (candidate, fallback) => isValidHexColor(candidate) ? candidate.toLowerCase() : fallback;
+
+  let cardStyle = source.cardStyle;
+  if (cardStyle === 'default') cardStyle = 'glass';
+  if (cardStyle === 'material') cardStyle = 'solid';
+  if (!['glass', 'frosted', 'solid', 'flat'].includes(cardStyle)) {
+    cardStyle = DEFAULT_CUSTOM_THEME.cardStyle;
+  }
+
+  let bgEffect = source.bgEffect;
+  if (bgEffect === 'static') bgEffect = 'none';
+  if (!['none', 'aurora', 'liquid', 'particles'].includes(bgEffect)) {
+    bgEffect = DEFAULT_CUSTOM_THEME.bgEffect;
+  }
+
   return {
+    version: 2,
     bgColor1: color(source.bgColor1, legacyBg || DEFAULT_CUSTOM_THEME.bgColor1),
     bgColor2: color(source.bgColor2, legacyBg || DEFAULT_CUSTOM_THEME.bgColor2),
-    bgAngle: clampThemeNumber(source.bgAngle, DEFAULT_CUSTOM_THEME.bgAngle, 0, 360),
+    bgAngle: Math.round(clampThemeNumber(source.bgAngle, DEFAULT_CUSTOM_THEME.bgAngle, 0, 360)),
     textColor: color(source.textColor, DEFAULT_CUSTOM_THEME.textColor),
     playerBg: color(source.playerBg, DEFAULT_CUSTOM_THEME.playerBg),
     cardBg: color(source.cardBg, DEFAULT_CUSTOM_THEME.cardBg),
     accentColor: color(source.accentColor, DEFAULT_CUSTOM_THEME.accentColor),
-    blur: clampThemeNumber(source.blur, DEFAULT_CUSTOM_THEME.blur, 0, 60),
-    glow: clampThemeNumber(source.glow, DEFAULT_CUSTOM_THEME.glow, 0, 0.4),
-    opacity: clampThemeNumber(source.opacity, DEFAULT_CUSTOM_THEME.opacity, 0.18, 1),
-    windowRadius: clampThemeNumber(source.windowRadius, DEFAULT_CUSTOM_THEME.windowRadius, 0, 32),
-    fontFamily: CUSTOM_THEME_FONTS.has(source.fontFamily) ? source.fontFamily : DEFAULT_CUSTOM_THEME.fontFamily,
-    borderWidth: ['0px', '1px', '2px'].includes(source.borderWidth) ? source.borderWidth : DEFAULT_CUSTOM_THEME.borderWidth,
+    glassEnabled: source.glassEnabled !== undefined ? Boolean(source.glassEnabled) : DEFAULT_CUSTOM_THEME.glassEnabled,
+    blur: Math.round(clampThemeNumber(source.blur, DEFAULT_CUSTOM_THEME.blur, 0, 60)),
+    saturation: Math.round(clampThemeNumber(source.saturation, DEFAULT_CUSTOM_THEME.saturation, 100, 200)),
+    panelTransparency: clampThemeNumber(source.panelTransparency, DEFAULT_CUSTOM_THEME.panelTransparency, 0, 1),
+    miniTransparency: source.miniTransparency !== null && source.miniTransparency !== undefined
+      ? clampThemeNumber(source.miniTransparency, DEFAULT_CUSTOM_THEME.panelTransparency, 0, 1)
+      : null,
+    cardStyle,
+    glowEnabled: source.glowEnabled !== undefined ? Boolean(source.glowEnabled) : DEFAULT_CUSTOM_THEME.glowEnabled,
+    glow: clampThemeNumber(source.glow, DEFAULT_CUSTOM_THEME.glow, 0, 1),
     glowColor: color(source.glowColor, DEFAULT_CUSTOM_THEME.glowColor),
-    cardStyle: CUSTOM_THEME_CARD_STYLES.has(source.cardStyle) ? source.cardStyle : DEFAULT_CUSTOM_THEME.cardStyle,
-    bgEffect: CUSTOM_THEME_BG_EFFECTS.has(source.bgEffect) ? source.bgEffect : DEFAULT_CUSTOM_THEME.bgEffect
+    windowRadius: Math.round(clampThemeNumber(source.windowRadius, DEFAULT_CUSTOM_THEME.windowRadius, 0, 32)),
+    borderWidth: normalizeBorderWidth(source.borderWidth),
+    shadowsEnabled: source.shadowsEnabled !== undefined ? Boolean(source.shadowsEnabled) : DEFAULT_CUSTOM_THEME.shadowsEnabled,
+    bgEffect,
+    animationsEnabled: source.animationsEnabled !== undefined ? Boolean(source.animationsEnabled) : DEFAULT_CUSTOM_THEME.animationsEnabled,
+    fontFamily: CUSTOM_THEME_FONTS.has(source.fontFamily) ? source.fontFamily : DEFAULT_CUSTOM_THEME.fontFamily,
+    wallpaperDim: clampThemeNumber(source.wallpaperDim, DEFAULT_CUSTOM_THEME.wallpaperDim, 0, 0.8)
   };
+}
+
+let pendingThemeCommit = null;
+let themeCommitRafId = null;
+let themePersistTimeout = null;
+
+function commitCustomTheme(rawTheme, { persist = true } = {}) {
+  const theme = normalizeCustomTheme(rawTheme);
+  pendingThemeCommit = theme;
+
+  if (!themeCommitRafId) {
+    themeCommitRafId = requestAnimationFrame(() => {
+      themeCommitRafId = null;
+      if (pendingThemeCommit) {
+        applyCustomTheme(pendingThemeCommit);
+      }
+    });
+  }
+
+  if (persist) {
+    if (themePersistTimeout) clearTimeout(themePersistTimeout);
+    themePersistTimeout = setTimeout(() => {
+      localStorage.setItem('gp_custom_theme', JSON.stringify(theme));
+      localStorage.setItem('gp_theme', 'custom');
+    }, 200);
+  }
+
+  return theme;
+}
+
+function setAccentOverride(color) {
+  activeAccentOverride = isValidHexColor(color) ? color.toLowerCase() : null;
+  const currentTheme = localStorage.getItem('gp_theme') || 'theme-dark-glass';
+  if (currentTheme === 'custom') {
+    applyCustomTheme(getStoredCustomTheme());
+  } else {
+    const root = document.documentElement;
+    if (activeAccentOverride) {
+      root.style.setProperty('--accent-color', activeAccentOverride);
+      const onAccent = pickReadableText(activeAccentOverride, null);
+      root.style.setProperty('--on-accent', onAccent);
+      root.style.setProperty('--play-main-bg', activeAccentOverride);
+      root.style.setProperty('--play-main-color', onAccent);
+      root.style.setProperty('--primary-btn-bg', activeAccentOverride);
+      root.style.setProperty('--primary-btn-color', onAccent);
+      root.style.setProperty('--focus-ring', hexToRgba(activeAccentOverride, 0.72));
+    } else {
+      applyTheme(currentTheme);
+    }
+  }
 }
 
 function getStoredCustomTheme() {
@@ -5269,6 +5481,18 @@ function applyTheme(themeName) {
   } else {
     clearCustomThemeProperties();
     document.body.classList.add(themeName);
+    applyBgEffect('none');
+    if (activeAccentOverride && localStorage.getItem('gp_dynamic_cover') === 'true') {
+      const root = document.documentElement;
+      root.style.setProperty('--accent-color', activeAccentOverride);
+      const onAccent = pickReadableText(activeAccentOverride, null);
+      root.style.setProperty('--on-accent', onAccent);
+      root.style.setProperty('--play-main-bg', activeAccentOverride);
+      root.style.setProperty('--play-main-color', onAccent);
+      root.style.setProperty('--primary-btn-bg', activeAccentOverride);
+      root.style.setProperty('--primary-btn-color', onAccent);
+      root.style.setProperty('--focus-ring', hexToRgba(activeAccentOverride, 0.72));
+    }
   }
   localStorage.setItem('gp_theme', themeName);
 }
@@ -5496,7 +5720,7 @@ function stopAmbientParticles() {
   }
 }
 
-function applyBgEffect(effectName = 'static') {
+function applyBgEffect(effectName = 'none') {
   let layer = document.getElementById('bg-effect-layer');
   if (!layer) {
     layer = document.createElement('div');
@@ -5514,6 +5738,7 @@ function applyBgEffect(effectName = 'static') {
     layer.classList.add('effect-liquid');
   } else if (effectName === 'particles') {
     layer.classList.add('effect-particles');
+    startAmbientParticles();
   }
   localStorage.setItem('gp_bg_effect', effectName);
 }
@@ -5554,34 +5779,78 @@ function applyCustomTheme(theme) {
   const isLightBg = avgLum > 0.42;
 
   const textColor = pickReadableText(averageBackground, theme.textColor);
-
   root.style.setProperty('--text-color', textColor);
-  root.style.setProperty('--blur-value', `blur(${theme.blur}px)`);
+  root.style.setProperty('--text-dim', hexToRgba(textColor, 0.68));
 
-  const textDim = hexToRgba(textColor, 0.68);
-  root.style.setProperty('--text-dim', textDim);
+  // Glass & blur calculation
+  let glassFilter = 'none';
+  let blurVal = 'none';
+  if (theme.glassEnabled && theme.cardStyle !== 'solid' && theme.cardStyle !== 'flat') {
+    if (theme.cardStyle === 'frosted') {
+      const frostedBlur = Math.min(80, Math.round(theme.blur * 1.35));
+      const frostedSat = Math.min(220, Math.round(theme.saturation * 1.15));
+      glassFilter = `blur(${frostedBlur}px) saturate(${frostedSat}%)`;
+      blurVal = `blur(${frostedBlur}px)`;
+    } else {
+      glassFilter = theme.blur > 0 ? `blur(${theme.blur}px) saturate(${theme.saturation}%)` : 'none';
+      blurVal = theme.blur > 0 ? `blur(${theme.blur}px)` : 'none';
+    }
+  }
+
+  root.style.setProperty('--glass-filter', glassFilter);
+  root.style.setProperty('--blur-value', blurVal);
+  root.style.setProperty('--blur', `${theme.blur}px`);
+  root.style.setProperty('--blur-raw', String(theme.blur));
 
   root.style.setProperty('--bg-gradient', `linear-gradient(${theme.bgAngle}deg, ${bg1} 0%, ${bg2} 100%)`);
+  root.style.setProperty('--bgColor1', bg1);
+
+  // Surface transparency & alpha math (linear, unclamped, 2 decimals)
+  const surfaceAlpha = Math.round(Math.max(0, Math.min(1, 1 - theme.panelTransparency)) * 100) / 100;
+  const miniTransparency = theme.miniTransparency !== null && theme.miniTransparency !== undefined
+    ? theme.miniTransparency
+    : theme.panelTransparency;
+  const miniAlpha = Math.round(Math.max(0, Math.min(1, 1 - miniTransparency)) * 100) / 100;
 
   const cardBgHex = theme.cardBg;
   const playerBgHex = theme.playerBg;
-  const effectiveOpacity = theme.opacity;
-  const cardOpacity = Math.min(0.78, Math.max(0.14, effectiveOpacity * (isLightBg ? 1.15 : 0.72)));
-  const playerOpacity = Math.min(0.96, Math.max(0.58, effectiveOpacity + 0.22));
+
+  // Card opacity depending on style and transparency
+  let cardOpacity = surfaceAlpha;
+  if (theme.cardStyle === 'solid') {
+    cardOpacity = Math.min(1, Math.max(0.7, surfaceAlpha + 0.3));
+  } else if (theme.cardStyle === 'flat') {
+    cardOpacity = Math.min(1, Math.max(0.6, surfaceAlpha + 0.2));
+  } else {
+    // Glass mode: honest transparency
+    cardOpacity = Math.max(0.04, surfaceAlpha * 0.88);
+  }
+
+  const playerOpacity = Math.max(0.06, Math.min(1, surfaceAlpha + 0.12));
   const surfaceBackground = mixHexColors(averageBackground, cardBgHex, cardOpacity);
   const surfaceTextColor = pickReadableText(surfaceBackground, textColor);
   const surfaceIsLight = getLuminance(surfaceBackground) > 0.42;
-  const borderAlpha = surfaceIsLight ? 0.2 : 0.16;
+  const borderAlpha = surfaceIsLight ? 0.22 : 0.18;
 
   root.style.setProperty('--card-bg', hexToRgba(cardBgHex, cardOpacity));
   root.style.setProperty('--card-border', hexToRgba(surfaceTextColor, borderAlpha));
-  root.style.setProperty('--card-hover-bg', hexToRgba(cardBgHex, Math.min(0.9, cardOpacity + 0.1)));
-  root.style.setProperty('--card-hover-border', hexToRgba(surfaceTextColor, surfaceIsLight ? 0.32 : 0.28));
-  root.style.setProperty('--surface-elevated', hexToRgba(cardBgHex, Math.min(0.94, cardOpacity + 0.16)));
-  root.style.setProperty('--panel-bg', hexToRgba(cardBgHex, Math.min(0.88, cardOpacity + 0.08)));
+  root.style.setProperty('--card-hover-bg', hexToRgba(cardBgHex, Math.min(1, cardOpacity + 0.12)));
+  root.style.setProperty('--card-hover-border', hexToRgba(surfaceTextColor, surfaceIsLight ? 0.34 : 0.28));
+  root.style.setProperty('--surface-elevated', hexToRgba(cardBgHex, Math.min(1, surfaceAlpha + 0.2)));
+  root.style.setProperty('--panel-bg', hexToRgba(cardBgHex, Math.min(1, surfaceAlpha + 0.08)));
   root.style.setProperty('--surface-text-color', surfaceTextColor);
   root.style.setProperty('--surface-text-dim', hexToRgba(surfaceTextColor, 0.68));
+
+  // High transparency readability boost
+  if (surfaceAlpha < 0.38) {
+    root.style.setProperty('--surface-text-shadow', '0 1px 3px rgba(0, 0, 0, 0.8), 0 0 1px rgba(0, 0, 0, 0.9)');
+  } else {
+    root.style.setProperty('--surface-text-shadow', 'none');
+  }
+
+  // Player bar and mini-player backgrounds
   root.style.setProperty('--player-bg', hexToRgba(playerBgHex, playerOpacity));
+  root.style.setProperty('--mini-bg', hexToRgba(playerBgHex, miniAlpha));
 
   const playerBackground = mixHexColors(averageBackground, playerBgHex, playerOpacity);
   const playerIsLight = getLuminance(playerBackground) > 0.42;
@@ -5590,7 +5859,11 @@ function applyCustomTheme(theme) {
   root.style.setProperty('--player-text-color', playerTextColor);
   root.style.setProperty('--player-text-dim', playerIsLight ? 'rgba(17, 17, 22, 0.62)' : 'rgba(247, 247, 250, 0.62)');
 
-  const accentColorHex = theme.accentColor;
+  // Accent & dynamic cover color override
+  const accentColorHex = activeAccentOverride && localStorage.getItem('gp_dynamic_cover') === 'true'
+    ? activeAccentOverride
+    : theme.accentColor;
+
   root.style.setProperty('--accent-color', accentColorHex);
   const onAccent = pickReadableText(accentColorHex, null);
   root.style.setProperty('--on-accent', onAccent);
@@ -5599,24 +5872,47 @@ function applyCustomTheme(theme) {
   root.style.setProperty('--primary-btn-bg', accentColorHex);
   root.style.setProperty('--primary-btn-color', onAccent);
   root.style.setProperty('--focus-ring', hexToRgba(accentColorHex, 0.72));
-  root.style.setProperty('--wallpaper-scrim', isLightBg ? 'rgba(255, 255, 255, 0.48)' : 'rgba(2, 3, 8, 0.46)');
+
+  // Wallpaper dim scrim
+  const scrimAlpha = theme.wallpaperDim !== undefined ? theme.wallpaperDim : 0.45;
+  root.style.setProperty('--wallpaper-scrim', isLightBg ? `rgba(255, 255, 255, ${scrimAlpha})` : `rgba(2, 3, 8, ${scrimAlpha})`);
+
+  // Status colors
   const statusPalette = surfaceIsLight
     ? { info: '#005eb8', success: '#146c35', warning: '#875000', error: '#b52b25' }
     : { info: '#74b7ff', success: '#5bd98b', warning: '#ffc166', error: '#ff7b72' };
   Object.entries(statusPalette).forEach(([name, color]) => root.style.setProperty(`--status-${name}`, color));
 
-  const glowColorHex = theme.glowColor;
-  const glowAlpha = theme.glow;
-  const glowColorRgba = hexToRgba(glowColorHex, glowAlpha);
-  root.style.setProperty('--glow-color', glowColorRgba);
-  root.style.setProperty('--glass-glow', `inset 0 1px 0 0 ${glowColorRgba}`);
+  // Glow calculation
+  if (!theme.glowEnabled || theme.glow <= 0) {
+    root.style.setProperty('--glow', '0');
+    root.style.setProperty('--glow-color', 'transparent');
+    root.style.setProperty('--glow-color-base', 'transparent');
+    root.style.setProperty('--glow-rgb', '0, 0, 0');
+    root.style.setProperty('--glass-glow', 'none');
+  } else {
+    const glowVal = theme.glow;
+    const glowColorHex = theme.glowColor;
+    const glowColorRgba = hexToRgba(glowColorHex, Math.min(1, glowVal * 0.75 + 0.05));
+    root.style.setProperty('--glow', String(glowVal));
+    root.style.setProperty('--glow-color', glowColorRgba);
+    root.style.setProperty('--glow-color-base', glowColorHex);
+    root.style.setProperty('--glow-rgb', hexToRgbTriplet(glowColorHex));
+    root.style.setProperty('--glass-glow', `inset 0 1px 0 0 ${glowColorRgba}`);
+  }
 
-  root.style.setProperty('--bgColor1', bg1);
-  root.style.setProperty('--glow', theme.glow);
-  root.style.setProperty('--blur', `${theme.blur}px`);
-  
+  // Shadows & Geometry
   root.style.setProperty('--window-radius', `${theme.windowRadius}px`);
+  root.style.setProperty('--border-width', theme.borderWidth);
+  root.style.setProperty('--card-shadow', theme.shadowsEnabled && theme.cardStyle !== 'flat' ? '0 8px 32px 0 rgba(0, 0, 0, 0.28)' : 'none');
+  root.style.setProperty('--glass-shadow', theme.shadowsEnabled ? '0 24px 64px rgba(0, 0, 0, 0.6)' : 'none');
 
+  // Modular helper classes on html root
+  root.classList.toggle('gp-glass-off', !theme.glassEnabled);
+  root.classList.toggle('gp-shadows-off', !theme.shadowsEnabled);
+  root.classList.toggle('gp-motion-off', !theme.animationsEnabled);
+
+  // Font
   if (theme.fontFamily) {
     loadGoogleFont(theme.fontFamily);
     root.style.setProperty('--font-family', `'${theme.fontFamily}', sans-serif`);
@@ -5624,55 +5920,32 @@ function applyCustomTheme(theme) {
     root.style.setProperty('--font-family', "'Inter', sans-serif");
   }
 
-  root.style.setProperty('--border-width', theme.borderWidth);
+  // Card styles on body
+  document.body.classList.remove('glass-style-glass', 'glass-style-frosted', 'glass-style-solid', 'glass-style-material', 'glass-style-flat');
+  document.body.classList.add(`glass-style-${theme.cardStyle}`);
 
-  document.body.classList.remove('glass-style-frosted', 'glass-style-material', 'glass-style-flat');
-  if (theme.cardStyle && theme.cardStyle !== 'default') {
-    document.body.classList.add(`glass-style-${theme.cardStyle}`);
-  }
+  // Apply background effect centrally
+  applyBgEffect(theme.bgEffect);
 }
 
 function clearCustomThemeProperties() {
   const root = document.documentElement;
-  root.style.removeProperty('--bg-gradient');
-  root.style.removeProperty('--blur-value');
-  root.style.removeProperty('--text-color');
-  root.style.removeProperty('--text-dim');
-  root.style.removeProperty('--card-bg');
-  root.style.removeProperty('--card-border');
-  root.style.removeProperty('--card-hover-bg');
-  root.style.removeProperty('--card-hover-border');
-  root.style.removeProperty('--player-bg');
-  root.style.removeProperty('--player-border');
-  root.style.removeProperty('--player-text-color');
-  root.style.removeProperty('--player-text-dim');
-  root.style.removeProperty('--panel-bg');
-  root.style.removeProperty('--surface-elevated');
-  root.style.removeProperty('--surface-text-color');
-  root.style.removeProperty('--surface-text-dim');
-  root.style.removeProperty('--accent-color');
-  root.style.removeProperty('--on-accent');
-  root.style.removeProperty('--play-main-bg');
-  root.style.removeProperty('--play-main-color');
-  root.style.removeProperty('--primary-btn-bg');
-  root.style.removeProperty('--primary-btn-color');
-  root.style.removeProperty('--focus-ring');
-  root.style.removeProperty('--wallpaper-scrim');
-  root.style.removeProperty('--status-info');
-  root.style.removeProperty('--status-success');
-  root.style.removeProperty('--status-warning');
-  root.style.removeProperty('--status-error');
-  root.style.removeProperty('--glass-glow');
-
-  // Clear custom redesign variables
-  root.style.removeProperty('--bgColor1');
-  root.style.removeProperty('--glow');
-  root.style.removeProperty('--blur');
-  root.style.removeProperty('--window-radius');
-  root.style.removeProperty('--font-family');
-  root.style.removeProperty('--border-width');
-  root.style.removeProperty('--glow-color');
-  document.body.classList.remove('glass-style-frosted', 'glass-style-material', 'glass-style-flat');
+  const props = [
+    '--bg-gradient', '--blur-value', '--blur', '--blur-raw', '--glass-filter',
+    '--text-color', '--text-dim', '--card-bg', '--card-border',
+    '--card-hover-bg', '--card-hover-border', '--card-shadow',
+    '--player-bg', '--mini-bg', '--player-border', '--player-text-color', '--player-text-dim',
+    '--panel-bg', '--surface-elevated', '--surface-text-color', '--surface-text-dim',
+    '--surface-text-shadow', '--accent-color', '--on-accent',
+    '--play-main-bg', '--play-main-color', '--primary-btn-bg', '--primary-btn-color',
+    '--focus-ring', '--wallpaper-scrim',
+    '--status-info', '--status-success', '--status-warning', '--status-error',
+    '--glass-glow', '--glow', '--glow-color', '--glow-color-base', '--glow-rgb',
+    '--window-radius', '--font-family', '--border-width', '--bgColor1'
+  ];
+  props.forEach(p => root.style.removeProperty(p));
+  root.classList.remove('gp-glass-off', 'gp-shadows-off', 'gp-motion-off');
+  document.body.classList.remove('glass-style-glass', 'glass-style-frosted', 'glass-style-solid', 'glass-style-material', 'glass-style-flat');
 }
 
 // Startup Initialization
@@ -5699,13 +5972,6 @@ function clearCustomThemeProperties() {
 const savedTheme = localStorage.getItem('gp_theme') || 'theme-dark-glass';
 applyTheme(savedTheme);
 
-// Apply Saved Background Effect on Startup
-if (savedTheme === 'custom') {
-  applyBgEffect(getStoredCustomTheme().bgEffect);
-} else {
-  applyBgEffect('static');
-}
-
 // Apply Saved Background Media (Image / GIF / Video) & Opacity on Startup
 const savedBgImage = localStorage.getItem('gp_bg_image');
 const savedBgIsVideo = localStorage.getItem('gp_bg_is_video') === 'true';
@@ -5715,18 +5981,23 @@ if (savedBgImage) {
 const savedBgOpacity = localStorage.getItem('gp_bg_image_opacity') || '0';
 document.documentElement.style.setProperty('--bg-image-opacity', parseFloat(savedBgOpacity) / 100);
 
-// Performance lifecycle for live video background (0% CPU/GPU when idle/minimized/in other apps)
+// Performance lifecycle for live video background and particles (0% CPU/GPU when idle/minimized/in other apps)
 function pauseBackgroundMedia() {
   const bgVideo = document.getElementById('bg-video-element');
   if (bgVideo && !bgVideo.classList.contains('hidden')) {
     bgVideo.pause();
   }
+  stopAmbientParticles();
 }
 
 function resumeBackgroundMedia() {
   const bgVideo = document.getElementById('bg-video-element');
   if (bgVideo && !bgVideo.classList.contains('hidden') && !document.hidden) {
     bgVideo.play().catch(() => {});
+  }
+  const currentEffect = localStorage.getItem('gp_bg_effect');
+  if (currentEffect === 'particles' && !document.hidden && !document.body.classList.contains('mini-player-active')) {
+    startAmbientParticles();
   }
 }
 
@@ -5967,14 +6238,15 @@ function extractDominantColor(imgElement) {
 }
 
 function applyDynamicCoverColor() {
+  if (localStorage.getItem('gp_dynamic_cover') !== 'true') return;
   if (currentCover.src && !currentCover.src.startsWith('data:image/svg')) {
     if (currentCover.complete) {
       const color = extractDominantColor(currentCover);
-      document.documentElement.style.setProperty('--accent-color', color);
+      setAccentOverride(color);
     } else {
       currentCover.onload = function () {
         const color = extractDominantColor(currentCover);
-        document.documentElement.style.setProperty('--accent-color', color);
+        setAccentOverride(color);
         currentCover.onload = null;
       };
     }
@@ -5982,8 +6254,7 @@ function applyDynamicCoverColor() {
 }
 
 function resetAccentColor() {
-  const currentTheme = localStorage.getItem('gp_theme') || 'theme-dark-glass';
-  applyTheme(currentTheme);
+  setAccentOverride(null);
 }
 
 currentCover.addEventListener('load', () => {

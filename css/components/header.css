@@ -1,0 +1,139 @@
+/* Header Buttons Layout & Styling */
+.header-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 16px;
+}
+
+.home-btn, .favorites-btn, .history-btn, .playlists-btn, .profile-btn, .settings-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  color: var(--text-color);
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  -webkit-app-region: no-drag;
+}
+
+.home-btn:hover, .favorites-btn:hover, .history-btn:hover, .playlists-btn:hover, .profile-btn:hover, .settings-btn:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+.home-btn svg, .favorites-btn svg, .history-btn svg, .playlists-btn svg, .profile-btn svg, .settings-btn svg {
+  color: var(--text-dim);
+  transition: color 0.2s ease;
+}
+
+.home-btn:hover svg {
+  color: #ff9500;
+}
+
+.favorites-btn:hover svg {
+  color: #ff453a;
+}
+
+.history-btn:hover svg {
+  color: #0a84ff;
+}
+
+.playlists-btn:hover svg {
+  color: #30d158;
+}
+
+.profile-btn:hover svg {
+  color: #bf5af2;
+}
+
+.settings-btn:hover svg {
+  color: #ffd60a;
+}
+
+/* Profiles dropdown container & contents */
+.profile-container {
+  position: relative;
+  -webkit-app-region: no-drag;
+}
+
+.profile-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--card-bg, rgba(20, 20, 25, 0.95));
+  backdrop-filter: var(--blur-value, blur(24px));
+  -webkit-backdrop-filter: var(--blur-value, blur(24px));
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.12));
+  border-radius: var(--window-radius, 16px);
+  min-width: 190px;
+  box-shadow: var(--card-shadow, 0 12px 40px rgba(0, 0, 0, 0.4));
+  padding: 8px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-dropdown-item {
+  background: transparent;
+  border: none;
+  color: var(--text-dim, rgba(255, 255, 255, 0.7));
+  padding: 8px 12px;
+  text-align: left;
+  border-radius: 10px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.profile-dropdown-item:hover {
+  background: var(--card-hover-bg, rgba(255, 255, 255, 0.08));
+  color: var(--text-color, #ffffff);
+}
+
+.profile-dropdown-item.active {
+  background: var(--card-hover-bg, rgba(255, 255, 255, 0.12));
+  color: var(--accent-color, #3b82f6);
+  font-weight: 600;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: var(--card-border, rgba(255, 255, 255, 0.08));
+  margin: 4px 0;
+}
+
+.dropdown-action-btn {
+  background: transparent;
+  border: 1px dashed var(--card-border, rgba(255, 255, 255, 0.15));
+  color: var(--accent-color, #3b82f6);
+  padding: 8px 12px;
+  text-align: center;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+}
+
+.dropdown-action-btn.logout-mode {
+  border-style: solid;
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+.dropdown-action-btn:hover {
+  background: var(--card-hover-bg, rgba(255, 255, 255, 0.08));
+}

@@ -1,0 +1,297 @@
+/* ── RELEASE 1.15.0: App Startup Splash Screen & Categorized Toasts ───────────────── */
+
+/* 1. Splash Screen Overlay */
+/* 1. Splash Screen Overlay (Minimalist Dark Glass) */
+.splash-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: radial-gradient(circle at 50% 45%, rgba(16, 16, 22, 0.98), rgba(4, 4, 8, 0.99));
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.6s;
+  will-change: opacity, transform;
+}
+
+.splash-screen.fade-out {
+  opacity: 0;
+  transform: scale(1.04);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.splash-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  width: 320px;
+  text-align: center;
+}
+
+.splash-logo-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+}
+
+.splash-logo-glow {
+  position: absolute;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 50%, transparent 75%);
+  animation: splashPulse 3s ease-in-out infinite alternate;
+  will-change: transform, opacity;
+}
+
+@keyframes splashPulse {
+  0% { transform: scale(0.9); opacity: 0.4; }
+  100% { transform: scale(1.25); opacity: 0.95; }
+}
+
+.splash-logo-text {
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 7px;
+  color: #ffffff;
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.4), 0 0 40px rgba(255, 255, 255, 0.15);
+  z-index: 2;
+}
+
+.splash-loader-bar {
+  width: 100%;
+  height: 3.5px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.splash-loader-progress {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.4));
+  border-radius: 4px;
+  transition: width 0.4s ease-out;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
+}
+
+.splash-status-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.65);
+  letter-spacing: 0.5px;
+  height: 18px;
+  transition: opacity 0.2s ease;
+}
+
+/* 2. Unified Glass Toast Alert Cards */
+.toast-notification {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 280px;
+  max-width: 400px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: var(--card-bg, rgba(18, 18, 24, 0.88));
+  backdrop-filter: var(--blur-value, blur(20px));
+  -webkit-backdrop-filter: var(--blur-value, blur(20px));
+  border: var(--border-width, 1px) solid var(--card-border, rgba(255, 255, 255, 0.12));
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  color: var(--text-color, #fff);
+  font-size: 13px;
+  font-weight: 500;
+  position: relative;
+  overflow: hidden;
+  transform: translateX(120%);
+  opacity: 0;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease;
+  will-change: transform, opacity;
+}
+
+.toast-notification.toast-error {
+  border-color: rgba(255, 69, 58, 0.4);
+  box-shadow: 0 14px 38px rgba(255, 69, 58, 0.16);
+}
+.toast-notification.toast-error .toast-icon-badge {
+  background: rgba(255, 69, 58, 0.15);
+  color: #ff453a;
+  border: 1px solid rgba(255, 69, 58, 0.3);
+}
+
+.toast-notification.toast-success {
+  border-color: rgba(48, 209, 88, 0.4);
+  box-shadow: 0 14px 38px rgba(48, 209, 88, 0.16);
+}
+.toast-notification.toast-success .toast-icon-badge {
+  background: rgba(48, 209, 88, 0.15);
+  color: #30d158;
+  border: 1px solid rgba(48, 209, 88, 0.3);
+}
+
+.toast-notification.toast-info {
+  border-color: rgba(10, 132, 255, 0.4);
+  box-shadow: 0 14px 38px rgba(10, 132, 255, 0.16);
+}
+.toast-notification.toast-info .toast-icon-badge {
+  background: rgba(10, 132, 255, 0.15);
+  color: #0a84ff;
+  border: 1px solid rgba(10, 132, 255, 0.3);
+}
+
+.toast-notification.toast-warning {
+  border-color: rgba(255, 159, 10, 0.4);
+  box-shadow: 0 14px 38px rgba(255, 159, 10, 0.16);
+}
+.toast-notification.toast-warning .toast-icon-badge {
+  background: rgba(255, 159, 10, 0.15);
+  color: #ff9f0a;
+  border: 1px solid rgba(255, 159, 10, 0.3);
+}
+
+.toast-icon-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.toast-content-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.toast-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.toast-message {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.toast-progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2.5px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.3);
+  transform-origin: left;
+  animation: toastProgress 3.5s linear forwards;
+}
+
+@keyframes toastProgress {
+  0% { transform: scaleX(1); }
+  100% { transform: scaleX(0); }
+}
+
+/* 3. GPU-Accelerated Pure CSS3 Motion Backgrounds */
+.bg-effect-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -2;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.bg-effect-layer.effect-aurora::before,
+.bg-effect-layer.effect-aurora::after {
+  content: '';
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.35;
+  will-change: transform;
+}
+.bg-effect-layer.effect-aurora::before {
+  top: -150px;
+  left: -150px;
+  background: radial-gradient(circle, var(--accent-color, #bf5af2), transparent 70%);
+  animation: auroraFloat1 18s ease-in-out infinite alternate;
+}
+.bg-effect-layer.effect-aurora::after {
+  bottom: -150px;
+  right: -150px;
+  background: radial-gradient(circle, var(--glow-color, #0a84ff), transparent 70%);
+  animation: auroraFloat2 22s ease-in-out infinite alternate;
+}
+
+@keyframes auroraFloat1 {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  100% { transform: translate3d(150px, 120px, 0) scale(1.25); }
+}
+@keyframes auroraFloat2 {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  100% { transform: translate3d(-180px, -140px, 0) scale(1.3); }
+}
+
+.bg-effect-layer.effect-liquid::before,
+.bg-effect-layer.effect-liquid::after {
+  content: '';
+  position: absolute;
+  width: 480px;
+  height: 480px;
+  border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+  filter: blur(90px);
+  opacity: 0.38;
+  will-change: transform;
+}
+
+.bg-effect-layer.effect-liquid::before {
+  top: 15%;
+  left: 20%;
+  background: radial-gradient(circle, var(--accent-color, #bf5af2), transparent 70%);
+  animation: liquidMorph1 14s ease-in-out infinite alternate;
+}
+
+.bg-effect-layer.effect-liquid::after {
+  bottom: 20%;
+  right: 15%;
+  background: radial-gradient(circle, var(--glow-color-base, var(--accent-color, #0a84ff)), transparent 70%);
+  animation: liquidMorph2 17s ease-in-out infinite alternate;
+}
+
+@keyframes liquidMorph1 {
+  0% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%; }
+  50% { transform: translate3d(120px, 80px, 0) rotate(90deg) scale(1.15); border-radius: 60% 40% 30% 70% / 50% 30% 70% 60%; }
+  100% { transform: translate3d(-80px, 140px, 0) rotate(180deg) scale(0.95); border-radius: 30% 70% 50% 50% / 60% 40% 60% 40%; }
+}
+
+@keyframes liquidMorph2 {
+  0% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+  50% { transform: translate3d(-140px, -60px, 0) rotate(-120deg) scale(1.2); border-radius: 40% 60% 50% 50% / 30% 60% 40% 70%; }
+  100% { transform: translate3d(70px, -110px, 0) rotate(-240deg) scale(0.9); border-radius: 50% 50% 40% 60% / 50% 40% 60% 50%; }
+}

@@ -1,0 +1,298 @@
+/* View Header components */
+.view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 16px;
+  width: 100%;
+}
+
+.view-header-title {
+  font-size: 20px;
+  font-weight: 300;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-color);
+}
+
+.view-header-subtitle {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-weight: 400;
+}
+
+.view-header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.view-btn {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 20px;
+  color: var(--text-color);
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.view-btn:hover {
+  background: var(--card-hover-bg);
+  border-color: var(--card-hover-border);
+}
+
+#follow-artist-btn.active {
+  background: rgba(255, 255, 255, 0.15) !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  color: #ffffff !important;
+}
+
+/* Card Plus/Add Button & Floating Menu */
+.playlist-add-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  z-index: 20;
+}
+
+.playlist-add-btn:hover {
+  color: var(--text-color);
+  background: var(--card-hover-bg);
+  transform: scale(1.1);
+}
+
+.playlist-menu {
+  /* Scope surface tokens so every child adapts to the active theme */
+  --text-color: var(--surface-text-color, #f5f5f7);
+  --text-dim: var(--surface-text-dim, rgba(255, 255, 255, 0.45));
+  position: fixed;
+  background: var(--surface-elevated, rgba(20, 20, 25, 0.95));
+  color: var(--surface-text-color, #f5f5f7);
+  backdrop-filter: var(--blur-value, blur(28px));
+  -webkit-backdrop-filter: var(--blur-value, blur(28px));
+  border: var(--border-width, 1px) solid var(--card-border, rgba(255, 255, 255, 0.08));
+  border-radius: var(--window-radius, 16px);
+  min-width: 190px;
+  box-shadow: var(--glass-shadow, 0 16px 48px rgba(0, 0, 0, 0.6)), var(--glass-glow, none);
+  font-family: var(--font-family, inherit);
+  padding: 6px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.playlist-menu-item {
+  background: transparent;
+  border: none;
+  color: var(--surface-text-color, #f5f5f7);
+  padding: 8px 12px;
+  text-align: left;
+  border-radius: calc(var(--window-radius, 16px) - 4px);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.playlist-menu-item:hover,
+.playlist-menu-item:focus-visible {
+  background: var(--card-hover-bg, rgba(255, 255, 255, 0.06));
+  color: var(--surface-text-color, #f5f5f7);
+  outline: none;
+}
+
+.playlist-menu-item-count {
+  font-size: 10px;
+  color: var(--surface-text-color, #f5f5f7);
+}
+
+.playlist-menu-title {
+  padding: 6px 12px 4px 12px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--surface-text-dim, rgba(255, 255, 255, 0.45));
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.playlist-menu-item.playlist-menu-empty {
+  cursor: default;
+  color: var(--surface-text-dim, rgba(255, 255, 255, 0.4));
+}
+
+.playlist-menu-item.playlist-menu-empty:hover {
+  background: transparent;
+}
+
+.playlist-menu-item.playlist-menu-create {
+  color: var(--status-success, #30d158);
+  border-top: 1px solid var(--card-border, rgba(255, 255, 255, 0.06));
+  margin-top: 4px;
+}
+
+.playlist-menu-item.playlist-menu-create:hover {
+  color: var(--status-success, #30d158);
+}
+
+
+/* Card Like Button */
+.like-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  z-index: 20;
+}
+
+.like-btn:hover {
+  color: var(--text-color);
+  background: var(--card-hover-bg);
+  transform: scale(1.1);
+}
+
+.like-btn.liked {
+  color: #ff453a;
+}
+
+.like-btn.liked:hover {
+  color: #ff3b30;
+}
+
+/* Auto-Update Banner Styling */
+.update-banner {
+  position: fixed;
+  bottom: 118px;
+  right: 24px;
+  background: var(--player-bg, rgba(20, 20, 25, 0.85)) !important;
+  backdrop-filter: var(--blur-value, blur(28px)) !important;
+  -webkit-backdrop-filter: var(--blur-value, blur(28px)) !important;
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08)) !important;
+  border-radius: 16px;
+  box-shadow: var(--glass-shadow, 0 16px 48px rgba(0, 0, 0, 0.6)) !important;
+  padding: 14px 18px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 320px;
+  max-width: 400px;
+  animation: slideUp 0.3s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+@keyframes slideUp {
+  0% { transform: translateY(50px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+.update-banner-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+}
+
+#update-banner-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-color);
+  flex: 1;
+  line-height: 1.4;
+}
+
+.banner-spinner {
+  width: 16px;
+  height: 16px;
+  border-width: 1.5px;
+  margin: 0;
+}
+
+.update-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.update-actions button.modal-btn {
+  padding: 6px 14px;
+  font-size: 12px;
+  border-radius: 20px;
+}
+
+.update-progress-bar-container {
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 1.5px;
+  overflow: hidden;
+  position: relative;
+}
+
+.update-progress-bar {
+  height: 100%;
+  background: #bf5af2;
+  border-radius: 1.5px;
+  transition: width 0.1s ease;
+  width: 0%;
+}
+
+/* --- Step 3 Theme Variable Overrides --- */
+.track-card {
+  background: var(--card-bg) !important;
+  border-color: var(--card-border) !important;
+}
+
+.track-card:hover {
+  background: var(--card-hover-bg) !important;
+  border-color: var(--card-hover-border) !important;
+}
+
+.track-card.active {
+  background: var(--card-hover-bg) !important;
+  border-color: var(--accent-color) !important;
+}
+
+.card-title, .track-title, .view-header-title {
+  color: var(--text-color) !important;
+}
+
+.card-artist, .track-artist, .view-header-subtitle {
+  color: var(--text-dim) !important;
+}
+
+.player-bar {
+  background: var(--player-bg) !important;
+  border-color: var(--player-border) !important;
+}
+
+.container.player-active .player-bar.bass-pulse {
+  transform: translateY(0) scale(1.02);
+  transition: transform 90ms ease-out;
+}

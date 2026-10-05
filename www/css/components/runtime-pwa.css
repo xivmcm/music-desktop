@@ -1,0 +1,332 @@
+/* --- Release 1.10.0: Browser/PWA runtime shell --- */
+.mobile-tab-bar {
+  display: none;
+}
+
+.web-runtime .window-controls,
+.web-runtime .mini-window-controls,
+.web-runtime .mini-player-btn,
+.web-runtime .update-banner {
+  display: none !important;
+}
+
+@media (max-width: 480px) {
+  html,
+  body:not(.mini-player-active) {
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    border-radius: 0 !important;
+  }
+
+  body:not(.mini-player-active) {
+    border: none;
+    box-shadow: none;
+    overflow: hidden;
+  }
+
+  body:not(.window-maximized):not(.mini-player-active) {
+    border-radius: 0 !important;
+    clip-path: none !important;
+    -webkit-clip-path: none !important;
+  }
+
+  .titlebar {
+    height: 34px;
+    padding: 0 14px;
+    justify-content: center;
+  }
+
+  .title {
+    font-size: 9px;
+    letter-spacing: 1.6px;
+  }
+
+  .sidebar-trigger,
+  .sidebar {
+    display: none !important;
+  }
+
+  .mobile-tab-bar {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    min-height: 62px;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px;
+    padding: 8px;
+    background: var(--player-bg);
+    border: 1px solid var(--player-border);
+    border-radius: 22px;
+    backdrop-filter: var(--blur-value);
+    -webkit-backdrop-filter: var(--blur-value);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.38), var(--glass-glow, none);
+    z-index: 1200;
+  }
+
+  .mobile-tab-btn {
+    min-width: 0;
+    min-height: 46px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    color: var(--text-dim);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 16px;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .mobile-tab-btn svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .mobile-tab-btn.active {
+    color: var(--text-color);
+    background: var(--card-hover-bg);
+    border-color: var(--card-hover-border);
+    box-shadow: 0 0 calc(var(--glow) * 16px) color-mix(in srgb, var(--glow-color-base, var(--accent-color)) calc(var(--glow) * 55%), transparent);
+  }
+
+  .container {
+    min-width: 0;
+  }
+
+  .search-header {
+    padding: 12px 12px 10px;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .search-box {
+    max-width: none;
+    min-height: 44px;
+    border-radius: 18px;
+    padding-left: 14px;
+  }
+
+  #search-button {
+    width: 36px;
+    height: 36px;
+  }
+
+  .header-buttons {
+    gap: 6px;
+    margin-left: 8px;
+  }
+
+  .profile-btn,
+  .settings-btn {
+    min-height: 38px;
+    padding: 8px 10px;
+    border-radius: 16px;
+  }
+
+  .profile-btn span,
+  .settings-btn span {
+    display: none;
+  }
+
+  .main-layout-wrapper {
+    min-width: 0;
+  }
+
+  .friend-activity-panel {
+    display: none !important;
+  }
+
+  .content-area {
+    padding: 14px 12px 94px;
+  }
+
+  .container.player-active .content-area {
+    padding-bottom: 258px;
+  }
+
+  .welcome-state h2 {
+    font-size: 21px;
+  }
+
+  .tracks-layout-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .track-card {
+    min-height: 86px;
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  .track-card .track-cover-container,
+  .track-card .track-cover-container .card-cover,
+  .card-cover {
+    width: 62px;
+    height: 62px;
+    border-radius: 14px;
+  }
+
+  .track-card .track-cover-container .cover-play-btn {
+    width: 42px;
+    height: 42px;
+  }
+
+  .card-title {
+    font-size: 14px;
+  }
+
+  .card-artist {
+    font-size: 12px;
+  }
+
+  .carousel-banner-section {
+    display: none;
+  }
+
+  .genre-scroll-section {
+    margin-bottom: 16px;
+  }
+
+  .genre-chip-btn {
+    min-height: 38px;
+    padding: 9px 16px;
+    border-radius: 16px;
+  }
+
+  .scroller-container-outer {
+    overflow: visible;
+  }
+
+  .scroller-container {
+    flex-direction: column;
+    overflow: visible;
+    gap: 12px;
+    padding-bottom: 0;
+  }
+
+  .track-card-horizontal {
+    width: 100%;
+    flex: 0 0 auto;
+    border-radius: 18px;
+  }
+
+  .card-cover-horizontal {
+    width: 64px;
+    height: 64px;
+    border-radius: 14px;
+  }
+
+  .player-bar {
+    left: 10px;
+    right: 10px;
+    bottom: calc(82px + env(safe-area-inset-bottom, 0px));
+    height: auto;
+    min-height: 150px;
+    padding: 12px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    align-content: center;
+    border-radius: 22px;
+    transform: translateY(calc(100% + 96px));
+  }
+
+  .container.player-active .player-bar,
+  .container.player-active .player-bar.bass-pulse {
+    transform: translateY(0);
+  }
+
+  .player-track-info {
+    width: 100%;
+    min-width: 0;
+    gap: 10px;
+  }
+
+  .track-cover-container img {
+    width: 54px;
+    height: 54px;
+    border-radius: 14px;
+  }
+
+  .player-track-info .like-btn {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+  }
+
+  .player-controls-container {
+    width: 100%;
+    gap: 10px;
+  }
+
+  .player-buttons {
+    width: 100%;
+    justify-content: center;
+    gap: 18px;
+  }
+
+  .player-btn {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .play-main {
+    width: 56px;
+    height: 56px;
+  }
+
+  .progress-bar-container {
+    gap: 8px;
+  }
+
+  input[type="range"] {
+    height: 7px;
+    border-radius: 999px;
+  }
+
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 7px;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    width: 18px;
+    height: 18px;
+    margin-top: -5.5px;
+  }
+
+  .player-volume-container {
+    display: none;
+  }
+
+  #player-visualizer {
+    border-radius: inherit;
+  }
+
+  .settings-panel {
+    max-width: none;
+  }
+
+  .settings-section {
+    border-radius: 18px;
+    padding: 16px;
+  }
+
+  .eq-panel {
+    min-height: 180px;
+    gap: 6px;
+    padding: 10px;
+  }
+
+  .modal-content {
+    max-width: calc(100vw - 24px);
+    border-radius: 20px;
+  }
+}

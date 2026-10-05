@@ -1,0 +1,65 @@
+/* GPU Hardware Acceleration for Glassmorphic elements and backdrop-filters */
+.sidebar,
+.container,
+.search-header,
+.track-card,
+.track-card-horizontal,
+.friend-activity-panel,
+.update-banner,
+.artist-header,
+.search-history-dropdown,
+.settings-section,
+.studio-tabs,
+.mini-player-block,
+.load-more-btn,
+#users-search-results,
+.glass-auth-container,
+.carousel-nav-btn,
+.scroll-chevron,
+.spotify-placeholder-card,
+.lyrics-overlay,
+.mobile-tab-bar,
+.mood-card,
+.liquid-sphere {
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* Surface styles change depth and blur without replacing the user's palette. */
+body.glass-style-glass { --blur-value: var(--glass-filter); }
+body.glass-style-frosted { --blur-value: var(--glass-filter); }
+body.glass-style-solid,
+body.glass-style-material { --blur-value: none; --card-shadow: 0 12px 40px rgba(0, 0, 0, 0.32); }
+body.glass-style-flat { --blur-value: none; --card-shadow: none; }
+
+#ambient-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.8;
+  transition: opacity 0.5s ease;
+  border-radius: var(--window-radius) !important;
+}
+
+/* Custom scrollbars inside Find Friends and Collab friend selectors */
+#find-friends-list::-webkit-scrollbar,
+#collab-friends-list::-webkit-scrollbar {
+  width: 6px;
+}
+#find-friends-list::-webkit-scrollbar-track,
+#collab-friends-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+#find-friends-list::-webkit-scrollbar-thumb,
+#collab-friends-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+#find-friends-list::-webkit-scrollbar-thumb:hover,
+#collab-friends-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}

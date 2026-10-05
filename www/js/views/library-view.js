@@ -256,6 +256,9 @@
     if (typeof window !== 'undefined') {
       window.currentLibrarySubTab = subTab;
       window.activeView = 'library';
+      if (window.GP?.NavigationHistory?.push) {
+        window.GP.NavigationHistory.push({ view: 'library', subTab });
+      }
     }
 
     const searchInput = document.getElementById('search-input');
@@ -493,7 +496,12 @@
   }
 
   function loadHistoryView() {
-    if (typeof window !== 'undefined') window.activeView = 'history';
+    if (typeof window !== 'undefined') {
+      window.activeView = 'history';
+      if (window.GP?.NavigationHistory?.push) {
+        window.GP.NavigationHistory.push({ view: 'history' });
+      }
+    }
     const searchInput = document.getElementById('search-input');
     const welcomeScreen = document.getElementById('welcome-screen');
     const tracksContainer = document.getElementById('tracks-container');

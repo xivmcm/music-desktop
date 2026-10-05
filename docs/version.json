@@ -1,10 +1,10 @@
 {
-  "version": "1.19.1",
+  "version": "1.19.2",
   "releaseDate": "2026-10-05",
-  "changelog": "• Полная модульная архитектура: разделение кодовой базы на изолированные компоненты и экраны (Views & Components)\n• Исправлено переключение и подсветка активных разделов в боковом меню навигации\n• Восстановлены стили выезжающего сайдбара и анимации\n• Персистентный кэш главной страницы и ускоренный холодный старт рекомендаций\n• Устранён спам ротации API-ключей в консоли",
+  "changelog": "• История переходов и навигация: добавлены адаптивные кнопки назад и вперед (Alt+Left/Right, боковые кнопки мыши)\n• Бесконечный поиск (Infinite Search): снят лимит в 80 треков, непрерывная догрузка результатов без ограничений\n• Защита от спама и rate-limit: умный троттлинг кнопки 'Показать еще' (800ms) со спиннером и устойчивая ротация при HTTP 429\n• Оптимизация DOM и рендеринга сотен карточек (content-visibility: auto) с 100% сохранением кастомного дизайна",
   "windows": {
-    "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.19.1.exe",
-    "filename": "GlassPlayer-Setup-1.19.1.exe"
+    "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.19.2.exe",
+    "filename": "GlassPlayer-Setup-1.19.2.exe"
   },
   "android": {
     "url": "https://xivmcm.github.io/music-desktop/GlassPlayer-1.18.1.apk",

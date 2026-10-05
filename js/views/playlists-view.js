@@ -105,7 +105,12 @@
   // --- View Loaders ---
 
   function loadPlaylistsView() {
-    if (typeof window !== 'undefined') window.activeView = 'playlists';
+    if (typeof window !== 'undefined') {
+      window.activeView = 'playlists';
+      if (window.GP?.NavigationHistory?.push) {
+        window.GP.NavigationHistory.push({ view: 'playlists' });
+      }
+    }
     const searchInput = document.getElementById('search-input');
     const welcomeScreen = document.getElementById('welcome-screen');
     const tracksContainer = document.getElementById('tracks-container');
@@ -243,6 +248,9 @@
     if (typeof window !== 'undefined') {
       window.activeView = 'playlist-tracks';
       window.activePlaylistId = playlistId;
+      if (window.GP?.NavigationHistory?.push) {
+        window.GP.NavigationHistory.push({ view: 'playlists', playlistId });
+      }
     }
     _activePlaylistId = playlistId;
 

@@ -1,3 +1,62 @@
+/* Navigation History Controls (Back / Forward) */
+.nav-history-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 12px;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+.nav-arrow-btn {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--card-bg, rgba(255, 255, 255, 0.05));
+  border: var(--border-width, 1px) solid var(--card-border, rgba(255, 255, 255, 0.08));
+  border-radius: calc(var(--window-radius, 16px) * 0.6);
+  color: var(--text-color, #ffffff);
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+  box-shadow: var(--glass-glow, none);
+  backdrop-filter: var(--blur-value, blur(20px));
+  -webkit-backdrop-filter: var(--blur-value, blur(20px));
+}
+
+.nav-arrow-btn svg {
+  color: var(--text-dim, rgba(255, 255, 255, 0.7));
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.nav-arrow-btn:not(:disabled):hover {
+  background: var(--card-hover-bg, rgba(255, 255, 255, 0.12));
+  border-color: var(--card-hover-border, rgba(255, 255, 255, 0.2));
+  color: var(--text-color, #ffffff);
+  transform: translateY(-1px);
+  box-shadow: 0 0 calc(var(--glow, 0.5) * 16px) color-mix(in srgb, var(--glow-color-base, var(--accent-color, #a855f7)) calc(var(--glow, 0.5) * 50%), transparent);
+}
+
+.nav-arrow-btn:not(:disabled):hover svg {
+  color: var(--accent-color, #a855f7);
+  transform: scale(1.08);
+}
+
+.nav-arrow-btn:not(:disabled):active {
+  transform: scale(0.94);
+}
+
+.nav-arrow-btn:disabled {
+  opacity: 0.28;
+  cursor: not-allowed;
+  pointer-events: none;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
 /* Header Buttons Layout & Styling */
 .header-buttons {
   display: flex;

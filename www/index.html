@@ -50,7 +50,7 @@
   <!-- Sliding Left Sidebar -->
   <aside id="sidebar" class="sidebar">
     <div class="sidebar-header">
-      <div class="sidebar-logo">GLASSPLAYER <span class="app-version-badge">v1.19.1</span></div>
+      <div class="sidebar-logo">GLASSPLAYER <span class="app-version-badge">v1.19.2</span></div>
     </div>
     <nav class="sidebar-menu">
       <button id="home-button" class="sidebar-btn active" title="Home">
@@ -89,6 +89,14 @@
   <div class="container">
     <!-- Top Search Bar -->
     <header class="search-header">
+      <div class="nav-history-controls">
+        <button id="nav-back-btn" class="nav-arrow-btn" title="Назад (Alt + ←)" disabled aria-label="Назад">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </button>
+        <button id="nav-forward-btn" class="nav-arrow-btn" title="Вперёд (Alt + →)" disabled aria-label="Вперёд">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
+      </div>
       <div class="search-box">
         <input type="text" id="search-input" placeholder="Search track, artist or channel..." autocomplete="off">
         <button id="search-button">
@@ -465,6 +473,7 @@
 
   <!-- Core Modules -->
   <script src="js/core/utils.js"></script>
+  <script src="js/core/navigation-history.js"></script>
   <script src="js/audio/audio-engine.js"></script>
   <script src="js/visualizer/ambient.js"></script>
   <script src="js/visualizer/visualizer.js"></script>

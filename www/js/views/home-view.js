@@ -468,6 +468,9 @@
   async function loadHomeView({ forceRefresh = false } = {}) {
     const requestVersion = ++homeLoadVersion;
     if (typeof root !== 'undefined') root.activeView = 'home';
+    if (root.GP?.NavigationHistory?.push) {
+      root.GP.NavigationHistory.push({ view: 'home' });
+    }
 
     const searchInput = document.getElementById('search-input');
     const welcomeScreen = document.getElementById('welcome-screen');

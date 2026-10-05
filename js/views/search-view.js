@@ -19,7 +19,6 @@
   let _activeSources = { soundcloud: true, spotify: false };
   let _currentSearchPage = 1;
   let _isLoadingMore = false;
-  const DEFAULT_MAX_TRACKS = 80;
 
   // Define reactive properties on window
   if (!Object.getOwnPropertyDescriptor(root, 'activeSources')) {
@@ -239,6 +238,9 @@
     if (!query) return;
 
     if (typeof root !== 'undefined') root.activeView = 'search';
+    if (root.GP?.NavigationHistory?.push) {
+      root.GP.NavigationHistory.push({ view: 'search', query });
+    }
     _currentSearchPage = 1;
     if (typeof root !== 'undefined') root.currentSearchPage = 1;
     addToSearchHistory(query);
@@ -386,14 +388,26 @@
     if (existingMsg) existingMsg.remove();
 
     const currentTracks = Array.isArray(root.playlist) ? root.playlist : [];
-    const maxLimit = root.maxTracksLimit || DEFAULT_MAX_TRACKS;
 
-    if (currentTracks.length >= maxLimit) {
+    // Optional explicit limit (if defined by root.maxTracksLimit)
+    if (root.maxTracksLimit && currentTracks.length >= root.maxTracksLimit) {
       const msg = document.createElement('div');
       msg.id = 'load-more-limit-msg';
       msg.className = 'load-more-limit-msg';
       msg.textContent = 'Достигнут предел результатов';
       tracksContainer.appendChild(msg);
+      return;
+    }
+
+    // If fewer than 20 tracks were returned (or 0), all available results were fetched
+    if (resultsCount < 20) {
+      if (currentTracks.length > 0) {
+        const msg = document.createElement('div');
+        msg.id = 'load-more-limit-msg';
+        msg.className = 'load-more-limit-msg';
+        msg.textContent = 'Все доступные треки загружены';
+        tracksContainer.appendChild(msg);
+      }
       return;
     }
 
@@ -449,6 +463,9 @@
         newTracks = await directSCEngine.search(query, 20, currentTracks.length);
       } catch (err) {}
     }
+
+    // Rate-limit anti-spam throttle: wait at least 800ms before enabling new requests
+    await new Promise(resolve => setTimeout(resolve, 800));
 
     if (btn) btn.remove();
     _isLoadingMore = false;

@@ -1,0 +1,384 @@
+/* Home: richer hierarchy, explainable recommendations and useful rails. */
+.home-welcome-header {
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.welcome-greeting {
+  min-width: 0;
+}
+
+.welcome-greeting h2 {
+  font-size: clamp(22px, 2.4vw, 28px);
+  font-weight: 620;
+  letter-spacing: -0.025em;
+}
+
+.welcome-subtitle {
+  max-width: 680px;
+  line-height: 1.45;
+}
+
+.home-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-shrink: 0;
+}
+
+.home-refresh-btn,
+.spotify-refresh-btn {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 13px;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  color: var(--text-color);
+  background: var(--card-bg);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.home-refresh-btn:hover,
+.spotify-refresh-btn:hover {
+  color: var(--accent-color);
+  background: var(--card-hover-bg);
+  border-color: var(--card-hover-border);
+}
+
+.spotify-section-title {
+  color: var(--text-color);
+}
+
+.carousel-banner-section {
+  padding: 20px 22px;
+  margin-bottom: 20px;
+  border-radius: 18px;
+  background: var(--panel-bg);
+  border-color: var(--card-border);
+  box-shadow: 0 14px 42px rgba(0, 0, 0, 0.16), var(--glass-glow);
+}
+
+.carousel-slide {
+  position: relative;
+  min-height: 138px;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 13px;
+}
+
+.carousel-slide::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -28px -16px -28px 48%;
+  background-image: var(--carousel-art);
+  background-position: center;
+  background-size: cover;
+  opacity: 0.28;
+  filter: blur(14px) saturate(1.1);
+  transform: scale(1.1);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 32%, #000 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 32%, #000 100%);
+}
+
+.carousel-slide-content {
+  position: relative;
+  z-index: 1;
+  max-width: 76%;
+  min-height: 138px;
+  gap: 20px;
+}
+
+.carousel-cover {
+  width: 112px;
+  height: 112px;
+  border-radius: 14px;
+  border-color: var(--card-border);
+}
+
+.carousel-title {
+  font-size: clamp(18px, 2vw, 23px);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.carousel-artist {
+  margin-bottom: 4px;
+}
+
+.carousel-reason {
+  max-width: 52ch;
+  margin-bottom: 8px;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.carousel-meta {
+  margin-bottom: 11px;
+}
+
+.carousel-play-now-btn,
+.card-play-btn-horizontal {
+  color: var(--on-accent);
+}
+
+.carousel-icon-btn {
+  background: var(--card-bg);
+}
+
+.carousel-dots-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.carousel-dots {
+  margin-top: 0;
+}
+
+.carousel-dot {
+  padding: 0;
+  border: 0;
+  background: color-mix(in srgb, var(--text-color) 22%, transparent);
+}
+
+.carousel-pause-btn {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--card-border);
+  border-radius: 50%;
+  color: var(--text-dim);
+  background: var(--card-bg);
+  cursor: pointer;
+}
+
+.carousel-pause-btn:hover,
+.carousel-pause-btn[aria-pressed="true"] {
+  color: var(--text-color);
+  background: var(--card-hover-bg);
+}
+
+.home-section.scrollable {
+  margin-bottom: 26px;
+}
+
+.home-section-header {
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 11px;
+}
+
+.home-section-heading {
+  min-width: 0;
+}
+
+.home-section-heading h3,
+.home-section-header h3 {
+  margin: 0 0 3px;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.see-all-link {
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.see-all-link:hover {
+  background: var(--card-bg);
+}
+
+.scroll-chevron.prev {
+  right: auto;
+  left: -10px;
+}
+
+.scroll-chevron:disabled {
+  pointer-events: none;
+  opacity: 0;
+}
+
+.track-card-horizontal {
+  flex-basis: 310px;
+  width: 310px;
+  padding: 10px;
+  border-radius: 13px;
+  background: var(--card-bg);
+  box-shadow: var(--glass-glow);
+}
+
+.card-cover-horizontal {
+  width: 56px;
+  height: 56px;
+}
+
+.card-title-horizontal {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.card-artist-horizontal {
+  font-size: 11px;
+}
+
+.card-actions-horizontal {
+  gap: 6px;
+}
+
+.card-like-btn-horizontal,
+.card-more-btn-horizontal {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--card-border);
+  border-radius: 50%;
+  color: var(--text-dim);
+  background: transparent;
+  cursor: pointer;
+}
+
+.card-like-btn-horizontal:hover,
+.card-more-btn-horizontal:hover {
+  color: var(--text-color);
+  background: var(--card-hover-bg);
+  border-color: var(--card-hover-border);
+}
+
+.card-like-btn-horizontal.liked {
+  color: var(--status-error);
+  background: color-mix(in srgb, var(--status-error) 10%, transparent);
+}
+
+.collection-view-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.collection-view-header h2 {
+  margin: 0 0 3px;
+  font-size: 22px;
+  font-weight: 650;
+}
+
+.collection-back-btn {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  color: var(--text-color);
+  background: var(--card-bg);
+  cursor: pointer;
+}
+
+.inline-error-state,
+.inline-empty-state {
+  width: 100%;
+  padding: 24px;
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  background: var(--card-bg);
+  color: var(--text-dim);
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.inline-error-state {
+  border-color: color-mix(in srgb, var(--status-error) 24%, var(--card-border));
+}
+
+.inline-error-state.compact {
+  padding: 14px;
+  margin: 12px 0;
+}
+
+.settings-panel .theme-option-btn {
+  color: var(--text-color);
+  background: var(--card-bg);
+  border-color: var(--card-border);
+}
+
+.settings-panel .theme-option-btn:hover,
+.settings-panel .theme-option-btn.active {
+  background: var(--card-hover-bg);
+  border-color: var(--accent-color);
+}
+
+.settings-panel .settings-section :is(span, p, label)[style*="color: rgba(255,255,255"],
+.settings-panel .settings-section :is(span, p, label)[style*="color:rgba(255,255,255"] {
+  color: var(--text-dim) !important;
+}
+
+.settings-panel .settings-section :is(span, p, label)[style*="color: #fff"],
+.settings-panel .settings-section :is(span, p, label)[style*="color:#fff"] {
+  color: var(--text-color) !important;
+}
+
+.settings-panel .settings-section select,
+.settings-panel .settings-section input[type="text"] {
+  color: var(--text-color) !important;
+  background: var(--card-bg) !important;
+  border-color: var(--card-border) !important;
+}
+
+.settings-panel .settings-section select option {
+  color: #111116;
+  background: #ffffff;
+}
+
+.disabled-customizer {
+  opacity: 0.58;
+}
+
+body.glass-style-glass :is(.track-card, .track-card-horizontal, .carousel-banner-section, .toast-notification, .local-library-header, .mini-player-block) {
+  backdrop-filter: var(--glass-filter) !important;
+  -webkit-backdrop-filter: var(--glass-filter) !important;
+  box-shadow: var(--card-shadow, 0 8px 32px 0 rgba(0, 0, 0, 0.2)), var(--glass-glow, none) !important;
+}
+
+body.glass-style-frosted :is(.track-card, .track-card-horizontal, .carousel-banner-section, .toast-notification, .local-library-header, .mini-player-block) {
+  backdrop-filter: var(--glass-filter, blur(35px) saturate(1.12)) !important;
+  -webkit-backdrop-filter: var(--glass-filter, blur(35px) saturate(1.12)) !important;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.24), var(--glass-glow, none) !important;
+}
+
+body.glass-style-solid :is(.track-card, .track-card-horizontal, .carousel-banner-section, .toast-notification, .local-library-header, .mini-player-block),
+body.glass-style-material :is(.track-card, .track-card-horizontal, .carousel-banner-section, .toast-notification, .local-library-header, .mini-player-block) {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24) !important;
+}
+
+body.glass-style-flat :is(.track-card, .track-card-horizontal, .carousel-banner-section, .toast-notification, .local-library-header, .mini-player-block) {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+}

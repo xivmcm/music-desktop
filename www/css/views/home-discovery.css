@@ -1,0 +1,367 @@
+/* --- REDESIGN MAIN VIEW STYLES --- */
+
+.home-welcome-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  width: 100%;
+}
+
+.welcome-greeting h2 {
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--text-color);
+  margin-bottom: 4px;
+}
+
+.welcome-subtitle {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+/* Service Pill Capsule */
+.sources-pill-capsule {
+  position: relative;
+  display: flex;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--card-border);
+  border-radius: 22px;
+  padding: 4px;
+  gap: 4px;
+  box-shadow: var(--glass-glow, none);
+  z-index: 1;
+}
+
+.capsule-active-indicator {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 36px;
+  height: 36px;
+  background: var(--card-hover-bg);
+  border: 1px solid var(--card-hover-border);
+  border-radius: 50%;
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  z-index: -1;
+  box-shadow: 0 0 calc(var(--glow) * 12px) color-mix(in srgb, var(--glow-color-base, var(--accent-color)) calc(var(--glow) * 30%), transparent), var(--glass-glow, none);
+}
+
+.source-capsule-btn {
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  position: relative;
+  z-index: 2;
+}
+
+.source-capsule-btn svg {
+  transition: transform 0.2s ease, fill 0.2s ease, stroke 0.2s ease;
+}
+
+.source-capsule-btn:hover {
+  color: var(--text-color);
+}
+
+.source-capsule-btn:hover svg {
+  transform: scale(1.08);
+}
+
+.source-capsule-btn.active {
+  color: var(--text-color);
+}
+
+.source-capsule-btn.active[data-source="soundcloud"] {
+  color: #ff9f0a;
+}
+.source-capsule-btn.active[data-source="spotify"] {
+  color: #30d158;
+}
+.source-capsule-btn.active[data-source="youtube"] {
+  color: #ff453a;
+}
+
+/* For You Carousel Banner */
+.carousel-banner-section {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 20px calc(var(--glow) * 2px) color-mix(in srgb, var(--glow-color-base, var(--accent-color)) calc(var(--glow) * 60%), transparent), var(--glass-glow, none);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.carousel-banner-section:hover {
+  border-color: var(--card-hover-border);
+  box-shadow: 0 8px 30px calc(var(--glow) * 3px) color-mix(in srgb, var(--glow-color-base, var(--accent-color)) calc(var(--glow) * 80%), transparent), var(--glass-glow, none);
+}
+
+.carousel-container {
+  overflow: hidden;
+  width: 100%;
+}
+
+.carousel-wrapper {
+  display: flex;
+  transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+  width: 100%;
+}
+
+.carousel-slide {
+  flex: 0 0 100%;
+  width: 100%;
+}
+
+.carousel-slide-content {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+}
+
+.carousel-cover {
+  width: 130px;
+  height: 130px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.carousel-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.carousel-tag {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent-color);
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+  opacity: 0.8;
+}
+
+.carousel-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-color);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.carousel-artist {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.carousel-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 16px;
+}
+
+.carousel-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.carousel-play-now-btn {
+  background: var(--accent-color);
+  color: var(--play-main-color, #000000);
+  border: none;
+  border-radius: 20px;
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.carousel-play-now-btn:hover {
+  transform: scale(1.05);
+  opacity: 0.95;
+}
+
+.carousel-play-now-btn:active {
+  transform: scale(0.98);
+}
+
+.carousel-icon-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--card-border);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: var(--text-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.carousel-icon-btn:hover {
+  background: var(--card-hover-bg);
+  border-color: var(--card-hover-border);
+  color: var(--accent-color);
+}
+
+.carousel-icon-btn.liked {
+  color: #ff453a !important;
+}
+
+/* Carousel Nav Buttons */
+.carousel-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--card-bg, rgba(10, 10, 12, 0.6));
+  backdrop-filter: var(--blur-value, blur(8px));
+  -webkit-backdrop-filter: var(--blur-value, blur(8px));
+  border: 1px solid var(--card-border);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--text-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.2s ease;
+}
+
+.carousel-nav-btn:hover {
+  background: var(--card-hover-bg, rgba(255, 255, 255, 0.08));
+  border-color: var(--card-hover-border);
+  color: var(--accent-color);
+}
+
+.carousel-nav-btn.prev {
+  left: 12px;
+}
+
+.carousel-nav-btn.next {
+  right: 12px;
+}
+
+/* Carousel Dots */
+.carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.carousel-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.carousel-dot.active {
+  width: 18px;
+  border-radius: 3px;
+  background: var(--accent-color);
+}
+
+/* Genre Scroller */
+.genre-scroll-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+  position: relative;
+  width: 100%;
+}
+
+.genre-chips-bar {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  flex: 1;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+}
+
+.genre-chips-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.genre-chip-btn {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--card-border);
+  border-radius: 20px;
+  color: var(--text-dim);
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  white-space: nowrap;
+}
+
+.genre-chip-btn:hover {
+  background: var(--card-hover-bg);
+  border-color: var(--card-hover-border);
+  color: var(--text-color);
+}
+
+.genre-chip-btn.active {
+  background: var(--card-hover-bg);
+  border-color: var(--card-hover-border);
+  color: var(--text-color);
+  box-shadow: 0 0 calc(var(--glow) * 15px) color-mix(in srgb, var(--glow-color-base, var(--accent-color)) calc(var(--glow) * 50%), transparent), var(--glass-glow, none);
+}
+
+.genre-scroll-next-btn {
+  background: var(--card-bg, rgba(10, 10, 12, 0.4));
+  border: 1px solid var(--card-border);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-color);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.genre-scroll-next-btn:hover {
+  background: var(--card-hover-bg, rgba(255, 255, 255, 0.06));
+  border-color: var(--card-hover-border);
+  color: var(--accent-color);
+}

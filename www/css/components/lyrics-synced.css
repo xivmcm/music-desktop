@@ -1,0 +1,88 @@
+/* Loading state */
+.lyrics-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 120px 0;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+}
+
+.lyrics-not-found {
+  text-align: center;
+  padding: 100px 32px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 16px;
+  line-height: 1.7;
+  max-width: 520px;
+}
+
+/* Individual lyric lines (Apple Music & Spotify Modern Synced Experience) */
+.lyrics-line {
+  width: 100%;
+  max-width: 720px;
+  padding: 12px 24px;
+  text-align: left;
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: clamp(20px, 2.4vw, 24px);
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: -0.015em;
+  color: rgba(255, 255, 255, 0.32);
+  cursor: pointer;
+  border-radius: 16px;
+  transform-origin: left center;
+  will-change: transform, color, opacity;
+  transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1),
+              color 0.24s ease,
+              opacity 0.24s ease,
+              background-color 0.24s ease;
+  user-select: none;
+  position: relative;
+}
+
+.lyrics-line:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateX(4px);
+}
+
+.lyrics-line.past {
+  color: rgba(255, 255, 255, 0.22);
+  opacity: 0.55;
+  transform: scale(0.97);
+}
+
+.lyrics-line.active {
+  font-weight: 750;
+  color: #ffffff;
+  opacity: 1;
+  transform: scale(1.08) translateX(6px);
+  background: rgba(255, 255, 255, 0.08);
+  text-shadow: 0 0 24px rgba(255, 255, 255, 0.4),
+               0 0 50px color-mix(in srgb, var(--accent-color, #ffffff) 50%, transparent);
+}
+
+.lyrics-line.upcoming {
+  color: rgba(255, 255, 255, 0.55);
+  opacity: 0.8;
+  transform: scale(1);
+}
+
+/* Plain-text lyrics (Genius / SoundCloud description) */
+.lyrics-plain {
+  width: 100%;
+  max-width: 680px;
+  padding: 24px 32px 60px;
+  color: rgba(255, 255, 255, 0.88);
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: clamp(17px, 2.2vw, 20px);
+  font-weight: 500;
+  line-height: 1.85;
+  letter-spacing: -0.01em;
+  text-align: left;
+  white-space: pre-line;
+}

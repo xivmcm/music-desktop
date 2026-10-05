@@ -1,0 +1,265 @@
+/* Bottom Player Bar */
+.player-bar {
+  position: absolute;
+  bottom: 12px;
+  left: 16px;
+  right: 16px;
+  width: auto;
+  height: 86px;
+  background: var(--player-bg, rgba(8, 8, 12, 0.78));
+  /* Reduce backdrop blur for the player bar specifically for sharper text rendering */
+  backdrop-filter: var(--glass-filter, blur(16px) saturate(180%));
+  -webkit-backdrop-filter: var(--glass-filter, blur(16px) saturate(180%));
+  border: var(--border-width, 1px) solid var(--player-border, rgba(255, 255, 255, 0.07));
+  border-radius: 20px;
+  padding: 0 22px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  /* GPU layer promotion — prevents compositing artifacts on text */
+  will-change: transform;
+  transform: translateY(calc(100% + 18px));
+  transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+  overflow: hidden;
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.35), var(--glass-glow, none);
+  transform-origin: bottom center;
+  z-index: 50;
+  /* Subpixel rendering fix for transparent glassmorphic backgrounds */
+  -webkit-font-smoothing: subpixel-antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  isolation: isolate;
+}
+
+#player-visualizer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.player-bar > * {
+  position: relative;
+  z-index: 2;
+  transform: translate3d(0, 0, 0); /* Force crisp GPU text rendering */
+}
+
+.container.player-active .player-bar {
+  /* Use translate3d for proper GPU compositing — sharper text */
+  transform: translate3d(0, 0, 0);
+}
+
+.container.player-active .content-area {
+  padding-bottom: 116px;
+}
+
+.player-track-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 25%;
+  min-width: 200px;
+}
+
+.track-cover-container img {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: #121214;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: box-shadow 0.3s ease;
+}
+
+.track-cover-container img.playing {
+  animation: coverPulse 2.5s infinite ease-in-out;
+}
+
+@keyframes coverPulse {
+  0% {
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 25px var(--accent-color);
+  }
+  100% {
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
+  }
+}
+
+.track-details {
+  min-width: 0;
+}
+
+.track-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+  /* Crisp text rendering on translucent panel */
+  -webkit-font-smoothing: subpixel-antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.track-artist {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-font-smoothing: subpixel-antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Center Controls */
+.player-controls-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 45%;
+}
+
+.player-buttons {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.player-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.player-btn:hover {
+  color: var(--text-color);
+  transform: scale(1.05);
+}
+
+.player-btn:active {
+  transform: scale(0.95);
+}
+
+.player-btn.active {
+  color: var(--accent-color) !important;
+}
+
+.play-main {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 50%), var(--play-main-bg, #ffffff);
+  color: var(--play-main-color, #000000);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), inset 0 2px 4px rgba(255, 255, 255, 0.3);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.play-main:hover {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 50%), var(--play-main-bg, #ffffff);
+  color: var(--play-main-color, #000000);
+  opacity: 0.95;
+  transform: scale(1.08);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3), inset 0 2px 4px rgba(255, 255, 255, 0.4);
+}
+
+/* Progress/Timeline */
+.progress-bar-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.progress-bar-container span {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-weight: 500;
+  min-width: 30px;
+}
+
+#current-time {
+  text-align: right;
+}
+
+#total-time {
+  text-align: left;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--card-border);
+  border-radius: 3px;
+  height: 4px;
+  outline: none;
+  width: 100%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--text-color);
+  border-radius: 50%;
+  height: 10px;
+  width: 10px;
+  margin-top: -3px;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.3);
+}
+
+/* Right Volume Controls */
+.player-volume-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 20%;
+  max-width: 150px;
+  justify-content: flex-end;
+  color: var(--text-dim);
+}
+
+.player-volume-container input[type="range"] {
+  max-width: 80px;
+}
+
+/* Micro-animations */
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 2px solid rgba(128, 128, 128, 0.15);
+  border-top: 2px solid var(--accent-color);
+  border-radius: 50%;
+  animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}

@@ -1,0 +1,315 @@
+/* Modular Theme Switches */
+html.gp-glass-off :is(.track-card, .track-card-horizontal, .carousel-banner-section, .toast-notification, .local-library-header, .mini-player-block, .player-bar, .settings-section, .sidebar, .sidebar-content) {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.gp-shadows-off :is(.track-card, .track-card-horizontal, .carousel-banner-section, .toast-notification, .local-library-header, .mini-player-block, .player-bar, .play-main, .mini-play-main) {
+  box-shadow: none !important;
+}
+
+html.gp-motion-off .bg-effect-layer * {
+  animation: none !important;
+}
+
+/* Text readability enhancer for high transparency */
+.card-title,
+.card-artist,
+.track-title,
+.track-artist,
+.mini-track-title,
+.mini-track-artist,
+.sidebar-nav-item,
+.section-title,
+.album-title,
+.artist-name {
+  text-shadow: var(--surface-text-shadow, none);
+}
+
+:is(.track-card, .track-card-horizontal, .carousel-banner-section, .toast-notification, .local-library-header, .settings-panel, .settings-section, .mini-more-popover) {
+  --text-color: var(--surface-text-color);
+  --text-dim: var(--surface-text-dim);
+}
+
+.artist-link {
+  appearance: none;
+  display: inline;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.artist-link:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.update-banner-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-left: 6px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.update-banner-close:hover {
+  color: var(--text-color);
+  background: var(--card-hover-bg);
+}
+
+.mini-progress-slider {
+  top: 50%;
+  bottom: auto;
+  height: 16px;
+  transform: translateY(-50%);
+  z-index: 2;
+}
+
+.mini-player-progress-container:hover {
+  height: 2px;
+}
+
+.mini-player-progress-container:focus-within {
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.mini-control-btn {
+  width: 28px;
+  height: 28px;
+}
+
+.mini-player-controls .mini-player-btn {
+  width: 30px;
+  height: 30px;
+}
+
+body.mini-player-active #toast-container {
+  top: 31px !important;
+  right: 8px !important;
+  left: 8px !important;
+  width: auto;
+  gap: 0;
+}
+
+body.mini-player-active #toast-container .toast-notification:not(:last-child) {
+  display: none;
+}
+
+body.mini-player-active .toast-notification {
+  grid-template-columns: 24px minmax(0, 1fr) 26px;
+  gap: 7px;
+  padding: 6px 7px 7px;
+  border-radius: 11px;
+  background: var(--surface-elevated);
+}
+
+body.mini-player-active .toast-icon-badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+}
+
+body.mini-player-active .toast-icon-badge svg {
+  width: 13px;
+  height: 13px;
+}
+
+body.mini-player-active .toast-title {
+  display: none;
+}
+
+body.mini-player-active .toast-message {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: 24px;
+}
+
+body.mini-player-active .toast-close-btn {
+  width: 26px;
+  height: 26px;
+}
+
+:where(.search-box input, .modal-content input, .auth-form-group input, .local-search-field input, .settings-section input, .settings-section select):focus-visible,
+:where(.search-box, .local-search-field):focus-within {
+  outline: 2px solid var(--focus-ring) !important;
+  outline-offset: 2px;
+}
+
+.gp-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(3, 4, 8, 0.52);
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.gp-confirm-overlay.is-visible {
+  opacity: 1;
+}
+
+.gp-confirm-dialog {
+  width: min(420px, 100%);
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 14px;
+  padding: 20px;
+  border: var(--border-width, 1px) solid var(--card-border);
+  border-radius: 18px;
+  background: var(--surface-elevated);
+  color: var(--surface-text-color);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42), var(--glass-glow);
+  transform: translateY(8px) scale(0.985);
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gp-confirm-overlay.is-visible .gp-confirm-dialog {
+  transform: translateY(0) scale(1);
+}
+
+.gp-confirm-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  color: var(--status-warning);
+  background: color-mix(in srgb, var(--status-warning) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--status-warning) 26%, transparent);
+}
+
+.gp-confirm-icon svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.gp-confirm-copy h2 {
+  margin: 1px 0 7px;
+  color: var(--surface-text-color);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.gp-confirm-copy p {
+  color: var(--surface-text-dim);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.gp-confirm-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 6px;
+}
+
+.gp-confirm-button {
+  min-height: 38px;
+  padding: 0 15px;
+  border: 1px solid var(--card-border);
+  border-radius: 11px;
+  background: var(--card-bg);
+  color: var(--surface-text-color);
+  cursor: pointer;
+}
+
+.gp-confirm-button:hover {
+  background: var(--card-hover-bg);
+  border-color: var(--card-hover-border);
+}
+
+.gp-confirm-button.danger {
+  border-color: color-mix(in srgb, var(--status-error) 45%, transparent);
+  background: var(--status-error);
+  color: #ffffff;
+}
+
+.mood-card {
+  color: var(--text-color);
+  text-align: left;
+}
+
+.home-refresh-btn.loading svg {
+  animation: spinRefresh 0.8s linear infinite;
+}
+
+@media (max-width: 900px) {
+  .local-library-header {
+    grid-template-columns: 1fr;
+  }
+
+  .local-library-tools {
+    justify-content: stretch;
+  }
+
+  .local-search-field {
+    flex: 1;
+  }
+}
+
+@media (max-width: 680px) {
+  #toast-container {
+    top: 48px !important;
+    right: 12px !important;
+    left: 12px !important;
+    width: auto;
+  }
+
+  .home-welcome-header,
+  .home-header-actions,
+  .local-library-tools {
+    flex-wrap: wrap;
+  }
+
+  .home-header-actions,
+  .local-search-field,
+  .local-sort-select,
+  .local-action-btn {
+    width: 100%;
+  }
+
+  .sources-pill-capsule {
+    margin-left: auto;
+  }
+
+  .library-subtabs {
+    width: 100%;
+  }
+
+  .library-tab-btn {
+    flex: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

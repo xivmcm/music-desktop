@@ -1,0 +1,163 @@
+/* Modals overlays & styling */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: var(--card-bg, rgba(20, 20, 25, 0.95));
+  backdrop-filter: var(--blur-value, blur(28px));
+  -webkit-backdrop-filter: var(--blur-value, blur(28px));
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.12));
+  border-radius: var(--window-radius, 18px);
+  padding: 24px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: var(--card-shadow, 0 24px 64px rgba(0, 0, 0, 0.5));
+  color: var(--text-color, #ffffff);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+}
+
+.modal-content h3 {
+  font-weight: 400;
+  font-size: 18px;
+  letter-spacing: 0.5px;
+  color: var(--text-color);
+}
+
+.modal-content input {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 10px 14px;
+  color: var(--text-color);
+  outline: none;
+  font-size: 14px;
+  width: 100%;
+  transition: all 0.2s ease;
+}
+
+.modal-content input:focus {
+  background: var(--card-hover-bg);
+  border-color: var(--card-hover-border);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.modal-btn {
+  border: none;
+  border-radius: 14px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modal-btn.primary {
+  background: var(--primary-btn-bg, #ffffff);
+  color: var(--primary-btn-color, #000000);
+}
+
+.modal-btn.primary:hover {
+  opacity: 0.9;
+}
+
+.modal-btn.secondary {
+  background: var(--card-bg);
+  color: var(--text-dim);
+  border: 1px solid var(--card-border);
+}
+
+.modal-btn.secondary:hover {
+  background: var(--card-hover-bg);
+  color: var(--text-color);
+  border-color: var(--card-hover-border);
+}
+
+/* Playlist elements */
+.playlist-card {
+  background: var(--card-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
+  will-change: transform;
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  position: relative;
+}
+
+.playlist-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.playlist-card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: rgba(48, 209, 88, 0.12);
+  color: #30d158;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  border: 1px solid rgba(48, 209, 88, 0.15);
+}
+
+.playlist-card-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playlist-card-count {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.playlist-delete-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.playlist-delete-btn:hover {
+  color: #ff453a;
+  background: rgba(255, 69, 58, 0.1);
+}

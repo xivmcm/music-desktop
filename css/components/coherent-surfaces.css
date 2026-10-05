@@ -1,0 +1,236 @@
+/* ── RELEASE 1.17.0: coherent player surfaces, library and feedback ── */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+:where(button, input, select, [role="button"]) {
+  touch-action: manipulation;
+}
+
+:where(button, input, select, a, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  cursor: default !important;
+  opacity: 0.42;
+}
+
+.track-card:focus-visible .cover-overlay,
+.track-card .track-cover-container:focus-within .cover-overlay {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* The player and its mini mode inherit a dedicated foreground pair. */
+.player-bar,
+body.mini-player-active .mini-player-block {
+  --text-color: var(--player-text-color);
+  --text-dim: var(--player-text-dim);
+}
+
+body.mini-player-active::before,
+body.mini-player-active::after {
+  display: block !important;
+  border-radius: var(--window-radius) !important;
+}
+
+body.mini-player-active .mini-player-block {
+  width: 100% !important;
+  height: 100% !important;
+  position: absolute !important;
+  background: var(--mini-bg, var(--player-bg)) !important;
+  color: var(--player-text-color) !important;
+  border: var(--border-width, 1px) solid var(--player-border) !important;
+  border-radius: var(--window-radius) !important;
+  box-shadow: var(--glass-shadow) !important;
+  backdrop-filter: var(--glass-filter, var(--blur-value)) !important;
+  -webkit-backdrop-filter: var(--glass-filter, var(--blur-value)) !important;
+}
+
+.mini-player-titlebar {
+  border-bottom-color: var(--player-border);
+}
+
+.mini-title,
+.mini-control-btn {
+  color: var(--player-text-dim);
+}
+
+.mini-control-btn {
+  width: 24px;
+  height: 24px;
+}
+
+.mini-control-btn:hover,
+.mini-player-btn:hover {
+  color: var(--player-text-color);
+  background: color-mix(in srgb, var(--player-text-color) 10%, transparent);
+}
+
+.mini-player-progress-container {
+  background: color-mix(in srgb, var(--player-text-color) 10%, transparent);
+}
+
+.mini-cover-container img {
+  border-color: var(--player-border);
+  background: var(--panel-bg);
+}
+
+.mini-player-btn.active,
+.mini-player-btn.liked,
+.mini-player-btn[aria-pressed="true"] {
+  color: var(--accent-color);
+  background: color-mix(in srgb, var(--accent-color) 14%, transparent);
+}
+
+.mini-more-popover {
+  background: var(--surface-elevated);
+  color: var(--text-color);
+  border-color: var(--card-border);
+  box-shadow: var(--glass-shadow);
+}
+
+/* Theme-aware notification stack with stable status semantics. */
+#toast-container {
+  position: fixed !important;
+  top: 50px !important;
+  right: 24px !important;
+  bottom: auto !important;
+  left: auto !important;
+  width: min(400px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 100000;
+  pointer-events: none;
+}
+
+.toast-notification {
+  --toast-status: var(--status-info);
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 28px;
+  align-items: start;
+  gap: 11px;
+  min-width: 0;
+  width: 100%;
+  max-width: none;
+  padding: 12px 12px 13px;
+  border-radius: 15px;
+  background: var(--surface-elevated);
+  color: var(--text-color);
+  border: var(--border-width, 1px) solid color-mix(in srgb, var(--toast-status) 30%, var(--card-border));
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.28), var(--glass-glow);
+  backdrop-filter: var(--blur-value);
+  -webkit-backdrop-filter: var(--blur-value);
+  pointer-events: auto;
+  transform: translate3d(22px, 0, 0) scale(0.985);
+  opacity: 0;
+  overflow: hidden;
+  transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1), opacity 180ms ease;
+}
+
+.toast-notification.is-visible {
+  transform: translate3d(0, 0, 0) scale(1);
+  opacity: 1;
+}
+
+.toast-notification.is-leaving {
+  transform: translate3d(16px, 0, 0) scale(0.985);
+  opacity: 0;
+}
+
+.toast-notification.toast-success { --toast-status: var(--status-success); }
+.toast-notification.toast-warning { --toast-status: var(--status-warning); }
+.toast-notification.toast-error { --toast-status: var(--status-error); }
+
+.toast-notification:is(.toast-info, .toast-success, .toast-warning, .toast-error) {
+  border-color: color-mix(in srgb, var(--toast-status) 30%, var(--card-border));
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.28), var(--glass-glow);
+}
+
+.toast-notification:is(.toast-info, .toast-success, .toast-warning, .toast-error) .toast-icon-badge {
+  color: var(--toast-status);
+  background: color-mix(in srgb, var(--toast-status) 13%, transparent);
+  border-color: color-mix(in srgb, var(--toast-status) 28%, transparent);
+}
+
+.toast-icon-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  color: var(--toast-status);
+  background: color-mix(in srgb, var(--toast-status) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--toast-status) 28%, transparent);
+}
+
+.toast-icon-badge svg,
+.toast-close-btn svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.toast-content-body {
+  min-width: 0;
+  padding-top: 1px;
+}
+
+.toast-title {
+  color: var(--text-color);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.toast-message {
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.toast-close-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.toast-close-btn:hover {
+  color: var(--text-color);
+  background: var(--card-hover-bg);
+}
+
+.toast-progress-bar {
+  grid-column: 1 / -1;
+  position: absolute;
+  inset: auto 0 0;
+  width: 100%;
+  height: 2px;
+  background: var(--toast-status);
+  transform-origin: left;
+  animation: toastProgress var(--toast-duration, 4000ms) linear forwards;
+}
+
+.toast-notification.is-paused .toast-progress-bar {
+  animation-play-state: paused;
+}

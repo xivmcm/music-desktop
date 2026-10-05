@@ -1,0 +1,54 @@
+/* ── Track Share Links ───────────────────────────────────────────────────── */
+.player-share-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  z-index: 20;
+}
+
+.player-share-btn:hover {
+  color: var(--text-color);
+  background: var(--card-hover-bg);
+  transform: scale(1.1);
+}
+
+.player-share-btn:active {
+  transform: scale(0.95);
+}
+
+.player-share-btn:focus-visible {
+  outline: 2px solid var(--accent-color, #a78bfa);
+  outline-offset: 2px;
+}
+
+.playlist-menu-item.share-link-menu-item {
+  border-top: 1px solid var(--card-border, rgba(255, 255, 255, 0.06));
+  margin-top: 4px;
+}
+
+.share-link-menu-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Track covers: no native drag / ghost image / selection ─────────────── */
+img,
+.track-cover-container,
+.track-cover-container img,
+.card-cover,
+#current-cover,
+#mini-current-cover {
+  -webkit-user-drag: none;
+  user-drag: none;
+  -webkit-user-select: none;
+  user-select: none;
+}

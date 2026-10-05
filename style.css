@@ -10,6 +10,7 @@
 @import './css/components/header.css';
 @import './css/components/modals.css';
 @import './css/components/popovers-banners.css';
+@import './css/components/sidebar.css';
 @import './css/views/home.css';
 @import './css/views/artist.css';
 @import './css/views/settings.css';

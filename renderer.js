@@ -506,16 +506,16 @@ document.addEventListener('click', (e) => {
 });
 
 // Navigation Click Event Listeners
-homeButton.addEventListener('click', () => loadHomeView());
-favoritesButton.addEventListener('click', () => loadFavorites(currentLibrarySubTab));
-historyButton.addEventListener('click', loadHistoryView);
-playlistsButton.addEventListener('click', loadPlaylistsView);
-settingsButton.addEventListener('click', loadSettingsView);
+homeButton.addEventListener('click', () => { updateActiveTab('home'); loadHomeView(); });
+favoritesButton.addEventListener('click', () => { updateActiveTab('library'); loadFavorites(currentLibrarySubTab); });
+historyButton.addEventListener('click', () => { updateActiveTab('history'); loadHistoryView(); });
+playlistsButton.addEventListener('click', () => { updateActiveTab('playlists'); loadPlaylistsView(); });
+settingsButton.addEventListener('click', () => { updateActiveTab('settings'); loadSettingsView(); });
 if (studioButton) {
-  studioButton.addEventListener('click', () => loadStudioView('visual'));
+  studioButton.addEventListener('click', () => { updateActiveTab('studio'); loadStudioView('visual'); });
 }
 if (statsButton) {
-  statsButton.addEventListener('click', loadStatsView);
+  statsButton.addEventListener('click', () => { updateActiveTab('stats'); loadStatsView(); });
 }
 
 document.querySelectorAll('.mobile-tab-btn').forEach((btn) => {
@@ -735,9 +735,11 @@ if (localStorage.getItem('gp_dynamic_cover') === 'true') {
 
 function updateActiveTab(viewName) {
   // Clear home carousel timer if switching away from home
-  if (viewName !== 'home' && carouselTimer) {
-    clearInterval(carouselTimer);
-    carouselTimer = null;
+  if (viewName !== 'home') {
+    if (typeof carouselTimer !== 'undefined' && carouselTimer) {
+      clearInterval(carouselTimer);
+      carouselTimer = null;
+    }
   }
 
   // Hide user search results if we switch away from search view
@@ -747,13 +749,13 @@ function updateActiveTab(viewName) {
   }
 
   const tabButtons = {
-    'home': homeButton,
-    'library': favoritesButton,
-    'history': historyButton,
-    'playlists': playlistsButton,
-    'studio': studioButton,
-    'stats': statsButton,
-    'settings': settingsButton
+    'home': homeButton || document.getElementById('home-button'),
+    'library': favoritesButton || document.getElementById('favorites-button'),
+    'history': historyButton || document.getElementById('history-button'),
+    'playlists': playlistsButton || document.getElementById('playlists-button'),
+    'studio': studioButton || document.getElementById('studio-button'),
+    'stats': statsButton || document.getElementById('stats-button'),
+    'settings': settingsButton || document.getElementById('settings-button')
   };
 
   Object.entries(tabButtons).forEach(([name, btn]) => {
@@ -778,10 +780,13 @@ function updateActiveTab(viewName) {
   }
 
   // Trigger smooth fade-in
-  tracksContainer.classList.remove('fade-in');
-  void tracksContainer.offsetWidth; // Force reflow
-  tracksContainer.classList.add('fade-in');
+  if (tracksContainer) {
+    tracksContainer.classList.remove('fade-in');
+    void tracksContainer.offsetWidth; // Force reflow
+    tracksContainer.classList.add('fade-in');
+  }
 }
+window.updateActiveTab = updateActiveTab;
 
 // --- Collaborative & Friend Playlists (Extracted to js/views/playlists-view.js) ---
 

@@ -85,6 +85,22 @@ app.whenReady().then(async () => {
         // 5. Test share button
         const hasShareBtn = document.getElementById('player-share-btn') !== null;
 
+        // 6. Test tab switching and active classes
+        const hasUpdateActiveTab = typeof window.updateActiveTab === 'function';
+        const homeBtn = document.getElementById('home-button');
+        const studioBtn = document.getElementById('studio-button');
+        const playlistsBtn = document.getElementById('playlists-button');
+        window.updateActiveTab('studio');
+        const studioActivated = studioBtn && studioBtn.classList.contains('active') && !homeBtn.classList.contains('active');
+        window.updateActiveTab('playlists');
+        const playlistsActivated = playlistsBtn && playlistsBtn.classList.contains('active') && !studioBtn.classList.contains('active');
+        window.updateActiveTab('home');
+        const homeReactivated = homeBtn && homeBtn.classList.contains('active') && !playlistsBtn.classList.contains('active');
+
+        // 7. Test sidebar positioning and CSS
+        const sidebar = document.getElementById('sidebar');
+        const hasSidebarAbsolute = sidebar && window.getComputedStyle(sidebar).position === 'absolute';
+
         return {
           hasGP,
           hasUtils,
@@ -117,7 +133,12 @@ app.whenReady().then(async () => {
           hasLoadArtist,
           hasToast,
           hasCard,
-          hasShareBtn
+          hasShareBtn,
+          hasUpdateActiveTab,
+          studioActivated,
+          playlistsActivated,
+          homeReactivated,
+          hasSidebarAbsolute
         };
       })()
     `);

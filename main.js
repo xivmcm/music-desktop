@@ -647,16 +647,46 @@ function createWindow() {
   };
   windowStates.set(window, state);
 
+  console.log('[MAIN] Loading index.html...');
   window.loadFile('index.html');
 
+  const displayWindow = () => {
+    if (window && !window.isDestroyed()) {
+      console.log('[MAIN] Showing window now! Bounds:', window.getBounds());
+      if (window.isMinimized()) window.restore();
+      window.show();
+      window.setAlwaysOnTop(true);
+      window.focus();
+      setTimeout(() => {
+        if (!state.isMiniPlayer && window && !window.isDestroyed()) {
+          window.setAlwaysOnTop(false);
+        }
+      }, 500);
+    }
+  };
+
   window.once('ready-to-show', () => {
-    window.show();
+    console.log('[MAIN] ready-to-show event fired!');
+    displayWindow();
     state.updateCheckTimer = setTimeout(() => {
       state.updateCheckTimer = null;
       if (window.isDestroyed()) return;
       glassUpdater.checkForUpdates();
     }, 4000);
   });
+
+  // Fallback to guarantee window visibility even if ready-to-show is delayed
+  setTimeout(displayWindow, 1500);
+
+  window.webContents.on('did-finish-load', () => {
+    console.log('[MAIN] did-finish-load event fired!');
+  });
+
+  window.webContents.on('render-process-gone', (e, details) => {
+    console.error('[MAIN] Renderer process gone:', details);
+  });
+
+
 
   // Notify renderer of window maximize events to toggle rounded corners
   window.on('maximize', () => {

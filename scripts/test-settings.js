@@ -237,7 +237,7 @@ const sandbox = {
   document: documentMock,
   btoa: (str) => Buffer.from(str).toString('base64'),
   atob: (str) => Buffer.from(str, 'base64').toString('utf8'),
-  APP_VERSION: '1.19.0',
+  APP_VERSION: '1.19.1',
   DEFAULT_MIRRORS: ['https://music-backend-iyni.onrender.com'],
   API_URL: 'https://music-backend-iyni.onrender.com',
   BACKEND_URL: 'https://music-backend-iyni.onrender.com/api',

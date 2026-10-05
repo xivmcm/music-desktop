@@ -1,10 +1,10 @@
 {
-  "version": "1.19.0",
-  "releaseDate": "2026-10-03",
-  "changelog": "• Рефакторинг «Конструктора тем» и движка Glassmorphism\n• Исправлено отображение фона в мини-плеере при любой прозрачности\n• Модульные переключатели эффектов: Стекло, Свечение, Тени, Анимации\n• Новые фоновые эффекты: Aurora, Liquid Spheres, Particles\n• Настраиваемая насыщенность стекла, затемнение обоев и раздельная прозрачность мини-плеера\n• Полная синхронизация настроек конструктора тем в реальном времени",
+  "version": "1.19.1",
+  "releaseDate": "2026-10-05",
+  "changelog": "• Полная модульная архитектура: разделение кодовой базы на изолированные компоненты и экраны (Views & Components)\n• Исправлено переключение и подсветка активных разделов в боковом меню навигации\n• Восстановлены стили выезжающего сайдбара и анимации\n• Персистентный кэш главной страницы и ускоренный холодный старт рекомендаций\n• Устранён спам ротации API-ключей в консоли",
   "windows": {
-    "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.19.0.exe",
-    "filename": "GlassPlayer-Setup-1.19.0.exe"
+    "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.19.1.exe",
+    "filename": "GlassPlayer-Setup-1.19.1.exe"
   },
   "android": {
     "url": "https://xivmcm.github.io/music-desktop/GlassPlayer-1.18.1.apk",

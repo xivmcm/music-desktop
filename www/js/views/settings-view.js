@@ -32,7 +32,7 @@
   }
 
   function getAppVersion() {
-    return (typeof window !== 'undefined' && window.APP_VERSION) || '1.19.1';
+    return (typeof window !== 'undefined' && window.APP_VERSION) || '1.19.2';
   }
 
   function getApiUrl() {
@@ -106,7 +106,12 @@
   // --- View Loaders ---
 
   function loadSettingsView() {
-    if (typeof window !== 'undefined') window.activeView = 'settings';
+    if (typeof window !== 'undefined') {
+      window.activeView = 'settings';
+      if (window.GP?.NavigationHistory?.push) {
+        window.GP.NavigationHistory.push({ view: 'settings' });
+      }
+    }
     const searchInput = document.getElementById('search-input');
     const welcomeScreen = document.getElementById('welcome-screen');
     const tracksContainer = document.getElementById('tracks-container');
@@ -123,7 +128,12 @@
   }
 
   function loadStudioView(tab = 'visual') {
-    if (typeof window !== 'undefined') window.activeView = 'studio';
+    if (typeof window !== 'undefined') {
+      window.activeView = 'studio';
+      if (window.GP?.NavigationHistory?.push) {
+        window.GP.NavigationHistory.push({ view: 'studio', studioTab: tab });
+      }
+    }
     const searchInput = document.getElementById('search-input');
     const welcomeScreen = document.getElementById('welcome-screen');
     const tracksContainer = document.getElementById('tracks-container');
@@ -140,7 +150,12 @@
   }
 
   function loadStatsView() {
-    if (typeof window !== 'undefined') window.activeView = 'stats';
+    if (typeof window !== 'undefined') {
+      window.activeView = 'stats';
+      if (window.GP?.NavigationHistory?.push) {
+        window.GP.NavigationHistory.push({ view: 'stats' });
+      }
+    }
     const searchInput = document.getElementById('search-input');
     const welcomeScreen = document.getElementById('welcome-screen');
     const tracksContainer = document.getElementById('tracks-container');

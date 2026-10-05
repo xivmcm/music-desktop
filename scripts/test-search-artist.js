@@ -523,12 +523,18 @@ async function runTests() {
   let loadMoreBtn = tracksContainer.querySelector('#load-more-btn');
   assert(loadMoreBtn !== null, 'Load more button created for >= 20 tracks');
 
-  // Hit limit (80 tracks)
+  // Infinite search: 80 tracks loaded, no limit by default, button persists
   context.window.playlist = new Array(80).fill(null).map((_, i) => ({ id: `t_${i}`, title: `Track ${i}` }));
+  context.window.updateLoadMoreButton(20);
+  assert(tracksContainer.querySelector('#load-more-btn') !== null, 'Infinite search allows >80 tracks without hard limit');
+
+  // When explicit maxTracksLimit is set, limit message is respected
+  context.window.maxTracksLimit = 80;
   context.window.updateLoadMoreButton(20);
   const limitMsg = tracksContainer.querySelector('#load-more-limit-msg');
   assert(limitMsg !== null, 'Limit message displayed at maxTracksLimit');
   assert(tracksContainer.querySelector('#load-more-btn') === null, 'Load more button removed at limit');
+  delete context.window.maxTracksLimit;
 
   // Load more execution
   context.window.playlist = [{ id: 't_init', title: 'Initial' }];

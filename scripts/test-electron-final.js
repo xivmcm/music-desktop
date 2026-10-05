@@ -101,6 +101,22 @@ app.whenReady().then(async () => {
         const sidebar = document.getElementById('sidebar');
         const hasSidebarAbsolute = sidebar && window.getComputedStyle(sidebar).position === 'absolute';
 
+        // 8. Test Navigation History and controls (v1.19.2)
+        const hasNavHistory = typeof window.GP?.NavigationHistory === 'object';
+        const backBtn = document.getElementById('nav-back-btn');
+        const fwdBtn = document.getElementById('nav-forward-btn');
+        const hasBackBtn = backBtn !== null;
+        const hasForwardBtn = fwdBtn !== null;
+        const initialBackDisabled = backBtn && backBtn.disabled === true;
+        const initialFwdDisabled = fwdBtn && fwdBtn.disabled === true;
+
+        // Perform test navigation push
+        window.GP.NavigationHistory.push({ view: 'search', query: 'ElectronTestQuery' });
+        const canBackAfterPush = window.GP.NavigationHistory.canGoBack();
+        const backEnabledAfterPush = backBtn && backBtn.disabled === false;
+        window.GP.NavigationHistory.back();
+        const backRestoredHome = window.GP.NavigationHistory.getCurrentIndex() === 0;
+
         return {
           hasGP,
           hasUtils,
@@ -138,7 +154,15 @@ app.whenReady().then(async () => {
           studioActivated,
           playlistsActivated,
           homeReactivated,
-          hasSidebarAbsolute
+          hasSidebarAbsolute,
+          hasNavHistory,
+          hasBackBtn,
+          hasForwardBtn,
+          initialBackDisabled,
+          initialFwdDisabled,
+          canBackAfterPush,
+          backEnabledAfterPush,
+          backRestoredHome
         };
       })()
     `);
@@ -168,6 +192,10 @@ app.whenReady().then(async () => {
         const toastContainer = document.getElementById('toast-container');
         const hasToast = toastContainer && toastContainer.children.length > 0;
 
+        const hasNavHistory = typeof window.GP?.NavigationHistory === 'object';
+        const hasBackBtn = document.getElementById('nav-back-btn') !== null;
+        const hasForwardBtn = document.getElementById('nav-forward-btn') !== null;
+
         return {
           hasGP,
           hasNotifications,
@@ -176,7 +204,10 @@ app.whenReady().then(async () => {
           hasRenderTracks,
           hasShowToast,
           hasCopyShare,
-          hasToast
+          hasToast,
+          hasNavHistory,
+          hasBackBtn,
+          hasForwardBtn
         };
       })()
     `);

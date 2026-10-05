@@ -94,6 +94,9 @@
   position: relative;
   overflow: hidden;
   box-shadow: 0 4px 15px calc(var(--glow) * 2px) color-mix(in srgb, var(--glow-color-base, var(--accent-color)) calc(var(--glow) * 60%), transparent), var(--glass-glow, none);
+  content-visibility: auto;
+  contain-intrinsic-size: 320px 84px;
+  contain: layout style paint;
 }
 
 .track-card-horizontal:hover {

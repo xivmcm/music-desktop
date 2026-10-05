@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.19.1';
+const APP_VERSION = '1.19.2';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -218,9 +218,12 @@ const DirectSoundCloudEngine = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
           }
         }, 5000);
-        if (res.status === 401) {
+        if (res.status === 401 || res.status === 429) {
           this.rotateClientId();
           attempts++;
+          if (res.status === 429) {
+            await new Promise(r => setTimeout(r, 600));
+          }
           continue;
         }
         if (!res.ok) throw new Error(`SC Search status: ${res.status}`);

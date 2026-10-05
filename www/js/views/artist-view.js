@@ -107,7 +107,12 @@
       return;
     }
 
-    if (typeof root !== 'undefined') root.activeView = 'artist';
+    if (typeof root !== 'undefined') {
+      root.activeView = 'artist';
+      if (root.GP?.NavigationHistory?.push) {
+        root.GP.NavigationHistory.push({ view: 'artist', artistId: String(artistId) });
+      }
+    }
 
     const welcomeScreen = document.getElementById('welcome-screen');
     const tracksContainer = document.getElementById('tracks-container');

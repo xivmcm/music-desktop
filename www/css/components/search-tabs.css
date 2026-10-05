@@ -57,9 +57,9 @@
   display: block;
   margin: 24px auto;
   padding: 10px 28px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
+  background: var(--card-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
+  border-radius: var(--window-radius, 20px);
   color: var(--text-color, #ffffff);
   font-size: 13px;
   font-weight: 500;
@@ -67,17 +67,18 @@
   backdrop-filter: var(--blur-value, blur(28px));
   -webkit-backdrop-filter: var(--blur-value, blur(28px));
   transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), var(--glass-glow, none);
   outline: none;
 }
 
-.load-more-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.15);
-  transform: scale(1.02);
+.load-more-btn:hover:not(:disabled) {
+  background: var(--card-hover-bg, rgba(255, 255, 255, 0.08));
+  border-color: var(--card-hover-border, rgba(255, 255, 255, 0.15));
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2), var(--glass-glow, none);
 }
 
-.load-more-btn:active {
+.load-more-btn:active:not(:disabled) {
   transform: scale(0.98);
 }
 

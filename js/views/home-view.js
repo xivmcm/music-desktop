@@ -257,6 +257,18 @@
     }
   }
 
+  const HOME_FEED_SECTIONS_CACHE_KEY = 'gp_home_feed_sections_cache';
+
+  function getPersistedHomeFeed() {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem(HOME_FEED_SECTIONS_CACHE_KEY);
+        if (raw) return JSON.parse(raw);
+      }
+    } catch (e) {}
+    return null;
+  }
+
   function getHomeRecommendationCacheKey() {
     return `gp_home_feed_v2_${getOwnerSuffix()}_${_activeHomeSource}`;
   }
@@ -271,6 +283,9 @@
     cachedSoundCloudDynamicAt = 0;
     soundCloudDynamicLoadVersion += 1;
     if (!preserveCache && typeof localStorage !== 'undefined') {
+      try {
+        localStorage.removeItem(HOME_FEED_SECTIONS_CACHE_KEY);
+      } catch (e) {}
       const owner = getOwnerSuffix();
       ['soundcloud', 'spotify'].forEach((source) => {
         try {
@@ -387,7 +402,7 @@
           : seed.artistId
             ? `artistId=${encodeURIComponent(seed.artistId)}`
             : `q=${encodeURIComponent(seed.query)}`;
-        const response = await fetchWithTimeout(`${backendUrl}/search/related?${params}`, {}, 1500);
+        const response = await fetchWithTimeout(`${backendUrl}/search/related?${params}`, {}, 3500);
         if (response.ok) {
           const data = await response.json();
           if (data.status === 'success' && Array.isArray(data.results) && data.results.length > 0) {
@@ -468,6 +483,16 @@
     if (loadingIndicator) loadingIndicator.classList.remove('hidden');
 
     try {
+      if (!_originalHomeData) {
+        const persisted = getPersistedHomeFeed();
+        if (persisted && typeof persisted === 'object') {
+          _originalHomeData = persisted;
+          if (typeof root !== 'undefined') {
+            root.originalHomeData = _originalHomeData;
+          }
+        }
+      }
+
       const backendUrl = getBackendUrl();
       const homeUrl = `${backendUrl}/search/home${forceRefresh ? `?refresh=${Date.now()}` : ''}`;
       let homeRes = null;
@@ -475,7 +500,7 @@
 
       try {
         const [homeResult, forYouResult] = await Promise.allSettled([
-          fetchWithTimeout(homeUrl, {}, 1500).then(r => {
+          fetchWithTimeout(homeUrl, {}, 4500).then(r => {
             if (!r.ok) throw new Error(`HTTP ${r.status}`);
             return r.json();
           }),
@@ -485,10 +510,10 @@
         forYouData = forYouResult.status === 'fulfilled' ? forYouResult.value : _cachedForYouData;
       } catch (e) {}
 
-      // Fallback: If backend is slow, sleeping or blocked, load directly via DirectSoundCloudEngine
+      // Fallback: If backend is slow, sleeping or blocked AND no cache is available, load directly via DirectSoundCloudEngine
       const directSCEngine = getDirectSCEngine();
-      if ((!homeRes || homeRes.status !== 'success' || !homeRes.results) && directSCEngine && typeof directSCEngine.getHomeSections === 'function') {
-        console.log('[Home View] Backend unavailable, loading home sections directly from SoundCloud...');
+      if ((!homeRes || homeRes.status !== 'success' || !homeRes.results) && !_originalHomeData && directSCEngine && typeof directSCEngine.getHomeSections === 'function') {
+        console.log('[Home View] Backend unavailable and no cache, loading home sections directly from SoundCloud...');
         try {
           const directSections = await directSCEngine.getHomeSections();
           homeRes = {
@@ -516,6 +541,11 @@
       if (homeRes?.status === 'success' && homeRes.results) {
         _originalHomeData = homeRes.results;
         _cachedForYouData = forYouData;
+        try {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(HOME_FEED_SECTIONS_CACHE_KEY, JSON.stringify(homeRes.results));
+          }
+        } catch (e) {}
         if (typeof root !== 'undefined') {
           root.originalHomeData = _originalHomeData;
           root.cachedForYouData = _cachedForYouData;

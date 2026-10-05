@@ -203,7 +203,7 @@ const DirectSoundCloudEngine = {
   rotateClientId() {
     this.clientIndex = (this.clientIndex + 1) % SC_CLIENT_IDS.length;
     this.clientId = SC_CLIENT_IDS[this.clientIndex];
-    console.log('[Direct SC Engine] Rotated to client_id:', this.clientId);
+    console.debug('[Direct SC Engine] Rotated to client_id:', this.clientId);
     return this.clientId;
   },
 

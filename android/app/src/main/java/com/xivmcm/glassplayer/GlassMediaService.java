@@ -155,7 +155,11 @@ public class GlassMediaService extends Service {
         }
 
         Notification notification = builder.build();
-        startForeground(NOTIFICATION_ID, notification);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+        } else {
+            startForeground(NOTIFICATION_ID, notification);
+        }
     }
 
     private PendingIntent getPendingAction(String action, int requestCode) {

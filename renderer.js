@@ -76,12 +76,17 @@ document.addEventListener('click', (event) => {
   }
 });
 
-if ('serviceWorker' in navigator && !isElectron) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./service-worker.js')
-      .then(() => console.log('[PWA] Service worker registered'))
-      .catch((err) => console.warn('[PWA] Service worker registration failed:', err.message));
-  });
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const registration of registrations) {
+      registration.unregister();
+    }
+  }).catch(() => {});
+  if (typeof caches !== 'undefined') {
+    caches.keys().then((keys) => {
+      keys.forEach((key) => caches.delete(key));
+    }).catch(() => {});
+  }
 }
 
 // ── Cover Image Anti-Censorship & Zero-Cost CDN Engine ───────────

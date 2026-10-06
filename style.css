@@ -21,7 +21,6 @@
 @import './css/components/horizontal-cards.css';
 @import './css/components/social-presence.css';
 @import './css/components/lyrics.css';
-@import './css/components/runtime-pwa.css';
 @import './css/components/lyrics-synced.css';
 @import './css/components/spotify-moods.css';
 @import './css/effects/glassmorphism.css';
@@ -32,3 +31,4 @@
 @import './css/views/home-recommendations.css';
 @import './css/effects/theme-builder.css';
 @import './css/components/misc.css';
+@import './css/components/runtime-pwa.css';

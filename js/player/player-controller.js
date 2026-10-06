@@ -110,7 +110,19 @@
 
   // --- Native Media Controls & MediaSession ---
   function getGlassMediaPlugin() {
-    return (typeof window !== 'undefined' && window.Capacitor?.Plugins?.GlassMedia) || null;
+    if (typeof window === 'undefined' || !window.Capacitor) return null;
+    if (!window._glassMediaPluginInstance) {
+      if (typeof window.Capacitor.registerPlugin === 'function') {
+        try {
+          window._glassMediaPluginInstance = window.Capacitor.registerPlugin('GlassMedia');
+        } catch (e) {
+          window._glassMediaPluginInstance = window.Capacitor.Plugins?.GlassMedia;
+        }
+      } else {
+        window._glassMediaPluginInstance = window.Capacitor.Plugins?.GlassMedia;
+      }
+    }
+    return window._glassMediaPluginInstance || null;
   }
 
   function setupMediaSession(track) {

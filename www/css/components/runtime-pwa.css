@@ -46,13 +46,6 @@
   }
 
   .titlebar {
-    height: 28px;
-    padding: 0 12px;
-    justify-content: center;
-  }
-
-  .web-runtime .titlebar,
-  .capacitor-runtime .titlebar {
     display: none !important;
   }
 
@@ -300,6 +293,9 @@
 
   .content-area {
     padding: 12px 10px 84px 10px;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior-y: contain;
   }
 
   .container.player-active .content-area {
@@ -313,6 +309,21 @@
   .tracks-layout-grid {
     grid-template-columns: 1fr;
     gap: 10px;
+  }
+
+  .track-card,
+  .track-card-horizontal {
+    will-change: auto !important;
+    transform: none !important;
+    transition: background-color 0.15s ease, border-color 0.15s ease !important;
+    contain: content !important;
+  }
+
+  /* Disable heavy canvas visualizers on mobile to ensure 60 FPS smooth scrolling */
+  #player-visualizer,
+  #visualizer-canvas,
+  #ambient-canvas {
+    display: none !important;
   }
 
   .track-card {

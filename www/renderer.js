@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.19.3';
+const APP_VERSION = '1.19.4';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -545,6 +545,7 @@ if (typeof window !== 'undefined' && window.Capacitor?.Plugins?.App) {
     const playerBar = document.querySelector('.player-bar');
     if (playerBar && playerBar.classList.contains('mobile-fullscreen')) {
       playerBar.classList.remove('mobile-fullscreen');
+      document.body.classList.remove('mobile-fullscreen-active');
       return;
     }
     const friendPanel = document.getElementById('friend-activity-panel');
@@ -603,6 +604,32 @@ searchInput.addEventListener('input', () => {
 // Apply Saved Theme on Startup
 const savedTheme = localStorage.getItem('gp_theme') || 'theme-dark-glass';
 applyTheme(savedTheme);
+
+// Apply Saved Mobile Player Style on Startup ('minimal' | 'classic')
+const savedMobileStyle = localStorage.getItem('gp_mobile_player_style') || 'minimal';
+document.body.classList.toggle('mobile-style-classic', savedMobileStyle === 'classic');
+document.body.classList.toggle('mobile-style-minimal', savedMobileStyle !== 'classic');
+
+// Battery & Background Optimization Listener
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    document.body.classList.add('app-backgrounded');
+    if (window.GP && window.GP.Visualizer && typeof window.GP.Visualizer.stopVisualizer === 'function') {
+      window.GP.Visualizer.stopVisualizer();
+    } else if (typeof window.stopVisualizer === 'function') {
+      window.stopVisualizer();
+    }
+  } else {
+    document.body.classList.remove('app-backgrounded');
+    if (typeof audioPlayer !== 'undefined' && !audioPlayer.paused) {
+      if (window.GP && window.GP.Visualizer && typeof window.GP.Visualizer.startVisualizer === 'function') {
+        window.GP.Visualizer.startVisualizer();
+      } else if (typeof window.startVisualizer === 'function') {
+        window.startVisualizer();
+      }
+    }
+  }
+});
 
 // Apply Saved Background Media (Image / GIF / Video) & Opacity on Startup
 const savedBgImage = localStorage.getItem('gp_bg_image');
@@ -951,6 +978,8 @@ const playerBarEl = document.querySelector('.player-bar');
 
 if (playerBarEl) {
   const onDragStart = (clientY) => {
+    // Never dismiss player via drag when fullscreen sheet is active
+    if (playerBarEl.classList.contains('mobile-fullscreen')) return;
     isDraggingPlayerBar = true;
     startPlayerBarY = clientY;
     playerBarEl.style.transition = 'none';
@@ -968,12 +997,15 @@ if (playerBarEl) {
   const onDragEnd = () => {
     if (!isDraggingPlayerBar) return;
     isDraggingPlayerBar = false;
-    playerBarEl.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
+    playerBarEl.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease';
     
     if (currentPlayerBarTranslateY > 65) {
       playerBarEl.classList.add('dismissed');
       playerBarEl.classList.remove('active');
-      playerBarEl.style.transform = 'translate3d(0, 140%, 0)';
+      playerBarEl.style.transform = 'translate3d(0, calc(100% + 220px), 0)';
+      playerBarEl.style.opacity = '0';
+      playerBarEl.style.visibility = 'hidden';
+      playerBarEl.style.pointerEvents = 'none';
       if (!audioPlayer.paused) audioPlayer.pause();
       setPlayState(false);
       currentTrackIndex = -1;

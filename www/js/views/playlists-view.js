@@ -573,8 +573,15 @@
       window.appendShareItemToTrackMenu(track);
     }
 
-    playlistMenu.style.top = `${rect.bottom + (window.scrollY || 0) + 6}px`;
-    playlistMenu.style.left = `${Math.min(rect.left + (window.scrollX || 0), (window.innerWidth || 1000) - 200)}px`;
+    if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+      const menuWidth = 220;
+      const left = Math.max(12, Math.min(rect.left + (window.scrollX || 0), window.innerWidth - menuWidth - 16));
+      playlistMenu.style.left = `${left}px`;
+      playlistMenu.style.top = `${rect.bottom + (window.scrollY || 0) + 6}px`;
+    } else {
+      playlistMenu.style.top = `${rect.bottom + (window.scrollY || 0) + 6}px`;
+      playlistMenu.style.left = `${Math.min(rect.left + (window.scrollX || 0), (window.innerWidth || 1000) - 200)}px`;
+    }
     playlistMenu.classList.remove('hidden');
   }
 
@@ -873,7 +880,22 @@
       });
     }
 
-    // Close floating playlist menu on outside clicks
+    // Close floating playlist menu on outside clicks and scrolls
+    const closePlaylistMenuOnScroll = () => {
+      const playlistMenu = document.getElementById('playlist-menu');
+      if (playlistMenu && !playlistMenu.classList.contains('hidden')) {
+        playlistMenu.classList.add('hidden');
+      }
+    };
+
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('scroll', closePlaylistMenuOnScroll, { passive: true });
+    }
+    const contentArea = document.querySelector('.content-area');
+    if (contentArea && typeof contentArea.addEventListener === 'function') {
+      contentArea.addEventListener('scroll', closePlaylistMenuOnScroll, { passive: true });
+    }
+
     document.addEventListener('click', (e) => {
       const playlistMenu = document.getElementById('playlist-menu');
       if (playlistMenu && !playlistMenu.classList.contains('hidden')) {

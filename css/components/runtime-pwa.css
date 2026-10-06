@@ -1,4 +1,4 @@
-/* --- Release 1.10.0 / 1.19.3: Mobile & PWA runtime shell --- */
+/* --- Release 1.10.0 / 1.19.4: Mobile & PWA runtime shell --- */
 .mobile-tab-bar,
 .mobile-mini-progress,
 .mobile-sheet-header,
@@ -25,6 +25,21 @@
 }
 
 @media (max-width: 768px) {
+  * {
+    -webkit-tap-highlight-color: transparent !important;
+  }
+
+  body {
+    -webkit-touch-callout: none !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+  }
+
+  input, textarea, [contenteditable="true"] {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+  }
+
   html,
   body:not(.mini-player-active) {
     width: 100%;
@@ -316,7 +331,20 @@
     will-change: auto !important;
     transform: none !important;
     transition: background-color 0.15s ease, border-color 0.15s ease !important;
-    contain: content !important;
+    contain: none !important;
+    content-visibility: visible !important;
+    background: rgba(18, 22, 34, 0.85) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    backdrop-filter: blur(24px) !important;
+    -webkit-backdrop-filter: blur(24px) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  .track-card.active,
+  .track-card-horizontal.active {
+    background: rgba(36, 44, 68, 0.92) !important;
+    border-color: var(--accent-color, rgba(168, 85, 247, 0.45)) !important;
+    box-shadow: 0 0 16px rgba(168, 85, 247, 0.25) !important;
   }
 
   /* Disable heavy canvas visualizers on mobile to ensure 60 FPS smooth scrolling */
@@ -469,13 +497,26 @@
     border: 1px solid var(--player-border, rgba(255, 255, 255, 0.1)) !important;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45), var(--glass-glow, none) !important;
     z-index: 1250 !important;
-    transform: translateY(calc(100% + 90px));
-    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    transform: translateY(calc(100% + 220px)) !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease !important;
   }
 
-  .container.player-active .player-bar,
-  .container.player-active .player-bar.bass-pulse {
-    transform: translateY(0);
+  .container.player-active .player-bar:not(.dismissed),
+  .container.player-active .player-bar.bass-pulse:not(.dismissed) {
+    transform: translateY(0) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+  }
+
+  .player-bar.dismissed {
+    transform: translateY(calc(100% + 220px)) !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
   }
 
   /* Mini progress bar on top edge of player */
@@ -485,20 +526,33 @@
     top: 0;
     left: 0;
     right: 0;
-    height: 2.5px;
-    background: rgba(255, 255, 255, 0.08);
-    overflow: hidden;
+    height: 5px;
+    background: rgba(255, 255, 255, 0.12);
+    overflow: visible;
     border-top-left-radius: inherit;
     border-top-right-radius: inherit;
-    pointer-events: none;
-    z-index: 5;
+    pointer-events: auto !important;
+    touch-action: none;
+    cursor: pointer;
+    z-index: 10;
+  }
+
+  .mobile-mini-progress::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    bottom: -10px;
+    left: 0;
+    right: 0;
+    z-index: 11;
   }
 
   .mobile-mini-progress-fill {
     height: 100%;
     width: 0%;
     background: var(--accent-color, #a855f7);
-    transition: width 0.25s linear;
+    border-radius: inherit;
+    transition: width 0.15s linear;
   }
 
   .mobile-sheet-header {
@@ -708,27 +762,51 @@
     margin: 6px auto 0 !important;
   }
 
+  /* Hide Bottom Navigation Tab Bar when Fullscreen Player Sheet is active */
+  body.mobile-fullscreen-active .mobile-tab-bar {
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
   .player-bar.mobile-fullscreen .player-controls-container {
     display: flex !important;
     flex-direction: column !important;
-    gap: 14px !important;
+    gap: 16px !important;
     width: 100% !important;
     flex-shrink: 0 !important;
+    margin-bottom: calc(env(safe-area-inset-bottom, 16px) + 14px) !important;
   }
 
   .player-bar.mobile-fullscreen .progress-bar-container {
     display: flex !important;
+    order: 1 !important;
     width: 100% !important;
     align-items: center !important;
-    gap: 10px !important;
+    gap: 12px !important;
+    padding: 0 4px !important;
+  }
+
+  .player-bar.mobile-fullscreen #progress-slider {
+    height: 6px !important;
+    cursor: pointer !important;
+  }
+
+  .player-bar.mobile-fullscreen #current-time,
+  .player-bar.mobile-fullscreen #total-time {
+    font-size: 12px !important;
+    color: var(--text-dim) !important;
+    min-width: 34px !important;
   }
 
   .player-bar.mobile-fullscreen .player-buttons {
     display: flex !important;
+    order: 2 !important;
     justify-content: space-between !important;
     align-items: center !important;
     width: 100% !important;
-    padding: 0 6px !important;
+    padding: 0 8px !important;
   }
 
   .player-bar.mobile-fullscreen #shuffle-button,
@@ -756,11 +834,97 @@
 
   .player-bar.mobile-fullscreen .player-volume-container {
     display: flex !important;
+    order: 3 !important;
     justify-content: space-between !important;
     align-items: center !important;
     width: 100% !important;
-    margin-top: 6px !important;
-    padding: 0 4px !important;
+    margin-top: 4px !important;
+    padding: 0 6px !important;
+  }
+
+  /* --- Classic Mobile Player Widget Style (body.mobile-style-classic) --- */
+  body.mobile-style-classic .player-bar:not(.mobile-fullscreen) {
+    height: 126px !important;
+    min-height: 126px !important;
+    max-height: 126px !important;
+    padding: 10px 14px 12px 14px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    border-radius: 20px !important;
+  }
+
+  body.mobile-style-classic .container.player-active .content-area {
+    padding-bottom: 215px !important;
+  }
+
+  body.mobile-style-classic .player-bar:not(.mobile-fullscreen) .mobile-mini-progress {
+    display: none !important;
+  }
+
+  body.mobile-style-classic .player-bar:not(.mobile-fullscreen) .player-track-info {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 10px !important;
+    cursor: default !important;
+  }
+
+  body.mobile-style-classic .player-bar:not(.mobile-fullscreen) .player-controls-container {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+  }
+
+  body.mobile-style-classic .player-bar:not(.mobile-fullscreen) .progress-bar-container {
+    display: flex !important;
+    width: 100% !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+
+  body.mobile-style-classic .player-bar:not(.mobile-fullscreen) .player-buttons {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding: 0 2px !important;
+  }
+
+  body.mobile-style-classic .player-bar:not(.mobile-fullscreen) #shuffle-button,
+  body.mobile-style-classic .player-bar:not(.mobile-fullscreen) #prev-button,
+  body.mobile-style-classic .player-bar:not(.mobile-fullscreen) #repeat-button {
+    display: flex !important;
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+  }
+
+  body.mobile-style-classic .player-bar:not(.mobile-fullscreen) .play-main {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+  }
+
+  body.mobile-style-classic .player-bar:not(.mobile-fullscreen) #next-button {
+    display: flex !important;
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+  }
+
+  /* Playlist Popup Menu Mobile Styling */
+  .playlist-menu {
+    position: fixed !important;
+    max-width: calc(100vw - 28px) !important;
+    z-index: 2500 !important;
+    border-radius: 16px !important;
+    background: var(--player-bg, rgba(16, 20, 30, 0.96)) !important;
+    backdrop-filter: blur(28px) !important;
+    -webkit-backdrop-filter: blur(28px) !important;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65) !important;
   }
 
   input[type="range"] {
@@ -801,4 +965,9 @@
     max-width: calc(100vw - 24px);
     border-radius: 20px;
   }
+}
+
+/* Backgrounded battery optimization across all viewports */
+body.app-backgrounded * {
+  animation-play-state: paused !important;
 }

@@ -32,7 +32,7 @@
   }
 
   function getAppVersion() {
-    return (typeof window !== 'undefined' && window.APP_VERSION) || '1.19.3';
+    return (typeof window !== 'undefined' && window.APP_VERSION) || '1.19.4';
   }
 
   function getApiUrl() {
@@ -400,6 +400,7 @@
 
     const currentTheme = (typeof localStorage !== 'undefined' && localStorage.getItem('gp_theme')) || 'theme-dark-glass';
     const currentProfile = (typeof window !== 'undefined' && window.currentProfile) || (typeof localStorage !== 'undefined' && localStorage.getItem('gp_active_profile')) || 'Default';
+    const currentMobileStyle = (typeof localStorage !== 'undefined' && localStorage.getItem('gp_mobile_player_style')) || 'minimal';
     const APP_VERSION = getAppVersion();
     const API_URL = getApiUrl();
     const isElectron = getIsElectron();
@@ -721,6 +722,23 @@
         </div>
       </div>
 
+      <div class="settings-section" data-section="mobile-player-style">
+        <h3>Стиль мобильного плеера</h3>
+        <div style="font-size: 12px; color: rgba(255, 255, 255, 0.5); margin-bottom: 12px; line-height: 1.4;">
+          Выберите удобный формат плеера для смартфона и компактных экранов.
+        </div>
+        <div class="mobile-player-style-options" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+          <button type="button" class="view-btn mobile-style-btn ${currentMobileStyle === 'minimal' ? 'active' : ''}" data-style="minimal" style="padding: 12px; display: flex; flex-direction: column; align-items: flex-start; text-align: left; height: auto; gap: 4px; border-radius: 12px; cursor: pointer;">
+            <div style="font-weight: 600; font-size: 13px;">Компактный (Стриминг)</div>
+            <div style="font-size: 11px; opacity: 0.7;">Мини-панель 56px со скраббером + раскрытие на весь экран с жестами</div>
+          </button>
+          <button type="button" class="view-btn mobile-style-btn ${currentMobileStyle === 'classic' ? 'active' : ''}" data-style="classic" style="padding: 12px; display: flex; flex-direction: column; align-items: flex-start; text-align: left; height: auto; gap: 4px; border-radius: 12px; cursor: pointer;">
+            <div style="font-weight: 600; font-size: 13px;">Классический (Виджет)</div>
+            <div style="font-size: 11px; opacity: 0.7;">Панель-виджет со всеми кнопками, таймингом и перемоткой без разворота</div>
+          </button>
+        </div>
+      </div>
+
       <div class="settings-section" data-section="audio-effects">
         <h3>Аудиоэффекты</h3>
         
@@ -860,10 +878,10 @@
     tracksContainer.appendChild(panel);
 
     const visibleSectionsByScope = {
-      settings: ['interface-effects', 'user-info'],
+      settings: ['interface-effects', 'mobile-player-style', 'user-info'],
       studio: studioTab === 'audio'
         ? ['audio-effects']
-        : ['theme-presets', 'theme-constructor', 'background-image'],
+        : ['theme-presets', 'theme-constructor', 'background-image', 'mobile-player-style'],
       stats: ['listening-stats']
     };
     const visibleSections = visibleSectionsByScope[scope] || visibleSectionsByScope.settings;
@@ -1402,6 +1420,26 @@
         }
       });
     }
+
+    // Mobile Player Style Selector
+    const mobileStyleBtns = panel.querySelectorAll('.mobile-style-btn');
+    mobileStyleBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const style = btn.dataset.style;
+        localStorage.setItem('gp_mobile_player_style', style);
+        mobileStyleBtns.forEach((b) => b.classList.toggle('active', b.dataset.style === style));
+        if (typeof document !== 'undefined') {
+          document.body.classList.toggle('mobile-style-classic', style === 'classic');
+          document.body.classList.toggle('mobile-style-minimal', style !== 'classic');
+          // If classic selected while in fullscreen, dismiss fullscreen gracefully
+          const playerBar = document.querySelector('.player-bar');
+          if (style === 'classic' && playerBar && playerBar.classList.contains('mobile-fullscreen')) {
+            playerBar.classList.remove('mobile-fullscreen');
+            document.body.classList.remove('mobile-fullscreen-active');
+          }
+        }
+      });
+    });
 
     // Audio Effects bindings
     const bassboostCheckbox = panel.querySelector('#effect-bassboost-checkbox');

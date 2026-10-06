@@ -330,6 +330,9 @@
       if (playerBarEl) {
         playerBarEl.classList.remove('dismissed');
         playerBarEl.classList.add('active');
+        playerBarEl.style.opacity = '';
+        playerBarEl.style.visibility = '';
+        playerBarEl.style.pointerEvents = '';
         playerBarEl.style.transform = 'translate3d(0, 0, 0)';
       }
     } else {
@@ -1019,14 +1022,74 @@
     const playerTrackInfo = document.getElementById('player-track-info') || document.querySelector('.player-track-info');
     const mobileCollapseBtn = document.getElementById('mobile-collapse-player-btn');
     const mobileSheetLyricsBtn = document.getElementById('mobile-sheet-lyrics-btn');
+    const mobileMiniProgress = document.getElementById('mobile-mini-progress') || document.querySelector('.mobile-mini-progress');
+
+    function openMobileFullscreen() {
+      if (!playerBar) return;
+      playerBar.classList.add('mobile-fullscreen');
+      if (typeof document !== 'undefined') {
+        document.body.classList.add('mobile-fullscreen-active');
+      }
+    }
+
+    function closeMobileFullscreen() {
+      if (!playerBar) return;
+      playerBar.classList.remove('mobile-fullscreen');
+      playerBar.style.transform = 'translate3d(0, 0, 0)';
+      if (typeof document !== 'undefined') {
+        document.body.classList.remove('mobile-fullscreen-active');
+      }
+    }
+
+    // Interactive Seeking on Mobile Mini-Player
+    if (mobileMiniProgress) {
+      const handleMiniSeek = (clientX) => {
+        const rect = mobileMiniProgress.getBoundingClientRect();
+        if (!rect.width) return;
+        const pct = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
+        const fill = document.getElementById('mobile-mini-progress-fill') || mobileMiniProgress.querySelector('.mobile-mini-progress-fill');
+        if (fill) fill.style.width = `${pct}%`;
+        seekToPercent(pct);
+      };
+
+      let isMiniScrubbing = false;
+
+      mobileMiniProgress.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
+        isMiniScrubbing = true;
+        if (e.touches && e.touches[0]) {
+          handleMiniSeek(e.touches[0].clientX);
+        }
+      }, { passive: false });
+
+      if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+        window.addEventListener('touchmove', (e) => {
+          if (!isMiniScrubbing) return;
+          if (e.touches && e.touches[0]) {
+            handleMiniSeek(e.touches[0].clientX);
+          }
+        }, { passive: true });
+
+        window.addEventListener('touchend', (e) => {
+          if (!isMiniScrubbing) return;
+          isMiniScrubbing = false;
+        }, { passive: true });
+      }
+
+      mobileMiniProgress.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleMiniSeek(e.clientX);
+      });
+    }
 
     if (playerBar) {
       if (playerTrackInfo) {
         playerTrackInfo.addEventListener('click', (e) => {
-          // If on mobile view, expand player into fullscreen sheet (unless clicking like button)
+          // If on mobile view, expand player into fullscreen sheet (unless clicking like, link, or mini-progress)
           if (typeof window !== 'undefined' && window.innerWidth <= 768) {
-            if (e.target.closest('#player-like-btn') || e.target.closest('.artist-link')) return;
-            playerBar.classList.add('mobile-fullscreen');
+            if (document.body.classList.contains('mobile-style-classic')) return;
+            if (e.target.closest('#player-like-btn') || e.target.closest('.artist-link') || e.target.closest('#mobile-mini-progress')) return;
+            openMobileFullscreen();
           }
         });
       }
@@ -1034,7 +1097,7 @@
       if (mobileCollapseBtn) {
         mobileCollapseBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          playerBar.classList.remove('mobile-fullscreen');
+          closeMobileFullscreen();
         });
       }
 
@@ -1046,21 +1109,45 @@
         });
       }
 
-      // Swipe-down gesture to collapse fullscreen player sheet on mobile
+      // Mobile Touch Gestures in Fullscreen Player Sheet:
+      // - Swipe Down: collapse back to mini-player without pausing
+      // - Swipe Left: next track
+      // - Swipe Right: previous track
+      let touchStartX = 0;
       let touchStartY = 0;
+      let touchStartTime = 0;
+
       playerBar.addEventListener('touchstart', (e) => {
         if (e.touches && e.touches[0]) {
+          touchStartX = e.touches[0].clientX;
           touchStartY = e.touches[0].clientY;
+          touchStartTime = Date.now();
         }
       }, { passive: true });
 
       playerBar.addEventListener('touchend', (e) => {
         if (!playerBar.classList.contains('mobile-fullscreen')) return;
         if (e.changedTouches && e.changedTouches[0]) {
+          const deltaX = e.changedTouches[0].clientX - touchStartX;
           const deltaY = e.changedTouches[0].clientY - touchStartY;
-          // If swiped down at least 65px
-          if (deltaY > 65) {
-            playerBar.classList.remove('mobile-fullscreen');
+          const elapsed = Date.now() - touchStartTime;
+
+          // Ignore swipe if touch began or ended on interactive elements
+          if (e.target.closest('input[type="range"], button, a')) return;
+
+          // Vertical swipe down to collapse
+          if (deltaY > 60 && Math.abs(deltaY) > Math.abs(deltaX) * 1.2) {
+            closeMobileFullscreen();
+            return;
+          }
+
+          // Horizontal swipe gestures (left: next, right: prev)
+          if (elapsed < 650 && Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.25) {
+            if (deltaX < 0) {
+              playNext();
+            } else {
+              playPrev();
+            }
           }
         }
       }, { passive: true });

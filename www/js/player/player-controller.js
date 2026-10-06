@@ -117,23 +117,50 @@
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator) || !track) return;
 
     try {
+      const artworkSrc = track.thumbnail || track.cover || 'assets/icon.png';
       navigator.mediaSession.metadata = new MediaMetadata({
         title: track.title || 'Название трека',
         artist: track.artist || 'Исполнитель',
         album: 'GlassPlayer',
-        artwork: [{
-          src: track.thumbnail || track.cover || 'assets/icon.png',
-          sizes: '512x512',
-          type: 'image/png'
-        }]
+        artwork: [
+          { src: artworkSrc, sizes: '96x96', type: 'image/png' },
+          { src: artworkSrc, sizes: '128x128', type: 'image/png' },
+          { src: artworkSrc, sizes: '192x192', type: 'image/png' },
+          { src: artworkSrc, sizes: '256x256', type: 'image/png' },
+          { src: artworkSrc, sizes: '512x512', type: 'image/png' }
+        ]
       });
 
-      navigator.mediaSession.setActionHandler('play', () => { togglePlay(true); });
-      navigator.mediaSession.setActionHandler('pause', () => { togglePlay(false); });
-      navigator.mediaSession.setActionHandler('previoustrack', () => { playPrev(); });
-      navigator.mediaSession.setActionHandler('nexttrack', () => { playNext(); });
+      if ('setActionHandler' in navigator.mediaSession) {
+        navigator.mediaSession.setActionHandler('play', () => { togglePlay(true); });
+        navigator.mediaSession.setActionHandler('pause', () => { togglePlay(false); });
+        navigator.mediaSession.setActionHandler('previoustrack', () => { playPrev(); });
+        navigator.mediaSession.setActionHandler('nexttrack', () => { playNext(); });
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+          const player = getAudioPlayer();
+          if (player && details.seekTime !== undefined) {
+            player.currentTime = details.seekTime;
+            updateMediaSessionPositionState();
+          }
+        });
+      }
     } catch (err) {
       console.warn('[MediaSession] Setup failed:', err.message);
+    }
+  }
+
+  function updateMediaSessionPositionState() {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+    const player = getAudioPlayer();
+    if (!player || !player.duration || isNaN(player.duration)) return;
+    if ('setPositionState' in navigator.mediaSession) {
+      try {
+        navigator.mediaSession.setPositionState({
+          duration: Math.max(0, player.duration),
+          playbackRate: player.playbackRate || 1,
+          position: Math.min(Math.max(0, player.currentTime || 0), player.duration)
+        });
+      } catch (e) {}
     }
   }
 
@@ -870,12 +897,18 @@
           if (miniProgressBar) {
             miniProgressBar.style.width = `${(current / duration) * 100}%`;
           }
+          const mobileProgressFill = document.getElementById('mobile-mini-progress-fill');
+          if (mobileProgressFill) {
+            mobileProgressFill.style.width = `${(current / duration) * 100}%`;
+          }
           if (miniProgressSlider && (!miniProgressSlider.matches || !miniProgressSlider.matches(':active'))) {
             miniProgressSlider.value = (current / duration) * 100;
           }
         } else {
           if (progressSlider) progressSlider.value = 0;
           if (miniProgressBar) miniProgressBar.style.width = '0%';
+          const mobileProgressFill = document.getElementById('mobile-mini-progress-fill');
+          if (mobileProgressFill) mobileProgressFill.style.width = '0%';
           if (miniProgressSlider) miniProgressSlider.value = 0;
         }
 
@@ -916,6 +949,13 @@
       });
 
       player.addEventListener('play', () => {
+        const curTrack = playlist[currentTrackIndex];
+        updateMediaSessionPlaybackState(true);
+        updateMediaSessionPositionState();
+        if (curTrack) {
+          updateNativeMediaControls(curTrack, true);
+        }
+
         if (typeof window.sendDiscordPresence === 'function') window.sendDiscordPresence();
         if (typeof window.startPresenceInterval === 'function') window.startPresenceInterval();
 
@@ -934,6 +974,13 @@
 
       player.addEventListener('pause', () => {
         playCountSession.continuousSeconds = 0;
+        const curTrack = playlist[currentTrackIndex];
+        updateMediaSessionPlaybackState(false);
+        updateMediaSessionPositionState();
+        if (curTrack) {
+          updateNativeMediaControls(curTrack, false);
+        }
+
         if (typeof window.rpcInterval !== 'undefined' && window.rpcInterval) {
           clearInterval(window.rpcInterval);
           window.rpcInterval = null;
@@ -953,6 +1000,58 @@
           window.stopVisualizer();
         }
       });
+    }
+
+    // --- Mobile Mini-Player & Fullscreen Sheet Interactions ---
+    const playerBar = document.querySelector('.player-bar');
+    const playerTrackInfo = document.getElementById('player-track-info') || document.querySelector('.player-track-info');
+    const mobileCollapseBtn = document.getElementById('mobile-collapse-player-btn');
+    const mobileSheetLyricsBtn = document.getElementById('mobile-sheet-lyrics-btn');
+
+    if (playerBar) {
+      if (playerTrackInfo) {
+        playerTrackInfo.addEventListener('click', (e) => {
+          // If on mobile view, expand player into fullscreen sheet (unless clicking like button)
+          if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+            if (e.target.closest('#player-like-btn') || e.target.closest('.artist-link')) return;
+            playerBar.classList.add('mobile-fullscreen');
+          }
+        });
+      }
+
+      if (mobileCollapseBtn) {
+        mobileCollapseBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          playerBar.classList.remove('mobile-fullscreen');
+        });
+      }
+
+      if (mobileSheetLyricsBtn) {
+        mobileSheetLyricsBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const lyricsBtn = document.getElementById('lyrics-btn');
+          if (lyricsBtn) lyricsBtn.click();
+        });
+      }
+
+      // Swipe-down gesture to collapse fullscreen player sheet on mobile
+      let touchStartY = 0;
+      playerBar.addEventListener('touchstart', (e) => {
+        if (e.touches && e.touches[0]) {
+          touchStartY = e.touches[0].clientY;
+        }
+      }, { passive: true });
+
+      playerBar.addEventListener('touchend', (e) => {
+        if (!playerBar.classList.contains('mobile-fullscreen')) return;
+        if (e.changedTouches && e.changedTouches[0]) {
+          const deltaY = e.changedTouches[0].clientY - touchStartY;
+          // If swiped down at least 65px
+          if (deltaY > 65) {
+            playerBar.classList.remove('mobile-fullscreen');
+          }
+        }
+      }, { passive: true });
     }
   }
 
@@ -985,6 +1084,7 @@
     getFallbackCoverUrl,
     setupMediaSession,
     updateMediaSessionPlaybackState,
+    updateMediaSessionPositionState,
     updateNativeMediaControls,
     incrementPlayCount,
     resetPlayCountSession,
@@ -1020,6 +1120,7 @@
   window.getFallbackCoverUrl = getFallbackCoverUrl;
   window.setupMediaSession = setupMediaSession;
   window.updateMediaSessionPlaybackState = updateMediaSessionPlaybackState;
+  window.updateMediaSessionPositionState = updateMediaSessionPositionState;
   window.updateNativeMediaControls = updateNativeMediaControls;
   window.incrementPlayCount = incrementPlayCount;
   window.resetPlayCountSession = resetPlayCountSession;

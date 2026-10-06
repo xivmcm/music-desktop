@@ -442,6 +442,7 @@
     // Collapsible Friend Activity sidebar trigger
     const toggleActivityBtn = document.getElementById('toggle-friend-activity-btn');
     const activityPanel = document.getElementById('friend-activity-panel');
+    const closeActivityBtn = document.getElementById('close-friend-activity-btn');
 
     if (toggleActivityBtn && activityPanel) {
       toggleActivityBtn.addEventListener('click', () => {
@@ -450,6 +451,32 @@
         toggleActivityBtn.style.color = activityPanel.classList.contains('hidden') ? 'var(--text-dim)' : 'var(--accent-color)';
       });
     }
+
+    if (closeActivityBtn && activityPanel) {
+      closeActivityBtn.addEventListener('click', () => {
+        activityPanel.classList.add('hidden');
+        if (toggleActivityBtn) {
+          toggleActivityBtn.classList.remove('active');
+          toggleActivityBtn.style.color = 'var(--text-dim)';
+        }
+      });
+    }
+
+    // Dismiss Friend Activity when clicking outside on mobile devices
+    document.addEventListener('click', (e) => {
+      if (typeof window !== 'undefined' && window.innerWidth <= 768 && activityPanel && !activityPanel.classList.contains('hidden')) {
+        const clickedInsidePanel = activityPanel.contains(e.target);
+        const clickedToggleBtn = toggleActivityBtn && toggleActivityBtn.contains(e.target);
+        const clickedFindFriendsModal = document.getElementById('find-friends-modal')?.contains(e.target);
+        if (!clickedInsidePanel && !clickedToggleBtn && !clickedFindFriendsModal) {
+          activityPanel.classList.add('hidden');
+          if (toggleActivityBtn) {
+            toggleActivityBtn.classList.remove('active');
+            toggleActivityBtn.style.color = 'var(--text-dim)';
+          }
+        }
+      }
+    });
 
     // Find Friends Modal search & toggles
     const findFriendsBtn = document.getElementById('find-friends-btn');

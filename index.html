@@ -50,7 +50,7 @@
   <!-- Sliding Left Sidebar -->
   <aside id="sidebar" class="sidebar">
     <div class="sidebar-header">
-      <div class="sidebar-logo">GLASSPLAYER <span class="app-version-badge">v1.19.2</span></div>
+      <div class="sidebar-logo">GLASSPLAYER <span class="app-version-badge">v1.19.3</span></div>
     </div>
     <nav class="sidebar-menu">
       <button id="home-button" class="sidebar-btn active" title="Home">
@@ -158,9 +158,14 @@
       <aside id="friend-activity-panel" class="friend-activity-panel hidden">
         <div class="friend-activity-header">
           <h3>Friend Activity</h3>
-          <button id="find-friends-btn" class="find-friends-btn" title="Найти друзей">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="16" y1="11" x2="22" y2="11"></line></svg>
-          </button>
+          <div class="friend-activity-header-actions">
+            <button id="find-friends-btn" class="find-friends-btn" title="Найти друзей">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="16" y1="11" x2="22" y2="11"></line></svg>
+            </button>
+            <button id="close-friend-activity-btn" class="close-friend-activity-btn" title="Закрыть" aria-label="Закрыть">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
         </div>
         <div id="friend-activity-list" class="friend-activity-list">
           <div class="friend-activity-empty">Войдите в аккаунт, чтобы видеть активность друзей</div>
@@ -174,8 +179,22 @@
     <!-- Bottom Player Control Bar -->
     <footer class="player-bar">
       <canvas id="player-visualizer"></canvas>
+      <!-- Mobile Mini Progress Line -->
+      <div id="mobile-mini-progress" class="mobile-mini-progress">
+        <div id="mobile-mini-progress-fill" class="mobile-mini-progress-fill"></div>
+      </div>
+      <!-- Mobile Fullscreen Sheet Header -->
+      <div class="mobile-sheet-header">
+        <button id="mobile-collapse-player-btn" class="mobile-collapse-player-btn" title="Свернуть плеер" aria-label="Свернуть плеер">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <span class="mobile-sheet-title">Сейчас играет</span>
+        <button id="mobile-sheet-lyrics-btn" class="mobile-sheet-action-btn" title="Текст песни" aria-label="Текст песни">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+        </button>
+      </div>
       <!-- Track Meta Info -->
-      <div class="player-track-info">
+      <div class="player-track-info" id="player-track-info">
         <div class="track-cover-container">
           <img id="current-cover" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23222'/><path d='M30 30 L70 50 L30 70 Z' fill='%23444'/></svg>" alt="Cover">
         </div>

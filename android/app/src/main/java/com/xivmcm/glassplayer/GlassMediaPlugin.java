@@ -159,7 +159,7 @@ public class GlassMediaPlugin extends Plugin {
             .setContentTitle(title)
             .setContentText(artist)
             .setSubText("GlassPlayer")
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setLargeIcon(largeIcon)
             .setOngoing(isPlaying)
             .setVisibility(Notification.VISIBILITY_PUBLIC)

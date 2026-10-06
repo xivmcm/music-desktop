@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.19.2';
+const APP_VERSION = '1.19.3';
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -524,13 +524,39 @@ if (statsButton) {
 document.querySelectorAll('.mobile-tab-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
     const view = btn.dataset.mobileView;
+    updateActiveTab(view);
     if (view === 'home') loadHomeView();
     if (view === 'library') loadFavorites(currentLibrarySubTab);
     if (view === 'playlists') loadPlaylistsView();
     if (view === 'studio') loadStudioView('visual');
     if (view === 'stats') loadStatsView();
+    if (view === 'settings') loadSettingsView();
   });
 });
+
+// Hardware back button support for Android (Capacitor)
+if (typeof window !== 'undefined' && window.Capacitor?.Plugins?.App) {
+  window.Capacitor.Plugins.App.addListener('backButton', () => {
+    const playerBar = document.querySelector('.player-bar');
+    if (playerBar && playerBar.classList.contains('mobile-fullscreen')) {
+      playerBar.classList.remove('mobile-fullscreen');
+      return;
+    }
+    const friendPanel = document.getElementById('friend-activity-panel');
+    if (friendPanel && !friendPanel.classList.contains('hidden')) {
+      friendPanel.classList.add('hidden');
+      return;
+    }
+    const lyricsOverlay = document.getElementById('lyrics-overlay');
+    if (lyricsOverlay && !lyricsOverlay.classList.contains('hidden')) {
+      lyricsOverlay.classList.add('hidden');
+      return;
+    }
+    if (window.GP?.NavigationHistory?.canGoBack?.()) {
+      window.GP.NavigationHistory.goBack();
+    }
+  });
+}
 
 // Search input focus/input listeners for autocomplete dropdown
 searchInput.addEventListener('focus', showSearchHistory);

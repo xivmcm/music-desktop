@@ -137,7 +137,7 @@ public class GlassMediaService extends Service {
             .setContentTitle(title)
             .setContentText(artist)
             .setSubText("GlassPlayer")
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setLargeIcon(largeIcon)
             .setContentIntent(contentIntent)
             .setOngoing(isPlaying)

@@ -149,10 +149,8 @@
         navigator.mediaSession.setActionHandler('previoustrack', () => { playPrev(); });
         navigator.mediaSession.setActionHandler('nexttrack', () => { playNext(); });
         navigator.mediaSession.setActionHandler('seekto', (details) => {
-          const player = getAudioPlayer();
-          if (player && details.seekTime !== undefined) {
-            player.currentTime = details.seekTime;
-            updateMediaSessionPositionState();
+          if (details && details.seekTime !== undefined) {
+            seekToSeconds(details.seekTime);
           }
         });
       }
@@ -181,11 +179,20 @@
     if (!glassMedia || nativeMediaControlsListenerAttached) return;
 
     nativeMediaControlsListenerAttached = true;
-    glassMedia.addListener('mediaAction', ({ action }) => {
+    glassMedia.addListener('mediaAction', (data) => {
+      if (!data) return;
+      const { action, position, positionMs } = data;
       if (action === 'play') togglePlay(true);
       if (action === 'pause') togglePlay(false);
       if (action === 'previous') playPrev();
       if (action === 'next') playNext();
+      if (action === 'seek') {
+        if (typeof position === 'number') {
+          seekToSeconds(position);
+        } else if (typeof positionMs === 'number') {
+          seekToSeconds(positionMs / 1000.0);
+        }
+      }
     });
   }
 
@@ -199,11 +206,19 @@
       return;
     }
 
+    const player = getAudioPlayer();
+    const durationSec = currentTrackDuration || (player && player.duration && !isNaN(player.duration) ? player.duration : 0) || 0;
+    const currentSec = (currentSeekOffset + (player ? player.currentTime : 0)) || 0;
+    const durationMs = Math.round(durationSec * 1000);
+    const positionMs = Math.round(currentSec * 1000);
+
     glassMedia.update({
       title: track.title || 'GlassPlayer',
       artist: track.artist || 'Ready to play',
       artwork: track.thumbnail || track.cover || 'assets/icon.png',
-      isPlaying: Boolean(isPlaying)
+      isPlaying: Boolean(isPlaying),
+      duration: durationMs,
+      position: positionMs
     }).catch((err) => {
       console.warn('[GlassMedia] Native notification update failed:', err.message);
     });
@@ -741,25 +756,48 @@
     const track = playlist[currentTrackIndex];
     if (duration > 0 && track) {
       const seekTime = (parseFloat(percent) / 100) * duration;
-      currentSeekOffset = seekTime;
+      const wasPaused = player.paused;
 
-      player.crossOrigin = 'anonymous';
-      player.src = getAudioStreamUrl(track, seekTime);
-      const playPromise = player.play();
-      currentPlayPromise = playPromise;
-      if (playPromise && typeof playPromise.then === 'function') {
-        playPromise
-          .then(() => {
-            if (currentPlayPromise === playPromise) {
-              setPlayState(true);
-            }
-          })
-          .catch(err => {
-            if (err.name !== 'AbortError') {
-              console.error('Playback failed after seek:', err);
-            }
-          });
+      currentSeekOffset = seekTime;
+      if (track.source === 'local' || track.blobUrl) {
+        player.currentTime = Math.min(Math.max(0, seekTime), duration);
+      } else {
+        player.crossOrigin = 'anonymous';
+        player.src = getAudioStreamUrl(track, seekTime);
       }
+
+      if (!wasPaused) {
+        const playPromise = player.play();
+        currentPlayPromise = playPromise;
+        if (playPromise && typeof playPromise.then === 'function') {
+          playPromise
+            .then(() => {
+              if (currentPlayPromise === playPromise) {
+                setPlayState(true);
+                updateNativeMediaControls(track, true);
+              }
+            })
+            .catch(err => {
+              if (err.name !== 'AbortError') {
+                console.error('Playback failed after seek:', err);
+              }
+            });
+        }
+      } else {
+        updateNativeMediaControls(track, false);
+      }
+    }
+  }
+
+  function seekToSeconds(seconds) {
+    const player = getAudioPlayer();
+    if (!player) return;
+    const duration = currentTrackDuration || player.duration || 0;
+    if (duration > 0) {
+      const clamped = Math.min(Math.max(0, seconds), duration);
+      seekToPercent((clamped / duration) * 100);
+    } else if (player.duration && !isNaN(player.duration)) {
+      player.currentTime = Math.min(Math.max(0, seconds), player.duration);
     }
   }
 
@@ -884,6 +922,10 @@
       player.addEventListener('loadedmetadata', () => {
         clearTimeout(trackLoadTimeout);
         if (progressSlider) progressSlider.max = 100;
+        const curTrack = playlist[currentTrackIndex];
+        if (curTrack) {
+          updateNativeMediaControls(curTrack, !player.paused);
+        }
         const applyEffects = (window.GP && window.GP.Audio && window.GP.Audio.applyAudioEffectsState) || window.applyAudioEffectsState;
         if (typeof applyEffects === 'function') applyEffects();
       });
@@ -1173,6 +1215,8 @@
     playPrev,
     playPrevTrack: playPrev,
     seekToPercent,
+    seekToSeconds,
+    seek: seekToSeconds,
     toggleShuffle,
     toggleRepeat,
     setPlayState,
@@ -1209,6 +1253,8 @@
   window.playPrev = playPrev;
   window.playPrevTrack = playPrev;
   window.seekToPercent = seekToPercent;
+  window.seekToSeconds = seekToSeconds;
+  window.seek = seekToSeconds;
   window.toggleShuffle = toggleShuffle;
   window.toggleRepeat = toggleRepeat;
   window.setPlayState = setPlayState;

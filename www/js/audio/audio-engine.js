@@ -30,7 +30,24 @@
     global.dataArray = dataArray;
   }
 
+  function isMobilePlatform() {
+    if (typeof window === 'undefined') return false;
+    if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) {
+      return true;
+    }
+    if (window.innerWidth && window.innerWidth <= 768 && typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')) {
+      return true;
+    }
+    return false;
+  }
+
   function initAudioContext(customPlayer) {
+    if (isMobilePlatform()) {
+      // Mobile native / Android: use direct hardware audio rendering.
+      // WebAudio createMediaElementSource in Android WebView throttles/crackles during screen-off and causes background buffer underrun.
+      return null;
+    }
+
     if (audioCtx && isSourceConnected) return audioCtx;
 
     const player = customPlayer || getAudioPlayer();
@@ -104,6 +121,7 @@
   const initAudioEffects = initAudioContext;
 
   function resumeAudioContext() {
+    if (isMobilePlatform()) return;
     if (audioCtx && audioCtx.state === 'suspended') {
       audioCtx.resume().catch((err) => {
         console.warn('[Audio Engine] Failed to resume AudioContext:', err.message);

@@ -9,10 +9,13 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.media.MediaMetadata;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.PowerManager;
+import android.os.SystemClock;
 
 public class GlassMediaService extends Service {
     public static final String ACTION_UPDATE = "com.xivmcm.glassplayer.SERVICE_UPDATE";
@@ -20,11 +23,14 @@ public class GlassMediaService extends Service {
     public static final String EXTRA_TITLE = "extra_title";
     public static final String EXTRA_ARTIST = "extra_artist";
     public static final String EXTRA_IS_PLAYING = "extra_is_playing";
+    public static final String EXTRA_DURATION = "extra_duration";
+    public static final String EXTRA_POSITION = "extra_position";
 
     private static final String CHANNEL_ID = "glassplayer_media_service";
     private static final int NOTIFICATION_ID = 9010;
 
     private MediaSession mediaSession;
+    private PowerManager.WakeLock wakeLock;
 
     @Override
     public void onCreate() {
@@ -33,12 +39,46 @@ public class GlassMediaService extends Service {
         initMediaSession();
     }
 
+    private synchronized void acquireWakeLock() {
+        try {
+            if (wakeLock == null) {
+                PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+                if (pm != null) {
+                    wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "GlassPlayer:PlaybackWakeLock");
+                    wakeLock.setReferenceCounted(false);
+                }
+            }
+            if (wakeLock != null && !wakeLock.isHeld()) {
+                wakeLock.acquire();
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private synchronized void acquireTemporaryWakeLock(long timeoutMs) {
+        try {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (pm != null) {
+                PowerManager.WakeLock tempLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "GlassPlayer:TempWakeLock");
+                tempLock.acquire(timeoutMs);
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private synchronized void releaseWakeLock() {
+        try {
+            if (wakeLock != null && wakeLock.isHeld()) {
+                wakeLock.release();
+            }
+        } catch (Exception ignored) {}
+    }
+
     private void initMediaSession() {
         if (mediaSession != null) return;
         mediaSession = new MediaSession(this, "GlassPlayerSession");
         mediaSession.setCallback(new MediaSession.Callback() {
             @Override
             public void onPlay() {
+                acquireTemporaryWakeLock(15000);
                 GlassMediaPlugin.dispatchAction(GlassMediaPlugin.ACTION_PLAY);
             }
 
@@ -49,12 +89,20 @@ public class GlassMediaService extends Service {
 
             @Override
             public void onSkipToPrevious() {
+                acquireTemporaryWakeLock(20000);
                 GlassMediaPlugin.dispatchAction(GlassMediaPlugin.ACTION_PREVIOUS);
             }
 
             @Override
             public void onSkipToNext() {
+                acquireTemporaryWakeLock(20000);
                 GlassMediaPlugin.dispatchAction(GlassMediaPlugin.ACTION_NEXT);
+            }
+
+            @Override
+            public void onSeekTo(long pos) {
+                acquireTemporaryWakeLock(10000);
+                GlassMediaPlugin.dispatchSeek(pos);
             }
         });
         mediaSession.setActive(true);
@@ -81,6 +129,7 @@ public class GlassMediaService extends Service {
         if (intent != null) {
             String action = intent.getAction();
             if (ACTION_STOP.equals(action)) {
+                releaseWakeLock();
                 stopForeground(true);
                 stopSelf();
                 return START_NOT_STICKY;
@@ -88,35 +137,55 @@ public class GlassMediaService extends Service {
                 String title = intent.getStringExtra(EXTRA_TITLE);
                 String artist = intent.getStringExtra(EXTRA_ARTIST);
                 boolean isPlaying = intent.getBooleanExtra(EXTRA_IS_PLAYING, false);
-                updateNotification(title, artist, isPlaying);
+                long durationMs = intent.getLongExtra(EXTRA_DURATION, 0L);
+                long positionMs = intent.getLongExtra(EXTRA_POSITION, 0L);
+                updateNotification(title, artist, isPlaying, durationMs, positionMs);
             }
         }
         return START_STICKY;
     }
 
-    private void updateNotification(String title, String artist, boolean isPlaying) {
-        if (title == null) title = "GlassPlayer";
-        if (artist == null) artist = "Music Player";
+    private void updateNotification(String title, String artist, boolean isPlaying, long durationMs, long positionMs) {
+        if (title == null || title.trim().isEmpty()) title = "GlassPlayer";
+        if (artist == null || artist.trim().isEmpty()) artist = "Music Player";
 
         if (mediaSession == null) {
             initMediaSession();
         }
 
+        if (isPlaying) {
+            acquireWakeLock();
+        } else {
+            releaseWakeLock();
+        }
+
         mediaSession.setActive(true);
-        mediaSession.setPlaybackState(new PlaybackState.Builder()
+
+        MediaMetadata.Builder metaBuilder = new MediaMetadata.Builder()
+            .putString(MediaMetadata.METADATA_KEY_TITLE, title)
+            .putString(MediaMetadata.METADATA_KEY_ARTIST, artist)
+            .putString(MediaMetadata.METADATA_KEY_ALBUM, "GlassPlayer");
+        if (durationMs > 0) {
+            metaBuilder.putLong(MediaMetadata.METADATA_KEY_DURATION, durationMs);
+        }
+        mediaSession.setMetadata(metaBuilder.build());
+
+        PlaybackState.Builder stateBuilder = new PlaybackState.Builder()
             .setActions(
                 PlaybackState.ACTION_PLAY |
                 PlaybackState.ACTION_PAUSE |
                 PlaybackState.ACTION_SKIP_TO_PREVIOUS |
                 PlaybackState.ACTION_SKIP_TO_NEXT |
-                PlaybackState.ACTION_PLAY_PAUSE
+                PlaybackState.ACTION_PLAY_PAUSE |
+                PlaybackState.ACTION_SEEK_TO
             )
             .setState(
                 isPlaying ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED,
-                PlaybackState.PLAYBACK_POSITION_UNKNOWN,
-                1.0f
-            )
-            .build());
+                positionMs >= 0 ? positionMs : 0,
+                isPlaying ? 1.0f : 0.0f,
+                SystemClock.elapsedRealtime()
+            );
+        mediaSession.setPlaybackState(stateBuilder.build());
 
         Intent openAppIntent = new Intent(this, MainActivity.class);
         openAppIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -180,6 +249,7 @@ public class GlassMediaService extends Service {
 
     @Override
     public void onDestroy() {
+        releaseWakeLock();
         if (mediaSession != null) {
             mediaSession.setActive(false);
             mediaSession.release();

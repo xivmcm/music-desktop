@@ -63,3 +63,15 @@ body.glass-style-flat { --blur-value: none; --card-shadow: none; }
 #collab-friends-list::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }
+
+@media (max-width: 768px) {
+  .track-card,
+  .track-card-horizontal,
+  .playlist-card,
+  .artist-card,
+  .album-card,
+  .track-item {
+    transform: none !important;
+    will-change: auto !important;
+  }
+}

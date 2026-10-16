@@ -203,18 +203,20 @@ body::after {
   transition: background 0.5s ease;
 }
 
-body:not(.window-maximized):not(.mini-player-active) {
-  border-radius: var(--window-radius) !important;
+body:not(.window-maximized) {
+  border-radius: var(--window-radius, 16px) !important;
   overflow: hidden !important;
-  clip-path: inset(0 round var(--window-radius)) !important;
-  -webkit-clip-path: inset(0 round var(--window-radius)) !important;
+  clip-path: inset(0 round var(--window-radius, 16px)) !important;
+  -webkit-clip-path: inset(0 round var(--window-radius, 16px)) !important;
   border: var(--border-width, 1px) solid var(--card-border);
   box-shadow: var(--glass-shadow);
 }
 
-body:not(.window-maximized):not(.mini-player-active)::before,
-body:not(.window-maximized):not(.mini-player-active)::after {
-  border-radius: var(--window-radius) !important;
+body:not(.window-maximized)::before,
+body:not(.window-maximized)::after {
+  border-radius: var(--window-radius, 16px) !important;
+  clip-path: inset(0 round var(--window-radius, 16px)) !important;
+  -webkit-clip-path: inset(0 round var(--window-radius, 16px)) !important;
 }
 
 body.window-maximized {

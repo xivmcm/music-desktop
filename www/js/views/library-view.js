@@ -138,27 +138,36 @@
 
   // --- Like UI State Synchronization ---
 
+  function isTrackLiked(trackId) {
+    if (trackId === undefined || trackId === null) return false;
+    return _likedTrackIds.has(trackId) || _likedTrackIds.has(String(trackId)) || _likedTrackIds.has(Number(trackId));
+  }
+
   function updateLikeUI(trackId) {
-    const isLiked = _likedTrackIds.has(trackId);
+    if (typeof document === 'undefined') return;
+
+    if (trackId === undefined || trackId === null) {
+      const playlist = (typeof window !== 'undefined' && window.playlist) || [];
+      const currentTrackIndex = (typeof window !== 'undefined' && typeof window.currentTrackIndex === 'number') ? window.currentTrackIndex : -1;
+      const cur = playlist[currentTrackIndex];
+      if (cur) trackId = cur.id;
+      else return;
+    }
+
+    const isLiked = isTrackLiked(trackId);
+    const trackIdStr = String(trackId);
     const heartSvgEmpty = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`;
     const heartSvgFilled = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
 
-    if (typeof document === 'undefined') return;
-
     // 1. Update all track card like buttons
-    const cards = document.querySelectorAll(`.track-card[data-track-id="${trackId}"], .track-card-horizontal[data-track-id="${trackId}"]`);
+    const cards = document.querySelectorAll(`.track-card[data-track-id="${trackIdStr}"], .track-card-horizontal[data-track-id="${trackIdStr}"]`);
     cards.forEach(card => {
       const cardLikeBtn = card.querySelector('.like-btn, .card-like-btn-horizontal');
       if (cardLikeBtn) {
         cardLikeBtn.setAttribute('aria-pressed', String(isLiked));
         cardLikeBtn.setAttribute('aria-label', isLiked ? 'Убрать из избранного' : 'Добавить в избранное');
-        if (isLiked) {
-          cardLikeBtn.classList.add('liked');
-          cardLikeBtn.innerHTML = heartSvgFilled;
-        } else {
-          cardLikeBtn.classList.remove('liked');
-          cardLikeBtn.innerHTML = heartSvgEmpty;
-        }
+        cardLikeBtn.classList.toggle('liked', isLiked);
+        cardLikeBtn.innerHTML = isLiked ? heartSvgFilled : heartSvgEmpty;
       }
     });
 
@@ -168,19 +177,16 @@
     const currentTrackIndex = (typeof window !== 'undefined' && typeof window.currentTrackIndex === 'number') ? window.currentTrackIndex : -1;
     const playingTrack = playlist[currentTrackIndex];
 
-    if (playerLikeBtn && playingTrack && playingTrack.id === trackId) {
-      if (isLiked) {
-        playerLikeBtn.classList.add('liked');
-        playerLikeBtn.innerHTML = heartSvgFilled;
-      } else {
-        playerLikeBtn.classList.remove('liked');
-        playerLikeBtn.innerHTML = heartSvgEmpty;
-      }
+    if (playerLikeBtn && playingTrack && String(playingTrack.id) === trackIdStr) {
+      playerLikeBtn.classList.toggle('liked', isLiked);
+      playerLikeBtn.setAttribute('aria-pressed', String(isLiked));
+      playerLikeBtn.setAttribute('aria-label', isLiked ? 'Убрать из избранного' : 'Добавить в избранное');
+      playerLikeBtn.innerHTML = isLiked ? heartSvgFilled : heartSvgEmpty;
     }
 
     // 3. Update mini-player like button
-    const miniLikeButton = document.getElementById('mini-like-btn');
-    if (miniLikeButton && playingTrack && playingTrack.id === trackId) {
+    const miniLikeButton = document.getElementById('mini-like-button') || document.getElementById('mini-like-btn');
+    if (miniLikeButton && playingTrack && String(playingTrack.id) === trackIdStr) {
       miniLikeButton.classList.toggle('liked', isLiked);
       miniLikeButton.setAttribute('aria-pressed', String(isLiked));
       miniLikeButton.setAttribute('aria-label', isLiked ? 'Убрать из избранного' : 'Добавить в избранное');
@@ -188,21 +194,25 @@
     }
   }
 
-  function isTrackLiked(trackId) {
-    return _likedTrackIds.has(trackId);
-  }
-
   function toggleLike(e, track) {
-    if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
-    if (!track || !track.id) return;
+    if (e) {
+      if (typeof e.stopPropagation === 'function') e.stopPropagation();
+      if (typeof e.preventDefault === 'function') e.preventDefault();
+    }
+    if (!track || track.id === undefined || track.id === null) return;
 
-    const isLiked = _likedTrackIds.has(track.id);
+    const trackIdStr = String(track.id);
+    const isLiked = isTrackLiked(track.id);
     let likes = getLikedTracks();
 
     if (isLiked) {
-      likes = likes.filter(t => t.id !== track.id);
+      likes = likes.filter(t => String(t.id) !== trackIdStr);
       _likedTrackIds.delete(track.id);
+      _likedTrackIds.delete(trackIdStr);
+      const numId = Number(track.id);
+      if (!isNaN(numId)) _likedTrackIds.delete(numId);
     } else {
+      likes = likes.filter(t => String(t.id) !== trackIdStr);
       likes.unshift({
         id: track.id,
         title: track.title,
@@ -212,6 +222,7 @@
         duration: track.duration
       });
       _likedTrackIds.add(track.id);
+      _likedTrackIds.add(trackIdStr);
     }
 
     saveLikedTracks(likes);
@@ -587,6 +598,29 @@
     if (historyBtn && !historyBtn.dataset.gpHistBound) {
       historyBtn.dataset.gpHistBound = '1';
       historyBtn.addEventListener('click', loadHistoryView);
+    }
+
+    const onLikeClick = (e) => {
+      if (e) {
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+      }
+      const playlist = (typeof window !== 'undefined' && window.playlist) || [];
+      const currentTrackIndex = (typeof window !== 'undefined' && typeof window.currentTrackIndex === 'number') ? window.currentTrackIndex : -1;
+      const track = playlist[currentTrackIndex];
+      if (track) toggleLike(e, track);
+    };
+
+    const playerLikeBtn = document.getElementById('player-like-btn');
+    if (playerLikeBtn && !playerLikeBtn.dataset.gpLikeBound) {
+      playerLikeBtn.dataset.gpLikeBound = '1';
+      playerLikeBtn.addEventListener('click', onLikeClick);
+    }
+
+    const miniLikeButton = document.getElementById('mini-like-button') || document.getElementById('mini-like-btn');
+    if (miniLikeButton && !miniLikeButton.dataset.gpLikeBound) {
+      miniLikeButton.dataset.gpLikeBound = '1';
+      miniLikeButton.addEventListener('click', onLikeClick);
     }
   }
 

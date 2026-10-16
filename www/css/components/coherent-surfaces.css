@@ -41,7 +41,9 @@ body.mini-player-active .mini-player-block {
 body.mini-player-active::before,
 body.mini-player-active::after {
   display: block !important;
-  border-radius: var(--window-radius) !important;
+  border-radius: var(--window-radius, 16px) !important;
+  clip-path: inset(0 round var(--window-radius, 16px)) !important;
+  -webkit-clip-path: inset(0 round var(--window-radius, 16px)) !important;
 }
 
 body.mini-player-active .mini-player-block {
@@ -51,7 +53,9 @@ body.mini-player-active .mini-player-block {
   background: var(--mini-bg, var(--player-bg)) !important;
   color: var(--player-text-color) !important;
   border: var(--border-width, 1px) solid var(--player-border) !important;
-  border-radius: var(--window-radius) !important;
+  border-radius: var(--window-radius, 16px) !important;
+  clip-path: inset(0 round var(--window-radius, 16px)) !important;
+  -webkit-clip-path: inset(0 round var(--window-radius, 16px)) !important;
   box-shadow: var(--glass-shadow) !important;
   backdrop-filter: var(--glass-filter, var(--blur-value)) !important;
   -webkit-backdrop-filter: var(--glass-filter, var(--blur-value)) !important;

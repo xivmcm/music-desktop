@@ -807,15 +807,14 @@
     const duration = currentTrackDuration || player.duration || 0;
     const track = playlist[currentTrackIndex];
     if (duration > 0 && track) {
-      const seekTime = (parseFloat(percent) / 100) * duration;
+      const seekTime = Math.min(Math.max(0, (parseFloat(percent) / 100) * duration), duration);
       const wasPaused = player.paused;
 
-      currentSeekOffset = seekTime;
-      if (track.source === 'local' || track.blobUrl) {
-        player.currentTime = Math.min(Math.max(0, seekTime), duration);
-      } else {
-        player.crossOrigin = 'anonymous';
-        player.src = getAudioStreamUrl(track, seekTime);
+      currentSeekOffset = 0;
+      try {
+        player.currentTime = seekTime;
+      } catch (seekErr) {
+        console.warn('[Player Controller] Direct currentTime seek error:', seekErr);
       }
 
       if (!wasPaused) {
@@ -908,6 +907,33 @@
     if (miniNextBtn) miniNextBtn.addEventListener('click', () => playNext());
     if (miniPrevBtn) miniPrevBtn.addEventListener('click', () => playPrev());
 
+    // Like Buttons (Player Bar & Mini Player)
+    const playerLikeBtn = document.getElementById('player-like-btn');
+    const miniLikeBtn = document.getElementById('mini-like-button') || document.getElementById('mini-like-btn');
+
+    function handleCurrentTrackLike(e) {
+      if (e) {
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+      }
+      const track = playlist[currentTrackIndex];
+      if (!track) return;
+      if (typeof window !== 'undefined' && typeof window.toggleLike === 'function') {
+        window.toggleLike(e, track);
+      } else if (window.GP?.Views?.Library?.toggleLike) {
+        window.GP.Views.Library.toggleLike(e, track);
+      }
+    }
+
+    if (playerLikeBtn && !playerLikeBtn.dataset.gpLikeBound) {
+      playerLikeBtn.dataset.gpLikeBound = '1';
+      playerLikeBtn.addEventListener('click', handleCurrentTrackLike);
+    }
+    if (miniLikeBtn && !miniLikeBtn.dataset.gpLikeBound) {
+      miniLikeBtn.dataset.gpLikeBound = '1';
+      miniLikeBtn.addEventListener('click', handleCurrentTrackLike);
+    }
+
     const progressSlider = document.getElementById('progress-slider');
     const currentTimeText = document.getElementById('current-time');
     const totalTimeText = document.getElementById('total-time');
@@ -916,6 +942,11 @@
     const volumeSlider = document.getElementById('volume-slider');
 
     if (progressSlider) {
+      const commitSeek = () => {
+        seekToPercent(progressSlider.value);
+        isSeeking = false;
+      };
+
       progressSlider.addEventListener('input', () => {
         isSeeking = true;
         const player = getAudioPlayer();
@@ -925,13 +956,18 @@
         }
       });
 
-      progressSlider.addEventListener('change', () => {
-        seekToPercent(progressSlider.value);
-        isSeeking = false;
-      });
+      progressSlider.addEventListener('change', commitSeek);
+      progressSlider.addEventListener('pointerup', commitSeek);
+      progressSlider.addEventListener('mouseup', commitSeek);
+      progressSlider.addEventListener('touchend', commitSeek);
     }
 
     if (miniProgressSlider) {
+      const commitMiniSeek = () => {
+        seekToPercent(miniProgressSlider.value);
+        isSeeking = false;
+      };
+
       miniProgressSlider.addEventListener('input', () => {
         isSeeking = true;
         if (miniProgressBar) {
@@ -939,10 +975,10 @@
         }
       });
 
-      miniProgressSlider.addEventListener('change', () => {
-        seekToPercent(miniProgressSlider.value);
-        isSeeking = false;
-      });
+      miniProgressSlider.addEventListener('change', commitMiniSeek);
+      miniProgressSlider.addEventListener('pointerup', commitMiniSeek);
+      miniProgressSlider.addEventListener('mouseup', commitMiniSeek);
+      miniProgressSlider.addEventListener('touchend', commitMiniSeek);
     }
 
     if (volumeSlider) {

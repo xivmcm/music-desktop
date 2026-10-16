@@ -1,13 +1,13 @@
 {
-  "version": "1.19.7",
-  "releaseDate": "2026-10-16",
-  "changelog": "• Комплексное исправление воспроизведения и аудио-движка (401 / 502 / HLS):\n  - Интегрирована полноценная поддержка HLS.js (m3u8) для нативного воспроизведения SoundCloud стримов в Chromium/Electron на Windows\n  - Исправлена авторизация аудиопотоков: добавлена передача обязательного токена track_authorization\n  - Внедрена динамическая синхронизация проверенных SoundCloud client_id с бэкенда и авторотация\n  - Устранены ошибки 502 Bad Gateway: оптимизирован интервал keep-alive пингов бэкенда\n  - Автоматический бесшовный фоллбек между progressive MP3 и HLS потоками",
+  "version": "1.19.8",
+  "releaseDate": "2026-10-17",
+  "changelog": "• Исправления и улучшения (v1.19.8):\n  - Исправлен ползунок таймера трека (seekbar): прямое позиционирование currentTime в HLS и HTML5 потоках без сброса потока и разрыва воспроизведения\n  - Восстановлены плавные закруглённые рамки мини-плеера (clip-path и border-radius в режиме mini-player)\n  - Восстановлена работа кнопки «Лайк» (добавление в избранное) на нижней панели управления и в меню «...» мини-плеера\n  - Улучшена синхронизация состояния избранного между всеми панелями и библиотекой",
   "windows": {
-    "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.19.7.exe",
-    "filename": "GlassPlayer-Setup-1.19.7.exe"
+    "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.19.8.exe",
+    "filename": "GlassPlayer-Setup-1.19.8.exe"
   },
   "android": {
-    "url": "https://xivmcm.github.io/music-desktop/GlassPlayer-1.19.7.apk",
-    "filename": "GlassPlayer-1.19.7.apk"
+    "url": "https://xivmcm.github.io/music-desktop/GlassPlayer-1.19.8.apk",
+    "filename": "GlassPlayer-1.19.8.apk"
   }
 }

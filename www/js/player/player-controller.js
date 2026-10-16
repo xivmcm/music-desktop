@@ -21,6 +21,16 @@
   let lastProgressUpdateTime = 0;
   let nativeMediaControlsListenerAttached = false;
   let statsIntervalTimer = null;
+  let currentHlsInstance = null;
+
+  function destroyCurrentHls() {
+    if (currentHlsInstance) {
+      try {
+        currentHlsInstance.destroy();
+      } catch (e) {}
+      currentHlsInstance = null;
+    }
+  }
 
   let playCountSession = {
     trackId: null,
@@ -496,6 +506,7 @@
     currentSeekOffset = 0;
 
     // Load stream with full audio player reset for local MP3 switching
+    destroyCurrentHls();
     player.pause();
     player.removeAttribute('src');
     player.crossOrigin = 'anonymous';
@@ -525,45 +536,86 @@
     clearTimeout(trackLoadTimeout);
 
     const startPlaybackWithUrl = (targetUrl, isFallback = false) => {
-      player.src = targetUrl;
-      const playPromise = player.play();
-      currentPlayPromise = playPromise;
+      destroyCurrentHls();
 
-      const loadTimeoutMs = (!isFallback && targetUrl !== rawStreamUrl) ? 2500 : 12000;
+      const isHlsUrl = typeof targetUrl === 'string' && (targetUrl.includes('.m3u8') || targetUrl.includes('/hls'));
 
-      trackLoadTimeout = setTimeout(() => {
-        if (currentPlayPromise === playPromise) {
-          if (!isFallback && targetUrl !== rawStreamUrl) {
-            console.log('[Stream Resolution] Direct CDN stream timed out, falling back to backend stream proxy...');
-            startPlaybackWithUrl(rawStreamUrl, true);
-          } else {
-            handleTrackLoadError("Track loading timed out (12 seconds limit)");
-          }
-        }
-      }, loadTimeoutMs);
+      const onPlaybackSuccess = (playPromise) => {
+        currentPlayPromise = playPromise;
+        const loadTimeoutMs = (!isFallback && targetUrl !== rawStreamUrl) ? 3500 : 12000;
 
-      if (playPromise && typeof playPromise.then === 'function') {
-        playPromise
-          .then(() => {
-            clearTimeout(trackLoadTimeout);
-            if (currentPlayPromise === playPromise) {
-              setPlayState(true);
-            }
-          })
-          .catch(err => {
-            clearTimeout(trackLoadTimeout);
-            if (err.name === 'AbortError') return;
-            console.error('Playback failed:', err);
-
-            // Fallback to proxy stream URL if direct CDN URL failed
+        trackLoadTimeout = setTimeout(() => {
+          if (currentPlayPromise === playPromise) {
             if (!isFallback && targetUrl !== rawStreamUrl) {
-              console.log('[Stream Resolution] Direct CDN stream failed, falling back to backend stream proxy...');
+              console.log('[Stream Resolution] Direct stream timed out, falling back to backend stream proxy...');
               startPlaybackWithUrl(rawStreamUrl, true);
-            } else if (currentPlayPromise === playPromise) {
-              handleTrackLoadError(err.message || 'Media playback error');
+            } else {
+              handleTrackLoadError("Track loading timed out (12 seconds limit)");
+            }
+          }
+        }, loadTimeoutMs);
+
+        if (playPromise && typeof playPromise.then === 'function') {
+          playPromise
+            .then(() => {
+              clearTimeout(trackLoadTimeout);
+              if (currentPlayPromise === playPromise) {
+                setPlayState(true);
+              }
+            })
+            .catch(err => {
+              clearTimeout(trackLoadTimeout);
+              if (err.name === 'AbortError') return;
+              console.error('Playback failed:', err);
+
+              if (!isFallback && targetUrl !== rawStreamUrl) {
+                console.log('[Stream Resolution] Direct stream failed, falling back to backend stream proxy...');
+                startPlaybackWithUrl(rawStreamUrl, true);
+              } else if (currentPlayPromise === playPromise) {
+                handleTrackLoadError(err.message || 'Media playback error');
+              }
+            });
+        }
+      };
+
+      if (isHlsUrl && typeof window !== 'undefined' && window.Hls && window.Hls.isSupported()) {
+        try {
+          console.log('[Player Controller] Initializing Hls.js for HLS stream...');
+          const hls = new window.Hls({
+            enableWorker: true,
+            lowLatencyMode: false,
+            backBufferLength: 90
+          });
+          currentHlsInstance = hls;
+          hls.loadSource(targetUrl);
+          hls.attachMedia(player);
+
+          hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
+            const playPromise = player.play();
+            onPlaybackSuccess(playPromise);
+          });
+
+          hls.on(window.Hls.Events.ERROR, (event, data) => {
+            if (data.fatal) {
+              console.warn('[Player Controller] Fatal Hls.js error:', data.type, data.details);
+              destroyCurrentHls();
+              if (!isFallback && targetUrl !== rawStreamUrl) {
+                console.log('[Player Controller] Falling back to backend stream proxy...');
+                startPlaybackWithUrl(rawStreamUrl, true);
+              } else {
+                handleTrackLoadError(`HLS stream error: ${data.details}`);
+              }
             }
           });
+          return;
+        } catch (hlsErr) {
+          console.warn('[Player Controller] Hls.js setup error, falling back to direct src:', hlsErr.message);
+        }
       }
+
+      player.src = targetUrl;
+      const playPromise = player.play();
+      onPlaybackSuccess(playPromise);
     };
 
     // For SoundCloud tracks: first try direct CDN resolution via DirectSoundCloudEngine

@@ -200,10 +200,7 @@ async function initApiFailover() {
 
 // ── Direct SoundCloud Client Engine (Zero-Cost & Anti-Block Fallback) ──────
 const SC_CLIENT_IDS = [
-  'UMY1dzQ68n2QbCuypNe8JOivmV2FO2Ep',
-  '4tU5e13d0lE3H19F7tK3uX6xLzK8qN5P',
-  'a3e059563d7fd3372b49b37f00a00bcf',
-  '2t9loNfhTwxOgahBDWmll2wHtgSljiq2'
+  'V7f0p2q7JD4vcOlEsqq6bwwtNYCyAtLC'
 ];
 
 const DirectSoundCloudEngine = {

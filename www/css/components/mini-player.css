@@ -25,6 +25,7 @@ body.window-maximized {
 }
 
 /* Mini Player Mode Styles & Redesign */
+html.mini-player-active,
 body.mini-player-active {
   min-height: 100% !important;
   height: 100% !important;
@@ -109,6 +110,8 @@ body.mini-player-active .mini-player-block {
   padding: 0 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   background: rgba(255, 255, 255, 0.02);
+  border-top-left-radius: var(--window-radius, 16px);
+  border-top-right-radius: var(--window-radius, 16px);
   -webkit-app-region: drag;
   user-select: none;
   cursor: grab;
@@ -203,6 +206,8 @@ body.mini-player-active .mini-player-block {
   justify-content: space-between;
   padding: 0 12px;
   gap: 12px;
+  border-bottom-left-radius: var(--window-radius, 16px);
+  border-bottom-right-radius: var(--window-radius, 16px);
   -webkit-app-region: no-drag !important;
 }
 

@@ -40,20 +40,14 @@
     -webkit-user-select: text !important;
   }
 
-  :root {
+  :root:not(.electron-runtime):not(.mini-player-active) {
     --window-radius: 0px !important;
   }
 
-  html,
-  body,
-  body::before,
-  body::after,
-  body:not(.window-maximized),
-  body:not(.window-maximized)::before,
-  body:not(.window-maximized)::after,
-  body:not(.mini-player-active),
-  body:not(.mini-player-active)::before,
-  body:not(.mini-player-active)::after {
+  html:not(.electron-runtime):not(.mini-player-active),
+  body:not(.electron-runtime):not(.mini-player-active),
+  body:not(.electron-runtime):not(.mini-player-active)::before,
+  body:not(.electron-runtime):not(.mini-player-active)::after {
     width: 100%;
     min-width: 0;
     height: 100%;

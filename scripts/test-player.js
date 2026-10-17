@@ -298,8 +298,7 @@ try {
   // Test 11: Seeking
   context.window.playTrack(0);
   context.window.seekToPercent(50);
-  assert(context.window.currentSeekOffset === 105, 'seekToPercent(50) set offset to 105 seconds (50% of 210)');
-  assert(mockAudioPlayer.src.includes('seek=105'), 'Stream URL contains seek=105 query parameter');
+  assert(mockAudioPlayer.currentTime === 105, 'seekToPercent(50) set audioPlayer.currentTime to 105 seconds (50% of 210)');
 
   // Test 12: Stream URL Generator
   const streamUrl = context.window.getAudioStreamUrl(sampleTracks[0]);

@@ -445,7 +445,10 @@
     }
 
     // Shadows & Geometry
-    root.style.setProperty('--window-radius', `${theme.windowRadius}px`);
+    root.style.setProperty('--window-radius', `${theme.windowRadius}px`, 'important');
+    if (document.body && document.body.style) {
+      document.body.style.setProperty('--window-radius', `${theme.windowRadius}px`, 'important');
+    }
     root.style.setProperty('--border-width', theme.borderWidth);
     root.style.setProperty('--card-shadow', theme.shadowsEnabled && theme.cardStyle !== 'flat' ? '0 8px 32px 0 rgba(0, 0, 0, 0.28)' : 'none');
     root.style.setProperty('--glass-shadow', theme.shadowsEnabled ? '0 24px 64px rgba(0, 0, 0, 0.6)' : 'none');
@@ -492,7 +495,12 @@
       '--glass-glow', '--glow', '--glow-color', '--glow-color-base', '--glow-rgb',
       '--window-radius', '--font-family', '--border-width', '--bgColor1'
     ];
-    props.forEach(p => root.style.removeProperty(p));
+    props.forEach(p => {
+      root.style.removeProperty(p);
+      if (document.body && document.body.style) {
+        document.body.style.removeProperty(p);
+      }
+    });
     root.classList.remove('gp-glass-off', 'gp-shadows-off', 'gp-motion-off');
     if (document.body) {
       document.body.classList.remove('glass-style-glass', 'glass-style-frosted', 'glass-style-solid', 'glass-style-material', 'glass-style-flat');

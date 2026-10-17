@@ -1,5 +1,7 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.19.8';
+const APP_VERSION = '1.19.9';
+document.documentElement.classList.toggle('electron-runtime', isElectron);
+document.documentElement.classList.toggle('web-runtime', !isElectron);
 document.body.classList.toggle('electron-runtime', isElectron);
 document.body.classList.toggle('web-runtime', !isElectron);
 
@@ -72,7 +74,8 @@ document.addEventListener('click', (event) => {
 
   // Browser preview fallback used by visual QA and the PWA build.
   if (!isElectron && action === 'toggleMiniPlayer') {
-    document.body.classList.toggle('mini-player-active');
+    const nextActive = document.body.classList.toggle('mini-player-active');
+    document.documentElement.classList.toggle('mini-player-active', nextActive);
   }
 });
 
@@ -836,6 +839,7 @@ function startPresenceInterval() {
 if (isElectron && window.electronAPI && window.electronAPI.onMiniPlayerToggled) {
   window.electronAPI.onMiniPlayerToggled((active) => {
     document.body.classList.toggle('mini-player-active', Boolean(active));
+    document.documentElement.classList.toggle('mini-player-active', Boolean(active));
     if (typeof resizeCanvas === 'function') resizeCanvas();
   });
 }

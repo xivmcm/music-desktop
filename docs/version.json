@@ -1,13 +1,13 @@
 {
-  "version": "1.19.8",
+  "version": "1.19.9",
   "releaseDate": "2026-10-17",
-  "changelog": "• Исправления и улучшения (v1.19.8):\n  - Исправлен ползунок таймера трека (seekbar): прямое позиционирование currentTime в HLS и HTML5 потоках без сброса потока и разрыва воспроизведения\n  - Восстановлены плавные закруглённые рамки мини-плеера (clip-path и border-radius в режиме mini-player)\n  - Восстановлена работа кнопки «Лайк» (добавление в избранное) на нижней панели управления и в меню «...» мини-плеера\n  - Улучшена синхронизация состояния избранного между всеми панелями и библиотекой",
+  "changelog": "• Исправления и улучшения (v1.19.9):\n  - Полностью исправлены рамки и закругление углов мини-плеера (изолирован мобильный медиа-запрос max-width: 768px, сбрасывавший --window-radius в 0px)\n  - Восстановлена прямая привязка углов мини-плеера к ползунку радиуса скругления в Настройках приложения\n  - Добавлено согласованное скругление верхней планки (mini-titlebar) и контентной области мини-плеера",
   "windows": {
-    "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.19.8.exe",
-    "filename": "GlassPlayer-Setup-1.19.8.exe"
+    "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.19.9.exe",
+    "filename": "GlassPlayer-Setup-1.19.9.exe"
   },
   "android": {
-    "url": "https://xivmcm.github.io/music-desktop/GlassPlayer-1.19.8.apk",
-    "filename": "GlassPlayer-1.19.8.apk"
+    "url": "https://xivmcm.github.io/music-desktop/GlassPlayer-1.19.9.apk",
+    "filename": "GlassPlayer-1.19.9.apk"
   }
 }

@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#0a0a0c">
   <script>
+    if (typeof window !== 'undefined' && window.electronAPI) {
+      document.documentElement.classList.add('electron-runtime');
+    }
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(function(regs) {
         for (var i = 0; i < regs.length; i++) regs[i].unregister();
@@ -62,7 +65,7 @@
   <!-- Sliding Left Sidebar -->
   <aside id="sidebar" class="sidebar">
     <div class="sidebar-header">
-      <div class="sidebar-logo">GLASSPLAYER <span class="app-version-badge">v1.19.8</span></div>
+      <div class="sidebar-logo">GLASSPLAYER <span class="app-version-badge">v1.19.9</span></div>
     </div>
     <nav class="sidebar-menu">
       <button id="home-button" class="sidebar-btn active" title="Home">

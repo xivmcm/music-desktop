@@ -218,21 +218,12 @@
       if (artistLink) {
         artistLink.addEventListener('click', (e) => {
           e.stopPropagation();
-          if (track.source === 'soundcloud' && track.artistId) {
+          const targetArtistId = track.artistId || track.artist || trackArtist;
+          if (targetArtistId) {
             if (typeof root.loadArtistView === 'function') {
-              root.loadArtistView(track.artistId);
+              root.loadArtistView(targetArtistId, track.artist || trackArtist);
             } else if (root.GP?.Views?.Artist?.loadArtistView) {
-              root.GP.Views.Artist.loadArtistView(track.artistId);
-            }
-          } else {
-            const searchInput = document.getElementById('search-input');
-            if (searchInput) {
-              searchInput.value = trackArtist;
-              if (typeof root.performSearch === 'function') {
-                root.performSearch();
-              } else if (root.GP?.Views?.Search?.performSearch) {
-                root.GP.Views.Search.performSearch();
-              }
+              root.GP.Views.Artist.loadArtistView(targetArtistId, track.artist || trackArtist);
             }
           }
         });

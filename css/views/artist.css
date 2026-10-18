@@ -2,58 +2,157 @@
 .artist-header {
   display: flex;
   align-items: center;
-  gap: 24px;
-  background: var(--card-bg, rgba(255, 255, 255, 0.02));
-  border: 1px solid var(--card-border);
-  border-radius: 16px;
-  padding: 24px;
+  gap: 28px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
+  border-radius: var(--window-radius, 16px);
+  padding: 28px;
   margin-bottom: 24px;
-  backdrop-filter: var(--blur-value);
-  -webkit-backdrop-filter: var(--blur-value);
+  backdrop-filter: var(--blur-value, blur(20px));
+  -webkit-backdrop-filter: var(--blur-value, blur(20px));
   width: 100%;
+  box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+.artist-header::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  right: -60px;
+  width: 220px;
+  height: 220px;
+  background: var(--accent-glow, rgba(112, 0, 255, 0.15));
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+}
+
+.artist-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
 }
 
 .artist-avatar {
-  width: 100px;
-  height: 100px;
+  width: 112px;
+  height: 112px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid var(--accent-color);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  border: 3px solid var(--accent-color, #7000ff);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  display: block;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.artist-avatar:hover {
+  transform: scale(1.03);
+  box-shadow: 0 12px 32px var(--accent-glow, rgba(112, 0, 255, 0.35));
 }
 
 .artist-info {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.artist-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
+  color: var(--text-dim, rgba(255, 255, 255, 0.6));
+  cursor: pointer;
+  transition: all 0.2s ease;
+  align-self: flex-start;
+  margin-bottom: 4px;
+}
+
+.artist-back-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-color, #ffffff);
+  transform: translateX(-2px);
 }
 
 .artist-info h2 {
-  font-size: 24px;
-  font-weight: 400;
-  color: var(--text-color);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-color, #ffffff);
+  margin: 0;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
 }
 
 .artist-meta {
   font-size: 13px;
-  color: var(--accent-color);
-  font-weight: 500;
+  color: var(--accent-color, #7000ff);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.artist-follow-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--accent-color, #7000ff);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-color, #ffffff);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  margin-top: 6px;
+  align-self: flex-start;
+  user-select: none;
+}
+
+.artist-follow-btn:hover {
+  background: var(--accent-color, #7000ff);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px var(--accent-glow, rgba(112, 0, 255, 0.35));
+}
+
+.artist-follow-btn.active {
+  background: var(--accent-color, #7000ff);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+.artist-follow-btn.active:hover {
+  background: rgba(255, 69, 58, 0.15);
+  border-color: rgba(255, 69, 58, 0.4);
+  color: #ff453a;
+  box-shadow: 0 4px 16px rgba(255, 69, 58, 0.2);
 }
 
 .artist-desc {
-  font-size: 12px;
-  color: var(--text-dim);
+  font-size: 13px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.6));
   line-height: 1.5;
-  max-height: 60px;
+  max-height: 70px;
   overflow-y: auto;
+  margin-top: 4px;
 }
 
 .artist-sections {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 28px;
   width: 100%;
 }
 

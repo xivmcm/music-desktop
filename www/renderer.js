@@ -417,6 +417,108 @@ const DirectSoundCloudEngine = {
       } catch (e) {}
     }));
     return sections;
+  },
+
+  async getArtistProfile(artistIdOrName) {
+    if (!artistIdOrName) return null;
+    let attempts = 0;
+    while (attempts < SC_CLIENT_IDS.length + 1) {
+      try {
+        const clientId = this.getClientId();
+        let numericUserId = /^\d+$/.test(String(artistIdOrName).trim()) ? String(artistIdOrName).trim() : null;
+        let userData = null;
+
+        if (numericUserId) {
+          const userRes = await fetchWithTimeout(`https://api-v2.soundcloud.com/users/${numericUserId}?client_id=${clientId}`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+          }, 5000);
+          if (userRes.ok) {
+            userData = await userRes.json();
+          }
+        }
+
+        if (!userData) {
+          const searchRes = await fetchWithTimeout(`https://api-v2.soundcloud.com/search/users?q=${encodeURIComponent(artistIdOrName)}&client_id=${clientId}&limit=1`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+          }, 5000);
+          if (searchRes.ok) {
+            const searchData = await searchRes.json();
+            if (searchData && searchData.collection && searchData.collection.length > 0) {
+              userData = searchData.collection[0];
+              numericUserId = String(userData.id);
+            }
+          }
+        }
+
+        if (!userData || !numericUserId) {
+          attempts++;
+          this.rotateClientId();
+          continue;
+        }
+
+        const [tracksRes, playlistsRes] = await Promise.allSettled([
+          fetchWithTimeout(`https://api-v2.soundcloud.com/users/${numericUserId}/tracks?client_id=${clientId}&limit=20`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+          }, 5000),
+          fetchWithTimeout(`https://api-v2.soundcloud.com/users/${numericUserId}/playlists_without_albums?client_id=${clientId}&limit=10`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+          }, 5000)
+        ]);
+
+        let tracksCollection = [];
+        if (tracksRes.status === 'fulfilled' && tracksRes.value.ok) {
+          const tracksData = await tracksRes.value.json();
+          tracksCollection = tracksData.collection || [];
+        }
+
+        let playlistsCollection = [];
+        if (playlistsRes.status === 'fulfilled' && playlistsRes.value.ok) {
+          const playlistsData = await playlistsRes.value.json();
+          playlistsCollection = playlistsData.collection || [];
+        }
+
+        const tracks = tracksCollection.map(track => {
+          const durSec = Math.floor((track.duration || 0) / 1000);
+          const min = Math.floor(durSec / 60);
+          const sec = durSec % 60;
+          return {
+            id: String(track.id),
+            title: track.title || track.display_title || 'Unknown Track',
+            artist: track.user?.username || track.user?.name || userData.username || 'Unknown Artist',
+            artistId: String(track.user?.id || numericUserId),
+            duration: `${min}:${String(sec).padStart(2, '0')}`,
+            source: 'soundcloud',
+            thumbnail: track.artwork_url || track.user?.avatar_url || userData.avatar_url || '',
+            playbackCount: track.playback_count,
+            playback_count: track.playback_count,
+            track_authorization: track.track_authorization || '',
+            media: track.media
+          };
+        });
+
+        const playlists = playlistsCollection.map(pl => ({
+          id: String(pl.id),
+          name: pl.title || 'Unknown Playlist',
+          tracksCount: pl.track_count || pl.tracks?.length || 0,
+          thumbnail: pl.artwork_url || (pl.tracks && pl.tracks[0]?.artwork_url) || userData.avatar_url || ''
+        }));
+
+        return {
+          id: String(userData.id),
+          name: userData.username || 'Unknown Artist',
+          avatar: userData.avatar_url || '',
+          followers: userData.followers_count || 0,
+          description: userData.description || '',
+          tracks,
+          playlists
+        };
+      } catch (err) {
+        console.warn('[Direct SC Engine] Artist profile fetch attempt failed:', err.message);
+      }
+      attempts++;
+      this.rotateClientId();
+    }
+    return null;
   }
 };
 window.DirectSoundCloudEngine = DirectSoundCloudEngine;

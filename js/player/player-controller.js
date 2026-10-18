@@ -449,24 +449,39 @@
       }
 
       if (currentArtist) {
-        currentArtist.innerHTML = `<span class="artist-link">${track.artist}</span>`;
+        currentArtist.innerHTML = `<span class="artist-link" title="Открыть профиль артиста">${escapeHTML(track.artist)}</span>`;
         const artistLink = currentArtist.querySelector('.artist-link');
         if (artistLink) {
           artistLink.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (track.source === 'soundcloud' && track.artistId) {
-              if (typeof window.loadArtistView === 'function') window.loadArtistView(track.artistId);
-            } else {
-              const searchInput = document.getElementById('search-input');
-              if (searchInput) {
-                searchInput.value = track.artist;
-                if (typeof window.performSearch === 'function') window.performSearch();
+            const targetArtistId = track.artistId || track.artist;
+            if (targetArtistId) {
+              if (typeof window.loadArtistView === 'function') {
+                window.loadArtistView(targetArtistId, track.artist);
+              } else if (window.GP?.Views?.Artist?.loadArtistView) {
+                window.GP.Views.Artist.loadArtistView(targetArtistId, track.artist);
               }
             }
           });
         }
       }
-      if (miniCurrentArtist) miniCurrentArtist.textContent = track.artist;
+      if (miniCurrentArtist) {
+        miniCurrentArtist.innerHTML = `<span class="artist-link" title="Открыть профиль артиста">${escapeHTML(track.artist)}</span>`;
+        const miniArtistLink = miniCurrentArtist.querySelector('.artist-link');
+        if (miniArtistLink) {
+          miniArtistLink.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const targetArtistId = track.artistId || track.artist;
+            if (targetArtistId) {
+              if (typeof window.loadArtistView === 'function') {
+                window.loadArtistView(targetArtistId, track.artist);
+              } else if (window.GP?.Views?.Artist?.loadArtistView) {
+                window.GP.Views.Artist.loadArtistView(targetArtistId, track.artist);
+              }
+            }
+          });
+        }
+      }
 
       const coverUrl = getOptimalCoverUrl(track.thumbnail, track.source);
       const fallbackCoverUrl = getFallbackCoverUrl(track.thumbnail);

@@ -162,6 +162,49 @@
     } catch (err) {
       console.warn('[Auth Merge] History merge failed:', err);
     }
+
+    // 3. Merge Guest Followed Artists
+    try {
+      const guestArtistsRaw = localStorage.getItem('gp_followed_artists_Default') || localStorage.getItem('gp_followed_artists');
+      let guestArtists = [];
+      try { guestArtists = guestArtistsRaw ? JSON.parse(guestArtistsRaw) : []; } catch (e) {}
+
+      const ownerSuffix = `account_${String(user.id || user._id || 'user').replace(/[^a-z0-9_-]/gi, '_')}`;
+      const accountArtistsKey = typeof window.getStorageKey === 'function' ? window.getStorageKey('followed_artists') : `gp_followed_artists_${ownerSuffix}`;
+      const accountArtistsRaw = localStorage.getItem(accountArtistsKey);
+      let accountArtists = [];
+      try { accountArtists = accountArtistsRaw ? JSON.parse(accountArtistsRaw) : []; } catch (e) {}
+
+      const cloudArtists = Array.isArray(user.followedArtists) ? user.followedArtists : [];
+      const seenArtists = new Set();
+      const mergedArtists = [];
+
+      for (const a of [...guestArtists, ...accountArtists, ...cloudArtists]) {
+        if (!a || (!a.id && !a.name)) continue;
+        const aKey = (a.id ? String(a.id) : '') + '::' + (a.name ? String(a.name).toLowerCase() : '');
+        if (!seenArtists.has(aKey)) {
+          seenArtists.add(aKey);
+          mergedArtists.push({
+            id: String(a.id || `artist_${Date.now()}`),
+            name: String(a.name || 'Unknown Artist'),
+            avatar: String(a.avatar || '')
+          });
+        }
+      }
+
+      user.followedArtists = mergedArtists;
+      localStorage.setItem(accountArtistsKey, JSON.stringify(mergedArtists));
+
+      if (authToken) {
+        if (typeof window.syncFollowedArtistsWithBackend === 'function') {
+          window.syncFollowedArtistsWithBackend(mergedArtists);
+        } else if (window.GP?.Views?.Artist?.syncFollowedArtistsWithBackend) {
+          window.GP.Views.Artist.syncFollowedArtistsWithBackend(mergedArtists);
+        }
+      }
+    } catch (err) {
+      console.warn('[Auth Merge] Followed artists merge failed:', err);
+    }
   }
 
   // Handle Authentication Submission
@@ -287,10 +330,27 @@
     showToast('Вы вышли из аккаунта');
 
     if (typeof window !== 'undefined') {
+      try {
+        window.dispatchEvent(new CustomEvent('gp:followed-artists-changed', { detail: { list: [] } }));
+      } catch (e) {}
+
       if (window.activeView === 'settings' && typeof window.renderSettings === 'function') {
         window.renderSettings();
       } else if (window.activeView === 'home' && typeof window.loadHomeView === 'function') {
         window.loadHomeView();
+      } else if (window.activeView === 'artist') {
+        const followBtn = document.getElementById('follow-artist-btn');
+        if (followBtn && typeof window.isArtistFollowed === 'function') {
+          const artistName = document.querySelector('.artist-info h2')?.textContent || '';
+          const isFollowed = window.isArtistFollowed('', artistName);
+          if (!isFollowed) {
+            followBtn.classList.remove('active');
+            const textSpan = followBtn.querySelector('.follow-text') || followBtn.querySelector('span');
+            if (textSpan) textSpan.textContent = 'Подписаться';
+            const iconSvg = followBtn.querySelector('.follow-icon');
+            if (iconSvg) iconSvg.innerHTML = '<line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>';
+          }
+        }
       }
     }
   }

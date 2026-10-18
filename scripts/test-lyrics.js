@@ -27,8 +27,8 @@ class MockDOMElement {
     this.tagName = tagName.toUpperCase();
     this.classList = {
       _classes: new Set(),
-      add: (c) => this.classList._classes.add(c),
-      remove: (c) => this.classList._classes.delete(c),
+      add: (...classes) => classes.forEach(c => this.classList._classes.add(c)),
+      remove: (...classes) => classes.forEach(c => this.classList._classes.delete(c)),
       contains: (c) => this.classList._classes.has(c),
       toggle: (c, state) => {
         if (state !== undefined) {
@@ -48,6 +48,14 @@ class MockDOMElement {
     this.offsetTop = 0;
     this.scrollTop = 0;
     this.listeners = {};
+  }
+
+  get className() {
+    return Array.from(this.classList._classes).join(' ');
+  }
+
+  set className(val) {
+    this.classList._classes = new Set((val || '').split(/\s+/).filter(Boolean));
   }
 
   get innerHTML() {
@@ -209,6 +217,78 @@ assert(!mockElements['lyrics-overlay'].classList.contains('visible'), 'overlay e
 assert(Array.isArray(sandbox.currentLyrics), 'window.currentLyrics returns array');
 assert(typeof sandbox.isLyricsModalOpen === 'boolean', 'window.isLyricsModalOpen returns boolean');
 
+// 8. Test isConfidentLrclibMatch
+assert(typeof sandbox.isConfidentLrclibMatch === 'function', 'isConfidentLrclibMatch is exported');
+const termsTest = {
+  artist: 'OG Buda',
+  songName: 'Сайфер',
+  directQuery: 'OG Buda Сайфер'
+};
+const goodCandidate = {
+  artistName: 'OG Buda',
+  trackName: 'Сайфер',
+  syncedLyrics: '[00:10.00]Привет'
+};
+const badCandidateArtist = {
+  artistName: 'Linkin Park',
+  trackName: 'Numb',
+  syncedLyrics: '[00:10.00]I\'ve become so numb'
+};
+const badCandidateEmpty = {
+  artistName: '',
+  trackName: '',
+  syncedLyrics: ''
+};
+assert(sandbox.isConfidentLrclibMatch(goodCandidate, termsTest) === true, 'isConfidentLrclibMatch accepts accurate match');
+assert(sandbox.isConfidentLrclibMatch(badCandidateArtist, termsTest) === false, 'isConfidentLrclibMatch rejects completely mismatched artist/title');
+assert(sandbox.isConfidentLrclibMatch(badCandidateEmpty, termsTest) === false, 'isConfidentLrclibMatch rejects empty candidate');
+
+// 9. Test generateAutoPacedLyrics
+assert(typeof sandbox.generateAutoPacedLyrics === 'function', 'generateAutoPacedLyrics is exported');
+const sampleGeniusText = `
+12 Contributors
+Translations
+Русский
+[Интро]
+Yeah, yeah
+
+[Куплет 1: OG Buda]
+Первая строка текста
+Вторая длинная строка с множеством разнообразных слов и слогов
+Третья строка
+
+[Припев]
+Это припев песни
+Повторяем припев
+Embed
+`;
+
+const paced = sandbox.generateAutoPacedLyrics(sampleGeniusText, 120); // 2 minutes track
+assert(Array.isArray(paced) && paced.length > 0, 'generateAutoPacedLyrics returns array of paced lines');
+
+const sectionHeaders = paced.filter(line => line.isSection);
+assert(sectionHeaders.length >= 3, 'Identified section headers ([Интро], [Куплет 1], [Припев])');
+assert(sectionHeaders[0].text === '[Интро]', 'First section header is [Интро]');
+
+// Check timestamps are chronological
+let isChronological = true;
+for (let i = 1; i < paced.length; i++) {
+  if (paced[i].time < paced[i - 1].time) {
+    isChronological = false;
+    break;
+  }
+}
+assert(isChronological, 'All auto-paced line timestamps are in chronological order');
+assert(paced[0].time >= 3, 'Intro padding allocated before first lyrics line');
+assert(paced[paced.length - 1].time <= 120, 'Last paced line ends before track duration');
+
+// Check rendering with section headers
+sandbox.renderLRCLines(paced);
+const renderedLines = mockElements['lyrics-content'].children;
+assert(renderedLines.length === paced.length, 'renderLRCLines correctly rendered all auto-paced lines');
+const hasSectionHeaderClass = Array.from(renderedLines).some(el => el.classList.contains('lyrics-section-header'));
+assert(hasSectionHeaderClass, 'DOM element created with .lyrics-section-header class for section title');
+
 console.log('\n----------------------------------------------------');
 console.log(`TEST RESULTS: ${passCount} / ${passCount + failCount} PASSED`);
 if (failCount === 0) {
@@ -218,3 +298,4 @@ if (failCount === 0) {
   process.exit(1);
 }
 console.log('====================================================\n');
+

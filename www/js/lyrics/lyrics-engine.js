@@ -124,8 +124,108 @@
     };
   }
 
+  function isConfidentLrclibMatch(candidate, terms) {
+    if (!candidate || !terms) return false;
+    const cTitle = (candidate.trackName || '').toLowerCase().trim();
+    const cArtist = (candidate.artistName || '').toLowerCase().trim();
+    const sTitle = (terms.songName || '').toLowerCase().trim();
+    const sArtist = (terms.artist || '').toLowerCase().trim();
+
+    if (!cTitle || !cArtist) return false;
+
+    if (sArtist && sArtist.length >= 2) {
+      const artistMatches = (cArtist.length >= 2 && sArtist.includes(cArtist)) || cArtist.includes(sArtist);
+      if (!artistMatches) {
+        const sWords = sArtist.split(/\s+/).filter(w => w.length >= 3);
+        const hasSharedWord = sWords.some(w => cArtist.includes(w));
+        if (!hasSharedWord) return false;
+      }
+    }
+
+    if (sTitle && sTitle.length >= 2) {
+      const titleMatches = (cTitle.length >= 2 && sTitle.includes(cTitle)) || cTitle.includes(sTitle);
+      if (!titleMatches) {
+        const sWords = sTitle.split(/\s+/).filter(w => w.length >= 3);
+        const hasSharedWord = sWords.some(w => cTitle.includes(w));
+        if (!hasSharedWord) return false;
+      }
+    }
+
+    return true;
+  }
+
   /**
-   * Multi-tiered lyrics fetcher: SoundCloud Description -> LRCLIB (Direct) -> LRCLIB (Search) -> LRCLIB (Clean Query) -> LRCLIB (Title-only)
+   * Smart Auto-Pacing Algorithm (Вариант 1)
+   * Converts unstructured lyrics into timed karaoke lines synchronized with the track duration.
+   */
+  function generateAutoPacedLyrics(plainText, trackDuration = 180) {
+    if (!plainText || typeof plainText !== 'string') return [];
+    const duration = Math.max(30, Number(trackDuration) || 180);
+
+    const cleanedText = plainText
+      .replace(/^\d+\s+Contributors\s*/i, '')
+      .replace(/Translations\s*[^\n]*\n/gi, '')
+      .replace(/Embed\s*$/i, '')
+      .trim();
+
+    const rawLines = cleanedText.split('\n');
+    const parsedLines = [];
+
+    for (let i = 0; i < rawLines.length; i++) {
+      const raw = rawLines[i].trim();
+      if (!raw) {
+        if (parsedLines.length > 0 && !parsedLines[parsedLines.length - 1].isPause) {
+          parsedLines.push({ isPause: true, weight: 2.0 });
+        }
+        continue;
+      }
+
+      const isHeader = /^\[.*\]$/.test(raw) || /^(Куплет|Припев|Интро|Аутро|Бридж|Verse|Chorus|Intro|Outro|Bridge)/i.test(raw);
+      const charWeight = Math.max(3, Math.min(raw.length, 60));
+      const weight = isHeader ? 2 : charWeight;
+
+      parsedLines.push({
+        text: raw,
+        isSection: isHeader,
+        isPause: false,
+        weight
+      });
+    }
+
+    const vocalLines = parsedLines.filter(l => !l.isPause);
+    if (vocalLines.length === 0) return [];
+
+    const introTime = Math.min(16, Math.max(4, duration * 0.07));
+    const outroTime = Math.min(15, Math.max(3, duration * 0.05));
+    const singingTime = Math.max(10, duration - introTime - outroTime);
+
+    const totalWeight = parsedLines.reduce((sum, l) => sum + (l.weight || 1), 0);
+    const timePerWeightUnit = singingTime / Math.max(1, totalWeight);
+
+    let currentTime = introTime;
+    const lrcLines = [];
+
+    for (let i = 0; i < parsedLines.length; i++) {
+      const item = parsedLines[i];
+      if (item.isPause) {
+        currentTime += item.weight * timePerWeightUnit;
+        continue;
+      }
+
+      lrcLines.push({
+        time: Math.round(currentTime * 100) / 100,
+        text: item.text,
+        isSection: item.isSection
+      });
+
+      currentTime += item.weight * timePerWeightUnit;
+    }
+
+    return lrcLines;
+  }
+
+  /**
+   * Multi-tiered lyrics fetcher: SoundCloud Description -> Native Electron (LRCLIB/Genius) -> Backend Proxy -> LRCLIB (Direct Strict) -> Direct Genius
    */
   async function fetchLyricsMultiSource(track) {
     if (!track) throw new Error('No track provided');
@@ -157,7 +257,7 @@
     const terms = cleanLyricsQuery(track.title, track.artist);
     console.log(`[Lyrics] Searching lyrics for: "${terms.directQuery}" (Artist: ${terms.artist}, Song: ${terms.songName})`);
 
-    // 2. Desktop native Node IPC fetch
+    // 2. Desktop native Node IPC fetch (Strict LRCLIB -> Genius scraper)
     if (typeof window !== 'undefined' && window.electronAPI && typeof window.electronAPI.fetchLyrics === 'function') {
       try {
         const nativeResult = await window.electronAPI.fetchLyrics(terms);
@@ -173,10 +273,10 @@
       }
     }
 
-    // 3. Backend Proxy Lyrics Fetch
+    // 3. Backend Proxy Lyrics Fetch (Strict LRCLIB -> Genius scraper -> Lyrist)
     try {
       const backendUrl = (typeof window !== 'undefined' && (window.API_URL || (typeof window.getBackendUrl === 'function' && window.getBackendUrl()))) || 'https://music-backend-iyni.onrender.com';
-      const res = await _fetchWithTimeout(`${backendUrl}/api/lyrics?title=${encodeURIComponent(terms.songName)}&artist=${encodeURIComponent(terms.artist)}&query=${encodeURIComponent(terms.directQuery)}`, {}, 2500);
+      const res = await _fetchWithTimeout(`${backendUrl}/api/lyrics?title=${encodeURIComponent(terms.songName)}&artist=${encodeURIComponent(terms.artist)}&query=${encodeURIComponent(terms.directQuery)}`, {}, 3500);
       if (res && res.ok) {
         const data = await res.json();
         if (data && (data.lyrics || data.plainText)) {
@@ -189,12 +289,11 @@
       }
     } catch (e) {}
 
-    // 4. Parallel Fast LRCLIB Queries (Direct Get + Combined Search + Clean Search + Title-only)
+    // 4. Parallel Fast LRCLIB Queries with strict validation (Direct Get + Clean Search)
     const queries = [
       `https://lrclib.net/api/get?${new URLSearchParams({ track_name: terms.songName, artist_name: terms.artist })}`,
       `https://lrclib.net/api/search?q=${encodeURIComponent(terms.directQuery)}`,
-      `https://lrclib.net/api/search?q=${encodeURIComponent(terms.rawCleanQuery)}`,
-      `https://lrclib.net/api/search?q=${encodeURIComponent(terms.titleOnlyQuery)}`
+      `https://lrclib.net/api/search?q=${encodeURIComponent(terms.rawCleanQuery)}`
     ];
 
     for (const url of queries) {
@@ -203,42 +302,93 @@
         if (res && res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
-            const best = data.find(item => item.syncedLyrics) || data[0];
-            if (best.syncedLyrics) {
-              const result = { format: 'lrc', lyrics: best.syncedLyrics, source: 'LRCLIB (Караоке)' };
-              console.log(`[Lyrics] Loaded synced lyrics for "${terms.directQuery}" from ${result.source}`);
-              if (typeof localStorage !== 'undefined') {
-                try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
+            const valid = data.filter(item => isConfidentLrclibMatch(item, terms));
+            const best = valid.find(item => item.syncedLyrics) || valid[0];
+            if (best) {
+              if (best.syncedLyrics) {
+                const result = { format: 'lrc', lyrics: best.syncedLyrics, source: 'LRCLIB (Караоке)' };
+                console.log(`[Lyrics] Loaded synced lyrics for "${terms.directQuery}" from ${result.source}`);
+                if (typeof localStorage !== 'undefined') {
+                  try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
+                }
+                return result;
+              } else if (best.plainLyrics) {
+                const result = { format: 'plain', plainText: best.plainLyrics, source: 'LRCLIB' };
+                console.log(`[Lyrics] Loaded plain lyrics for "${terms.directQuery}" from ${result.source}`);
+                if (typeof localStorage !== 'undefined') {
+                  try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
+                }
+                return result;
               }
-              return result;
-            } else if (best.plainLyrics) {
-              const result = { format: 'plain', plainText: best.plainLyrics, source: 'LRCLIB' };
-              console.log(`[Lyrics] Loaded plain lyrics for "${terms.directQuery}" from ${result.source}`);
-              if (typeof localStorage !== 'undefined') {
-                try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
-              }
-              return result;
             }
           } else if (data && !Array.isArray(data)) {
-            if (data.syncedLyrics) {
-              const result = { format: 'lrc', lyrics: data.syncedLyrics, source: 'LRCLIB (Караоке)' };
-              console.log(`[Lyrics] Loaded synced lyrics for "${terms.directQuery}" from ${result.source}`);
-              if (typeof localStorage !== 'undefined') {
-                try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
+            if (isConfidentLrclibMatch(data, terms)) {
+              if (data.syncedLyrics) {
+                const result = { format: 'lrc', lyrics: data.syncedLyrics, source: 'LRCLIB (Караоке)' };
+                console.log(`[Lyrics] Loaded synced lyrics for "${terms.directQuery}" from ${result.source}`);
+                if (typeof localStorage !== 'undefined') {
+                  try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
+                }
+                return result;
+              } else if (data.plainLyrics) {
+                const result = { format: 'plain', plainText: data.plainLyrics, source: 'LRCLIB' };
+                console.log(`[Lyrics] Loaded plain lyrics for "${terms.directQuery}" from ${result.source}`);
+                if (typeof localStorage !== 'undefined') {
+                  try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
+                }
+                return result;
               }
-              return result;
-            } else if (data.plainLyrics) {
-              const result = { format: 'plain', plainText: data.plainLyrics, source: 'LRCLIB' };
-              console.log(`[Lyrics] Loaded plain lyrics for "${terms.directQuery}" from ${result.source}`);
-              if (typeof localStorage !== 'undefined') {
-                try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
-              }
-              return result;
             }
           }
         }
       } catch (e) {}
     }
+
+    // 5. Direct Genius fallback if available
+    try {
+      const geniusUrl = `https://genius.com/api/search/multi?q=${encodeURIComponent(terms.directQuery)}`;
+      const gRes = await _fetchWithTimeout(geniusUrl, { headers: { 'Accept': 'application/json' } }, 3000);
+      if (gRes && gRes.ok) {
+        const gData = await gRes.json();
+        const songHits = gData?.response?.sections?.find(s => s.type === 'song')?.hits || [];
+        if (songHits.length > 0) {
+          const hit = songHits[0].result;
+          if (hit && hit.url) {
+            const pageRes = await _fetchWithTimeout(hit.url, {}, 3500);
+            if (pageRes && pageRes.ok) {
+              const html = await pageRes.text();
+              const containerRegex = /<div[^>]*data-lyrics-container="true"[^>]*>([\s\S]*?)<\/div>/gi;
+              const matches = [];
+              let m;
+              while ((m = containerRegex.exec(html)) !== null) {
+                matches.push(m[1]);
+              }
+              if (matches.length > 0) {
+                const raw = matches.join('\n')
+                  .replace(/<br\s*[\/]?>/gi, '\n')
+                  .replace(/<\/p>/gi, '\n\n')
+                  .replace(/<[^>]+>/g, '')
+                  .replace(/&#x27;/g, "'")
+                  .replace(/&amp;/g, '&')
+                  .replace(/&quot;/g, '"')
+                  .replace(/\u00a0/g, ' ')
+                  .replace(/^\d+\s+Contributors\s*/i, '')
+                  .replace(/Translations\s*[^\n]*\n/gi, '')
+                  .replace(/Embed\s*$/i, '')
+                  .trim();
+                if (raw.length > 20) {
+                  const result = { format: 'plain', plainText: raw, source: 'Genius' };
+                  if (typeof localStorage !== 'undefined') {
+                    try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) {}
+                  }
+                  return result;
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (gErr) {}
 
     console.warn(`[Lyrics] No lyrics found across queries for "${terms.directQuery}"`);
     throw new Error('Текст песни не найден');
@@ -254,7 +404,7 @@
 
     (lines || []).forEach((line, i) => {
       const el = document.createElement('div');
-      el.className = 'lyrics-line upcoming';
+      el.className = 'lyrics-line upcoming' + (line.isSection ? ' lyrics-section-header' : '');
       el.dataset.index = i;
       el.dataset.time = line.time;
       el.textContent = line.text;
@@ -417,9 +567,34 @@
         if (player) player.addEventListener('timeupdate', syncHandler);
         syncHandler();
       } else if (data.plainText) {
-        lyricsState.format = 'plain';
-        if (content) {
-          content.innerHTML = `<div class="lyrics-plain">${_escapeHTML(data.plainText)}</div>`;
+        // Smart Auto-Pacing (Вариант 1)
+        const trackDuration = (player && Number.isFinite(player.duration) && player.duration > 10)
+          ? player.duration
+          : (currentTrack.duration || 180);
+
+        const pacedLines = generateAutoPacedLyrics(data.plainText, trackDuration);
+        if (pacedLines && pacedLines.length > 0) {
+          lyricsState.lrcLines = pacedLines;
+          lyricsState.format = 'lrc';
+          renderLRCLines(lyricsState.lrcLines);
+
+          const syncHandler = () => {
+            const currentPlayer = getPlayer();
+            if (currentPlayer) syncLyricsToTime(currentPlayer.currentTime);
+          };
+          lyricsState.syncTimer = syncHandler;
+          if (player) player.addEventListener('timeupdate', syncHandler);
+          syncHandler();
+
+          if (sourceBadge && data.source) {
+            sourceBadge.textContent = `✨ ${data.source} (Синхро-ритм)`;
+            sourceBadge.classList.remove('hidden');
+          }
+        } else {
+          lyricsState.format = 'plain';
+          if (content) {
+            content.innerHTML = `<div class="lyrics-plain">${_escapeHTML(data.plainText)}</div>`;
+          }
         }
       } else {
         throw new Error('No lyrics data');
@@ -512,6 +687,8 @@
   window.GP = window.GP || {};
   window.GP.Lyrics = {
     cleanLyricsQuery,
+    isConfidentLrclibMatch,
+    generateAutoPacedLyrics,
     fetchLyricsMultiSource,
     loadLyrics: fetchLyricsMultiSource,
     renderLRCLines,
@@ -527,6 +704,8 @@
   // Backward compatibility global exports
   window.lyricsState = lyricsState;
   window.cleanLyricsQuery = cleanLyricsQuery;
+  window.isConfidentLrclibMatch = isConfidentLrclibMatch;
+  window.generateAutoPacedLyrics = generateAutoPacedLyrics;
   window.fetchLyricsMultiSource = fetchLyricsMultiSource;
   window.loadLyrics = fetchLyricsMultiSource;
   window.renderLRCLines = renderLRCLines;

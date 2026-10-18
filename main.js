@@ -417,19 +417,160 @@ function registerIpcHandlers() {
     state.wasMaximized = false;
   });
 
+  function isConfidentLrclibMatch(candidate, songName, artist) {
+    if (!candidate) return false;
+    const cTitle = (candidate.trackName || '').toLowerCase().trim();
+    const cArtist = (candidate.artistName || '').toLowerCase().trim();
+    const sTitle = (songName || '').toLowerCase().trim();
+    const sArtist = (artist || '').toLowerCase().trim();
+
+    if (!cTitle || !cArtist) return false;
+
+    if (sArtist && sArtist.length >= 2) {
+      const artistMatches = (cArtist.length >= 2 && sArtist.includes(cArtist)) || cArtist.includes(sArtist);
+      if (!artistMatches) {
+        const sWords = sArtist.split(/\s+/).filter(w => w.length >= 3);
+        const hasSharedWord = sWords.some(w => cArtist.includes(w));
+        if (!hasSharedWord) return false;
+      }
+    }
+
+    if (sTitle && sTitle.length >= 2) {
+      const titleMatches = (cTitle.length >= 2 && sTitle.includes(cTitle)) || cTitle.includes(sTitle);
+      if (!titleMatches) {
+        const sWords = sTitle.split(/\s+/).filter(w => w.length >= 3);
+        const hasSharedWord = sWords.some(w => cTitle.includes(w));
+        if (!hasSharedWord) return false;
+      }
+    }
+
+    return true;
+  }
+
+  function fetchHttpsText(url, timeoutMs = 5000) {
+    return new Promise((resolve, reject) => {
+      const req = https.get(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,application/json,*/*;q=0.8'
+        }
+      }, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          return fetchHttpsText(res.headers.location, timeoutMs).then(resolve).catch(reject);
+        }
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => resolve(data));
+      });
+      req.on('error', reject);
+      req.setTimeout(timeoutMs, () => {
+        req.destroy();
+        reject(new Error('Timeout'));
+      });
+    });
+  }
+
+  async function fetchGeniusLyrics(query, songName = '', artist = '') {
+    try {
+      const searchUrl = `https://genius.com/api/search/multi?q=${encodeURIComponent(query)}`;
+      const searchRaw = await fetchHttpsText(searchUrl, 4500);
+      const searchData = JSON.parse(searchRaw);
+      const sections = searchData?.response?.sections || [];
+      const songSection = sections.find(s => s.type === 'song');
+      const hits = songSection?.hits || [];
+      if (!hits.length) return null;
+
+      const cleanTitle = (songName || '').toLowerCase().trim();
+      const cleanArtist = (artist || '').toLowerCase().trim();
+
+      let bestHit = null;
+      for (const h of hits) {
+        const item = h.result;
+        if (!item || !item.url) continue;
+        const hitTitle = (item.title || '').toLowerCase().trim();
+        const hitArtist = (item.artist_names || item.primary_artist?.name || '').toLowerCase().trim();
+
+        if (cleanArtist && cleanArtist.length >= 2) {
+          if (hitArtist.includes(cleanArtist) || cleanArtist.includes(hitArtist)) {
+            bestHit = item;
+            break;
+          }
+        } else if (cleanTitle && (hitTitle.includes(cleanTitle) || cleanTitle.includes(hitTitle))) {
+          bestHit = item;
+          break;
+        }
+      }
+
+      if (!bestHit && hits.length > 0) {
+        bestHit = hits[0].result;
+      }
+
+      if (!bestHit || !bestHit.url) return null;
+
+      const pageHtml = await fetchHttpsText(bestHit.url, 5000);
+      const containerRegex = /<div[^>]*data-lyrics-container="true"[^>]*>([\s\S]*?)<\/div>/gi;
+      const matches = [];
+      let match;
+      while ((match = containerRegex.exec(pageHtml)) !== null) {
+        matches.push(match[1]);
+      }
+      if (matches.length === 0) {
+        const oldMatch = pageHtml.match(/<div class="lyrics"[^>]*>([\s\S]*?)<\/div>/i);
+        if (oldMatch) matches.push(oldMatch[1]);
+      }
+      if (!matches.length) return null;
+
+      let raw = matches.join('\n');
+      raw = raw.replace(/<br\s*[\/]?>/gi, '\n');
+      raw = raw.replace(/<\/p>/gi, '\n\n');
+      raw = raw.replace(/<[^>]+>/g, '');
+      raw = raw
+        .replace(/&#x27;/g, "'")
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&#(\d+);/g, (m, code) => String.fromCharCode(code))
+        .replace(/\u00a0/g, ' ');
+
+      const cleaned = raw
+        .replace(/^\d+\s+Contributors\s*/i, '')
+        .replace(/Translations\s*[^\n]*\n/gi, '')
+        .replace(/Embed\s*$/i, '')
+        .split('\n')
+        .map(l => l.trim())
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+
+      if (cleaned.length > 20) {
+        return {
+          format: 'plain',
+          plainText: cleaned,
+          source: 'Genius',
+          songTitle: bestHit.title,
+          artistName: bestHit.artist_names
+        };
+      }
+      return null;
+    } catch (err) {
+      console.warn('[Genius Native] Error:', err.message);
+      return null;
+    }
+  }
+
   ipcMain.handle('fetch-lyrics', async (event, terms) => {
     if (!terms) return null;
-    const { artist, songName, directQuery, rawCleanQuery, titleOnlyQuery } = terms;
+    const { artist, songName, directQuery } = terms;
     const LRCLIB_HEADERS = {
-      'User-Agent': 'GlassPlayer/1.17.6 (https://github.com/xivmcm/music-desktop)',
-      'Lrclib-Client': 'GlassPlayer v1.17.6'
+      'User-Agent': 'GlassPlayer/1.20.2 (https://github.com/xivmcm/music-desktop)',
+      'Lrclib-Client': 'GlassPlayer v1.20.2'
     };
 
+    // 1. Try LRCLIB with strict match validation
     const queries = [
       `https://lrclib.net/api/get?${new URLSearchParams({ track_name: songName, artist_name: artist })}`,
-      `https://lrclib.net/api/search?q=${encodeURIComponent(directQuery)}`,
-      `https://lrclib.net/api/search?q=${encodeURIComponent(rawCleanQuery)}`,
-      `https://lrclib.net/api/search?q=${encodeURIComponent(titleOnlyQuery)}`
+      `https://lrclib.net/api/search?q=${encodeURIComponent(directQuery)}`
     ];
 
     for (const url of queries) {
@@ -438,22 +579,34 @@ function registerIpcHandlers() {
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
-            const best = data.find(item => item.syncedLyrics) || data[0];
-            if (best.syncedLyrics) {
-              return { format: 'lrc', lyrics: best.syncedLyrics, source: 'LRCLIB (Караоке)' };
-            } else if (best.plainLyrics) {
-              return { format: 'plain', plainText: best.plainLyrics, source: 'LRCLIB' };
+            const valid = data.filter(item => isConfidentLrclibMatch(item, songName, artist));
+            const best = valid.find(item => item.syncedLyrics) || valid[0];
+            if (best) {
+              if (best.syncedLyrics) {
+                return { format: 'lrc', lyrics: best.syncedLyrics, source: 'LRCLIB (Караоке)' };
+              } else if (best.plainLyrics) {
+                return { format: 'plain', plainText: best.plainLyrics, source: 'LRCLIB' };
+              }
             }
           } else if (data && !Array.isArray(data)) {
-            if (data.syncedLyrics) {
-              return { format: 'lrc', lyrics: data.syncedLyrics, source: 'LRCLIB (Караоке)' };
-            } else if (data.plainLyrics) {
-              return { format: 'plain', plainText: data.plainLyrics, source: 'LRCLIB' };
+            if (isConfidentLrclibMatch(data, songName, artist)) {
+              if (data.syncedLyrics) {
+                return { format: 'lrc', lyrics: data.syncedLyrics, source: 'LRCLIB (Караоке)' };
+              } else if (data.plainLyrics) {
+                return { format: 'plain', plainText: data.plainLyrics, source: 'LRCLIB' };
+              }
             }
           }
         }
       } catch (e) {}
     }
+
+    // 2. If LRCLIB had no confident match, fall back to Genius
+    const geniusLyrics = await fetchGeniusLyrics(directQuery, songName, artist);
+    if (geniusLyrics) {
+      return geniusLyrics;
+    }
+
     return null;
   });
 

@@ -1,5 +1,18 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.20.2';
+const APP_VERSION = '1.20.6';
+window.APP_VERSION = APP_VERSION;
+if (typeof document !== 'undefined') {
+  const syncVersionBadges = () => {
+    document.querySelectorAll('.app-version-badge').forEach(badge => {
+      badge.textContent = `v${APP_VERSION}`;
+    });
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', syncVersionBadges);
+  } else {
+    syncVersionBadges();
+  }
+}
 document.documentElement.classList.toggle('electron-runtime', isElectron);
 document.documentElement.classList.toggle('web-runtime', !isElectron);
 document.body.classList.toggle('electron-runtime', isElectron);

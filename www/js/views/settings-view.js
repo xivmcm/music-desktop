@@ -32,7 +32,7 @@
   }
 
   function getAppVersion() {
-    return (typeof window !== 'undefined' && window.APP_VERSION) || '1.20.0';
+    return (typeof window !== 'undefined' && window.APP_VERSION) || '1.20.6';
   }
 
   function getApiUrl() {
@@ -890,7 +890,10 @@
         </div>
         <div class="settings-info-row">
           <span class="settings-info-label">Текущая версия:</span>
-          <span class="settings-info-value">${APP_VERSION}</span>
+          <span class="settings-info-value" style="display: inline-flex; align-items: center; gap: 8px;">
+            <span class="app-version-badge">v${APP_VERSION}</span>
+            <button id="settings-open-changelog-btn" class="settings-changelog-btn" type="button" style="background: rgba(255,255,255,0.08); border: 1px solid var(--card-border, rgba(255,255,255,0.12)); border-radius: 12px; padding: 2px 10px; font-size: 11px; color: var(--accent-color, #fff); cursor: pointer; transition: all 0.2s ease;">Что нового?</button>
+          </span>
         </div>
         
         <div class="settings-info-row" style="flex-direction: column; align-items: stretch; gap: 8px; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 15px;">
@@ -1711,6 +1714,15 @@
     if (openFullStatsBtn) {
       openFullStatsBtn.addEventListener('click', () => {
         loadStatsView();
+      });
+    }
+
+    const changelogBtn = panel.querySelector('#settings-open-changelog-btn');
+    if (changelogBtn) {
+      changelogBtn.addEventListener('click', () => {
+        if (typeof window.openChangelogModal === 'function') {
+          window.openChangelogModal();
+        }
       });
     }
 

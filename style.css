@@ -15,6 +15,7 @@
 @import './css/views/artist.css';
 @import './css/views/settings.css';
 @import './css/views/stats.css';
+@import './css/components/changelog.css';
 @import './css/components/mini-player.css';
 @import './css/components/search-tabs.css';
 @import './css/views/social.css';

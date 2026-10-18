@@ -889,7 +889,9 @@
       const fallbackCover = getFallbackCover(album.thumbnail);
 
       card.innerHTML = `
-        <img class="album-card-cover" src="${optimalCover}" alt="" loading="lazy" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='${fallbackCover}';}">
+        <div class="album-card-cover-wrap">
+          <img class="album-card-cover" src="${optimalCover}" alt="" loading="lazy" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='${fallbackCover}';}">
+        </div>
         <div class="album-card-title">${escapeHTML(album.title || album.name || 'Альбом')}</div>
         <div class="album-card-author">${escapeHTML(album.artist || album.author || 'SoundCloud')} • ${album.tracksCount || 0} треков</div>
       `;

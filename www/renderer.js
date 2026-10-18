@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.20.1';
+const APP_VERSION = '1.20.2';
 document.documentElement.classList.toggle('electron-runtime', isElectron);
 document.documentElement.classList.toggle('web-runtime', !isElectron);
 document.body.classList.toggle('electron-runtime', isElectron);
@@ -456,28 +456,22 @@ const DirectSoundCloudEngine = {
           continue;
         }
 
-        const [tracksRes, playlistsRes] = await Promise.allSettled([
-          fetchWithTimeout(`https://api-v2.soundcloud.com/users/${numericUserId}/tracks?client_id=${clientId}&limit=20`, {
+        const [topRes, tracksRes, playlistsRes, albumsRes] = await Promise.allSettled([
+          fetchWithTimeout(`https://api-v2.soundcloud.com/users/${numericUserId}/toptracks?client_id=${clientId}&limit=10`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+          }, 5000),
+          fetchWithTimeout(`https://api-v2.soundcloud.com/users/${numericUserId}/tracks?client_id=${clientId}&limit=50`, {
             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
           }, 5000),
           fetchWithTimeout(`https://api-v2.soundcloud.com/users/${numericUserId}/playlists_without_albums?client_id=${clientId}&limit=10`, {
             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+          }, 5000),
+          fetchWithTimeout(`https://api-v2.soundcloud.com/users/${numericUserId}/albums?client_id=${clientId}&limit=10`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
           }, 5000)
         ]);
 
-        let tracksCollection = [];
-        if (tracksRes.status === 'fulfilled' && tracksRes.value.ok) {
-          const tracksData = await tracksRes.value.json();
-          tracksCollection = tracksData.collection || [];
-        }
-
-        let playlistsCollection = [];
-        if (playlistsRes.status === 'fulfilled' && playlistsRes.value.ok) {
-          const playlistsData = await playlistsRes.value.json();
-          playlistsCollection = playlistsData.collection || [];
-        }
-
-        const tracks = tracksCollection.map(track => {
+        const mapTrack = (track) => {
           const durSec = Math.floor((track.duration || 0) / 1000);
           const min = Math.floor(durSec / 60);
           const sec = durSec % 60;
@@ -494,14 +488,51 @@ const DirectSoundCloudEngine = {
             track_authorization: track.track_authorization || '',
             media: track.media
           };
-        });
+        };
 
-        const playlists = playlistsCollection.map(pl => ({
-          id: String(pl.id),
-          name: pl.title || 'Unknown Playlist',
-          tracksCount: pl.track_count || pl.tracks?.length || 0,
-          thumbnail: pl.artwork_url || (pl.tracks && pl.tracks[0]?.artwork_url) || userData.avatar_url || ''
-        }));
+        let rawTop = [];
+        if (topRes.status === 'fulfilled' && topRes.value.ok) {
+          const d = await topRes.value.json();
+          rawTop = d.collection || [];
+        }
+
+        let rawAll = [];
+        if (tracksRes.status === 'fulfilled' && tracksRes.value.ok) {
+          const d = await tracksRes.value.json();
+          rawAll = d.collection || [];
+        }
+
+        let popularTracks = rawTop.map(mapTrack);
+        const allTracks = rawAll.map(mapTrack);
+
+        if (popularTracks.length === 0 && allTracks.length > 0) {
+          popularTracks = [...allTracks]
+            .sort((a, b) => (b.playbackCount || 0) - (a.playbackCount || 0))
+            .slice(0, 10);
+        }
+
+        const seenPlIds = new Set();
+        const combinedPls = [];
+        if (albumsRes.status === 'fulfilled' && albumsRes.value.ok) {
+          const d = await albumsRes.value.json();
+          if (Array.isArray(d.collection)) combinedPls.push(...d.collection);
+        }
+        if (playlistsRes.status === 'fulfilled' && playlistsRes.value.ok) {
+          const d = await playlistsRes.value.json();
+          if (Array.isArray(d.collection)) combinedPls.push(...d.collection);
+        }
+
+        const playlists = [];
+        for (const pl of combinedPls) {
+          if (!pl || !pl.id || seenPlIds.has(String(pl.id))) continue;
+          seenPlIds.add(String(pl.id));
+          playlists.push({
+            id: String(pl.id),
+            name: pl.title || 'Unknown Playlist',
+            tracksCount: pl.track_count || pl.tracks?.length || 0,
+            thumbnail: pl.artwork_url || (pl.tracks && pl.tracks[0]?.artwork_url) || userData.avatar_url || ''
+          });
+        }
 
         return {
           id: String(userData.id),
@@ -509,7 +540,9 @@ const DirectSoundCloudEngine = {
           avatar: userData.avatar_url || '',
           followers: userData.followers_count || 0,
           description: userData.description || '',
-          tracks,
+          popularTracks,
+          allTracks,
+          tracks: allTracks.length > 0 ? allTracks : popularTracks,
           playlists
         };
       } catch (err) {
@@ -519,6 +552,78 @@ const DirectSoundCloudEngine = {
       this.rotateClientId();
     }
     return null;
+  },
+
+  async getPlaylist(playlistId) {
+    if (!playlistId) return [];
+    let attempts = 0;
+    while (attempts < SC_CLIENT_IDS.length + 1) {
+      try {
+        const clientId = this.getClientId();
+        const url = `https://api-v2.soundcloud.com/playlists/${playlistId}?client_id=${clientId}`;
+        const res = await fetchWithTimeout(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+        }, 5000);
+        if (res.ok) {
+          const data = await res.json();
+          if (!data || !Array.isArray(data.tracks)) return [];
+
+          const stubTrackIds = data.tracks
+            .filter(t => t && t.id && !t.title)
+            .map(t => String(t.id));
+
+          const resolvedMap = new Map();
+          if (stubTrackIds.length > 0) {
+            for (let i = 0; i < stubTrackIds.length; i += 50) {
+              const chunk = stubTrackIds.slice(i, i + 50);
+              try {
+                const batchUrl = `https://api-v2.soundcloud.com/tracks?ids=${chunk.join(',')}&client_id=${clientId}`;
+                const batchRes = await fetchWithTimeout(batchUrl, {
+                  headers: { 'User-Agent': 'Mozilla/5.0' }
+                }, 5000);
+                if (batchRes.ok) {
+                  const fullItems = await batchRes.json();
+                  if (Array.isArray(fullItems)) {
+                    fullItems.forEach(item => {
+                      if (item && item.id) resolvedMap.set(String(item.id), item);
+                    });
+                  }
+                }
+              } catch (e) {}
+            }
+          }
+
+          const albumArtwork = data.artwork_url || (data.user && data.user.avatar_url) || '';
+          const albumArtist = data.user?.username || data.user?.name || data.label_name || 'SoundCloud Artist';
+
+          return data.tracks.map(rawTrack => {
+            if (!rawTrack) return null;
+            const track = (rawTrack.title ? rawTrack : resolvedMap.get(String(rawTrack.id))) || rawTrack;
+            const durSec = Math.floor((track.duration || 0) / 1000);
+            const min = Math.floor(durSec / 60);
+            const sec = durSec % 60;
+            return {
+              id: String(track.id),
+              title: track.title || track.display_title || 'Unknown Track',
+              artist: track.user?.username || track.user?.name || track.label_name || albumArtist,
+              artistId: String(track.user?.id || data.user?.id || ''),
+              duration: `${min}:${String(sec).padStart(2, '0')}`,
+              source: 'soundcloud',
+              thumbnail: track.artwork_url || track.user?.avatar_url || albumArtwork,
+              playbackCount: track.playback_count,
+              playback_count: track.playback_count,
+              track_authorization: track.track_authorization || '',
+              media: track.media
+            };
+          }).filter(Boolean);
+        }
+      } catch (err) {
+        console.warn('[Direct SC Engine] Playlist fetch attempt failed:', err.message);
+      }
+      attempts++;
+      this.rotateClientId();
+    }
+    return [];
   },
 
   async getAlbums(query = 'album phonk trap hits', limit = 10) {

@@ -212,8 +212,8 @@
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap;">
             <div class="playlist-card-count">${pl.tracks ? pl.tracks.length : 0} tracks</div>
             <div class="playlist-card-badges">
-              ${isPrivate ? '<span class="playlist-tag-badge private">🔒 Приватный</span>' : ''}
-              ${isCollab ? '<span class="playlist-tag-badge collab">👥 Совместный</span>' : ''}
+              ${isPrivate ? '<span class="playlist-tag-badge private"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>Приватный</span>' : ''}
+              ${isCollab ? '<span class="playlist-tag-badge collab"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>Совместный</span>' : ''}
             </div>
           </div>
           <button class="playlist-delete-btn" title="Delete Playlist">
@@ -333,8 +333,8 @@
           </button>
           <span style="font-size: 20px; font-weight: 600;">${escapeHTML(pl.name)}</span>
           <span class="view-header-subtitle" style="margin-left: 6px;">(${pl.tracks ? pl.tracks.length : 0} tracks)</span>
-          ${isPrivate ? '<span class="playlist-tag-badge private" style="font-size: 11px; padding: 3px 8px;">🔒 Приватный</span>' : ''}
-          ${isCollab ? '<span class="playlist-tag-badge collab" style="font-size: 11px; padding: 3px 8px;">👥 Совместный</span>' : ''}
+          ${isPrivate ? '<span class="playlist-tag-badge private" style="font-size: 11px; padding: 3px 8px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>Приватный</span>' : ''}
+          ${isCollab ? '<span class="playlist-tag-badge collab" style="font-size: 11px; padding: 3px 8px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>Совместный</span>' : ''}
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
           ${playAllBtnHtml}

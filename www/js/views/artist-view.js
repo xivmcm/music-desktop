@@ -361,22 +361,90 @@
     const sections = document.createElement('div');
     sections.className = 'artist-sections';
 
-    // Tracks Section
-    if (artistData.tracks && artistData.tracks.length > 0) {
-      const tracksSection = document.createElement('div');
-      tracksSection.className = 'home-section';
-      tracksSection.innerHTML = '<div class="home-section-title">Популярные треки</div>';
+    // 1. Popular Tracks Section
+    const popular = (artistData.popularTracks && artistData.popularTracks.length > 0)
+      ? artistData.popularTracks
+      : (artistData.tracks || []).slice(0, 10);
 
-      const tracksGrid = document.createElement('div');
-      tracksGrid.className = 'tracks-layout-grid';
-      tracksSection.appendChild(tracksGrid);
+    if (popular.length > 0) {
+      const popularSection = document.createElement('div');
+      popularSection.className = 'home-section';
+      popularSection.innerHTML = '<div class="home-section-title">Популярные треки</div>';
 
-      sections.appendChild(tracksSection);
+      const popGrid = document.createElement('div');
+      popGrid.className = 'tracks-layout-grid';
+      popularSection.appendChild(popGrid);
+
+      sections.appendChild(popularSection);
 
       if (typeof root.renderTracks === 'function') {
-        root.renderTracks(artistData.tracks, tracksGrid);
+        root.renderTracks(popular, popGrid);
       }
-    } else {
+    }
+
+    // 2. All Releases / Chronological Tracks Section (from newest to oldest)
+    const allTracks = (artistData.allTracks && artistData.allTracks.length > 0)
+      ? artistData.allTracks
+      : (artistData.tracks || []);
+
+    if (allTracks.length > 0) {
+      const allSection = document.createElement('div');
+      allSection.className = 'home-section';
+      allSection.innerHTML = '<div class="home-section-title">Все релизы и треки</div>';
+
+      const allGrid = document.createElement('div');
+      allGrid.className = 'tracks-layout-grid';
+      allSection.appendChild(allGrid);
+
+      const PAGE_SIZE = 12;
+      let displayedCount = Math.min(PAGE_SIZE, allTracks.length);
+
+      if (typeof root.renderTracks === 'function') {
+        root.renderTracks(allTracks.slice(0, displayedCount), allGrid);
+      }
+
+      if (allTracks.length > displayedCount) {
+        const loadMoreBtn = document.createElement('button');
+        loadMoreBtn.className = 'view-btn';
+        loadMoreBtn.style.margin = '16px auto 0';
+        loadMoreBtn.style.display = 'inline-flex';
+        loadMoreBtn.style.alignItems = 'center';
+        loadMoreBtn.style.gap = '8px';
+        loadMoreBtn.style.padding = '8px 20px';
+        loadMoreBtn.style.borderRadius = '12px';
+        loadMoreBtn.innerHTML = `
+          <span>Показать ещё</span>
+          <span style="opacity: 0.6; font-size: 11px;">(${allTracks.length - displayedCount})</span>
+        `;
+
+        loadMoreBtn.addEventListener('click', () => {
+          const nextCount = Math.min(displayedCount + 15, allTracks.length);
+          const chunk = allTracks.slice(displayedCount, nextCount);
+          displayedCount = nextCount;
+
+          if (typeof root.renderTracks === 'function') {
+            root.renderTracks(chunk, allGrid, true);
+          }
+
+          if (displayedCount >= allTracks.length) {
+            loadMoreBtn.remove();
+          } else {
+            loadMoreBtn.innerHTML = `
+              <span>Показать ещё</span>
+              <span style="opacity: 0.6; font-size: 11px;">(${allTracks.length - displayedCount})</span>
+            `;
+          }
+        });
+
+        const btnContainer = document.createElement('div');
+        btnContainer.style.textAlign = 'center';
+        btnContainer.style.width = '100%';
+        btnContainer.appendChild(loadMoreBtn);
+        allSection.appendChild(btnContainer);
+      }
+
+      sections.appendChild(allSection);
+    } else if (popular.length === 0) {
       const emptyTracksSection = document.createElement('div');
       emptyTracksSection.className = 'home-section';
       emptyTracksSection.innerHTML = `
@@ -388,11 +456,11 @@
       sections.appendChild(emptyTracksSection);
     }
 
-    // Playlists & Albums Section
+    // 3. Playlists & Albums Section
     if (artistData.playlists && artistData.playlists.length > 0) {
       const playlistsSection = document.createElement('div');
       playlistsSection.className = 'home-section';
-      playlistsSection.innerHTML = '<div class="home-section-title">Альбомы и плейлисты</div>';
+      playlistsSection.innerHTML = '<div class="home-section-title">Альбомы и сборники</div>';
 
       const scroller = document.createElement('div');
       scroller.className = 'scroller-container';
@@ -400,17 +468,18 @@
 
       artistData.playlists.forEach(pl => {
         const card = document.createElement('div');
-        card.className = 'playlist-card';
-        card.style.flex = '0 0 220px';
+        card.className = 'album-card-horizontal';
         card.style.cursor = 'pointer';
 
         const plThumbnail = getOptimalCover(pl.thumbnail);
         const fallbackPlThumbnail = getFallbackCover(pl.thumbnail);
 
         card.innerHTML = `
-          <img src="${plThumbnail}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='${fallbackPlThumbnail}';}" style="width:100%; height:130px; object-fit:cover; border-radius:12px;">
-          <div class="playlist-card-title" style="margin-top:10px; font-weight:600;">${escapeHTML(pl.name || 'Плейлист')}</div>
-          <div class="playlist-card-count" style="font-size:12px; color:var(--text-dim); margin-top:4px;">${pl.tracksCount || 0} треков</div>
+          <div class="album-card-cover-wrap">
+            <img class="album-card-cover" src="${plThumbnail}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='${fallbackPlThumbnail}';}">
+          </div>
+          <div class="album-card-title">${escapeHTML(pl.name || 'Альбом')}</div>
+          <div class="album-card-author">${pl.tracksCount || 0} треков</div>
         `;
 
         card.addEventListener('click', () => {
@@ -442,13 +511,28 @@
     if (loadingIndicator) loadingIndicator.classList.remove('hidden');
 
     try {
-      const backendUrl = getBackendUrl();
-      const response = await fetch(`${backendUrl}/search/playlist/${playlistId}`);
-      const data = await response.json();
+      let results = [];
+      try {
+        const backendUrl = getBackendUrl();
+        const response = await fetch(`${backendUrl}/search/playlist/${playlistId}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.status === 'success' && Array.isArray(data.results)) {
+            results = data.results;
+          }
+        }
+      } catch (e) {
+        console.warn('[Artist View] Backend playlist fetch failed, trying direct engine:', e.message);
+      }
+
+      if (results.length === 0 && root.DirectSoundCloudEngine?.getPlaylist) {
+        results = await root.DirectSoundCloudEngine.getPlaylist(playlistId);
+      }
+
       if (loadingIndicator) loadingIndicator.classList.add('hidden');
 
-      if (data.status === 'success' && data.results) {
-        root.playlist = data.results;
+      if (results && results.length > 0) {
+        root.playlist = results;
 
         if (tracksContainer) {
           tracksContainer.innerHTML = '';
@@ -475,18 +559,11 @@
             }
           });
 
-          if (root.playlist.length > 0) {
-            const listGrid = document.createElement('div');
-            listGrid.className = 'tracks-layout-grid';
-            tracksContainer.appendChild(listGrid);
-            if (typeof root.renderTracks === 'function') {
-              root.renderTracks(root.playlist, listGrid);
-            }
-          } else {
-            const emptyState = document.createElement('div');
-            emptyState.className = 'welcome-state';
-            emptyState.innerHTML = '<h2>Плейлист пуст</h2>';
-            tracksContainer.appendChild(emptyState);
+          const listGrid = document.createElement('div');
+          listGrid.className = 'tracks-layout-grid';
+          tracksContainer.appendChild(listGrid);
+          if (typeof root.renderTracks === 'function') {
+            root.renderTracks(root.playlist, listGrid);
           }
           tracksContainer.classList.remove('hidden');
         }

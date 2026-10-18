@@ -1063,7 +1063,6 @@ const updateDownloadBtn = document.getElementById('update-download-btn');
 const updateInstallBtn = document.getElementById('update-install-btn');
 const updateCloseBtn = document.getElementById('update-close-btn');
 const updateProgressBar = document.getElementById('update-progress-bar');
-
 const updateManualBtn = document.getElementById('update-manual-btn');
 
 let currentUpdateInfo = null;
@@ -1072,19 +1071,18 @@ if (isElectron && window.electronAPI && window.electronAPI.onUpdateStatus) {
   window.electronAPI.onUpdateStatus((status, payload) => {
     console.log(`[Auto-Updater] Status changed: ${status}`, payload);
     if (status === 'checking') {
-      // Background check
+      // Quiet background check
     } else if (status === 'available') {
       currentUpdateInfo = payload;
       const verText = typeof payload === 'object' ? payload.version : payload;
-      updateBannerText.textContent = `Доступна новая версия GlassPlayer: v${verText}!`;
-      updateDownloadBtn.classList.remove('hidden');
-      updateInstallBtn.classList.add('hidden');
-      if (updateManualBtn) {
-        updateManualBtn.classList.remove('hidden');
-        if (payload && payload.downloadUrl) {
-          updateManualBtn.href = payload.downloadUrl;
-        }
+      if (updateBannerText) updateBannerText.textContent = `Доступна новая версия GlassPlayer: v${verText}!`;
+      if (updateDownloadBtn) {
+        updateDownloadBtn.classList.remove('hidden');
+        updateDownloadBtn.textContent = 'Скачать';
+        updateDownloadBtn.disabled = false;
       }
+      if (updateInstallBtn) updateInstallBtn.classList.add('hidden');
+      if (updateManualBtn) updateManualBtn.classList.add('hidden');
       if (bannerLoader) bannerLoader.classList.add('hidden');
       if (updateProgressBar) updateProgressBar.style.width = '0%';
       if (updateBanner) updateBanner.classList.remove('hidden');
@@ -1092,10 +1090,11 @@ if (isElectron && window.electronAPI && window.electronAPI.onUpdateStatus) {
       showToastNotification('У вас установлена самая актуальная версия GlassPlayer.', 'success', 'Обновления');
     } else if (status === 'error') {
       console.error('[Auto-Updater Error]:', payload);
-      showToastNotification(`Ошибка проверки обновлений: ${payload || 'Сервер недоступен'}`, 'error', 'Обновления');
-      if (updateBannerText) updateBannerText.textContent = `Ошибка автообновления: ${payload || 'Сервер недоступен'}`;
+      showToastNotification(`Ошибка автообновления: ${payload || 'Сервер недоступен'}`, 'error', 'Обновления');
+      if (updateBannerText) updateBannerText.textContent = `Ошибка обновления: ${payload || 'Сервер недоступен'}`;
       if (bannerLoader) bannerLoader.classList.add('hidden');
       if (updateDownloadBtn) updateDownloadBtn.classList.add('hidden');
+      if (updateInstallBtn) updateInstallBtn.classList.add('hidden');
       if (updateManualBtn) {
         updateManualBtn.classList.remove('hidden');
         updateManualBtn.href = 'https://github.com/xivmcm/music-desktop/releases/latest';
@@ -1106,24 +1105,34 @@ if (isElectron && window.electronAPI && window.electronAPI.onUpdateStatus) {
 
   window.electronAPI.onUpdateProgress((percent) => {
     const rounded = Math.round(percent);
-    updateBannerText.textContent = `Загрузка обновления: ${rounded}%`;
+    if (updateBannerText) updateBannerText.textContent = `Загрузка обновления: ${rounded}%`;
+    if (updateDownloadBtn) updateDownloadBtn.classList.add('hidden');
+    if (updateInstallBtn) updateInstallBtn.classList.add('hidden');
+    if (updateManualBtn) updateManualBtn.classList.add('hidden');
+    if (bannerLoader) bannerLoader.classList.remove('hidden');
     if (updateProgressBar) updateProgressBar.style.width = `${rounded}%`;
+    if (updateBanner) updateBanner.classList.remove('hidden');
   });
 
   window.electronAPI.onUpdateReady(() => {
-    updateBannerText.textContent = 'Обновление скачано и готово к установке!';
-    updateDownloadBtn.classList.add('hidden');
-    updateInstallBtn.classList.remove('hidden');
+    if (updateBannerText) updateBannerText.textContent = 'Обновление готово к установке!';
+    if (updateDownloadBtn) updateDownloadBtn.classList.add('hidden');
+    if (updateInstallBtn) {
+      updateInstallBtn.classList.remove('hidden');
+      updateInstallBtn.textContent = 'Установить';
+      updateInstallBtn.disabled = false;
+    }
     if (updateManualBtn) updateManualBtn.classList.add('hidden');
     if (bannerLoader) bannerLoader.classList.add('hidden');
     if (updateProgressBar) updateProgressBar.style.width = '100%';
+    if (updateBanner) updateBanner.classList.remove('hidden');
   });
 
   if (updateDownloadBtn) {
     updateDownloadBtn.addEventListener('click', () => {
       updateDownloadBtn.classList.add('hidden');
       if (bannerLoader) bannerLoader.classList.remove('hidden');
-      updateBannerText.textContent = 'Загрузка обновления...';
+      if (updateBannerText) updateBannerText.textContent = 'Подготовка загрузки...';
       const downloadUrl = currentUpdateInfo?.downloadUrl || null;
       window.electronAPI.downloadUpdate(downloadUrl);
     });
@@ -1131,8 +1140,13 @@ if (isElectron && window.electronAPI && window.electronAPI.onUpdateStatus) {
 
   if (updateInstallBtn) {
     updateInstallBtn.addEventListener('click', () => {
-      updateBannerText.textContent = 'Перезапуск и установка...';
-      window.electronAPI.installUpdate();
+      updateInstallBtn.disabled = true;
+      updateInstallBtn.textContent = 'Установка...';
+      if (updateBannerText) updateBannerText.textContent = 'Перезапуск и обновление GlassPlayer...';
+      if (bannerLoader) bannerLoader.classList.remove('hidden');
+      setTimeout(() => {
+        window.electronAPI.installUpdate();
+      }, 300);
     });
   }
 

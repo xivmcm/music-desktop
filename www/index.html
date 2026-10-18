@@ -441,11 +441,13 @@
   <div id="update-banner" class="update-banner hidden">
     <div class="update-banner-content">
       <div class="spinner banner-spinner hidden" id="banner-loader"></div>
-      <span id="update-banner-text">Доступна новая версия!</span>
+      <div class="update-banner-info">
+        <span id="update-banner-text">Доступна новая версия!</span>
+        <a id="update-manual-btn" class="update-manual-link hidden" href="https://github.com/xivmcm/music-desktop/releases/latest" target="_blank" rel="noopener">Скачать вручную</a>
+      </div>
       <div class="update-actions">
-        <button id="update-download-btn" class="modal-btn primary hidden">Скачать</button>
-        <button id="update-install-btn" class="modal-btn primary hidden">Установить</button>
-        <a id="update-manual-btn" class="modal-btn secondary hidden" href="https://github.com/xivmcm/music-desktop/releases/latest" target="_blank" rel="noopener">Скачать вручную</a>
+        <button id="update-download-btn" class="update-action-btn primary hidden">Скачать</button>
+        <button id="update-install-btn" class="update-action-btn accent hidden">Установить</button>
         <button id="update-close-btn" class="close-btn update-banner-close" type="button" aria-label="Закрыть уведомление об обновлении">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
         </button>

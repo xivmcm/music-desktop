@@ -650,7 +650,28 @@ class GlassUpdater {
 
       if (updateInfo && this.isNewerVersion(updateInfo.version)) {
         this.latestUpdate = updateInfo;
+
+        // Check if full installer is already downloaded and cached in Temp
+        const tempPath = path.join(app.getPath('temp'), `GlassPlayer-Setup-${updateInfo.version}.exe`);
+        const expectedSize = updateInfo.size || 0;
+        if (fs.existsSync(tempPath)) {
+          try {
+            const stat = fs.statSync(tempPath);
+            if ((expectedSize > 0 && Math.abs(stat.size - expectedSize) < 2048) || (!expectedSize && stat.size > 50 * 1024 * 1024)) {
+              console.log(`[GlassUpdater] Cached complete installer verified for v${updateInfo.version} (${stat.size} bytes).`);
+              this.downloadedInstallerPath = tempPath;
+              sendToPrimaryWindow('update-status', 'available', updateInfo);
+              sendToPrimaryWindow('update-ready');
+              return;
+            }
+          } catch (statErr) {
+            console.warn('[GlassUpdater] Failed to verify cached installer:', statErr.message);
+          }
+        }
+
         sendToPrimaryWindow('update-status', 'available', updateInfo);
+        // Start silent background download so user gets a seamless update without manual waiting
+        this.downloadUpdate(updateInfo.downloadUrl, true);
       } else {
         this.latestUpdate = null;
         sendToPrimaryWindow('update-status', 'not-available');
@@ -709,18 +730,37 @@ class GlassUpdater {
     }
   }
 
-  async downloadUpdate(targetUrl) {
+  async downloadUpdate(targetUrl, isBackground = false) {
     const url = targetUrl || this.latestUpdate?.downloadUrl;
     if (!url) {
-      sendToPrimaryWindow('update-status', 'error', 'No download URL provided');
+      if (!isBackground) sendToPrimaryWindow('update-status', 'error', 'No download URL provided');
       return;
     }
 
     if (this.isDownloading) return;
-    this.isDownloading = true;
 
-    const tempPath = path.join(app.getPath('temp'), `GlassPlayer-Setup-${this.latestUpdate?.version || Date.now()}.exe`);
+    const versionStr = this.latestUpdate?.version || 'latest';
+    const tempPath = path.join(app.getPath('temp'), `GlassPlayer-Setup-${versionStr}.exe`);
     this.downloadedInstallerPath = tempPath;
+
+    // Check if fully downloaded already in cache
+    const expectedSize = this.latestUpdate?.size || 0;
+    if (fs.existsSync(tempPath)) {
+      try {
+        const stat = fs.statSync(tempPath);
+        if ((expectedSize > 0 && Math.abs(stat.size - expectedSize) < 2048) || (!expectedSize && stat.size > 50 * 1024 * 1024)) {
+          console.log(`[GlassUpdater] Reusing existing complete installer (${stat.size} bytes).`);
+          this.isDownloading = false;
+          sendToPrimaryWindow('update-progress', 100);
+          sendToPrimaryWindow('update-ready');
+          return;
+        }
+      } catch (err) {
+        // Continue downloading
+      }
+    }
+
+    this.isDownloading = true;
 
     const downloadStream = (fileUrl) => new Promise((resolve, reject) => {
       const file = fs.createWriteStream(tempPath);
@@ -775,43 +815,68 @@ class GlassUpdater {
     } catch (err) {
       this.isDownloading = false;
       console.error('[GlassUpdater Download Error]:', err.message);
-      sendToPrimaryWindow('update-status', 'error', `Ошибка загрузки: ${err.message}`);
+      if (!isBackground) {
+        sendToPrimaryWindow('update-status', 'error', `Ошибка загрузки: ${err.message}`);
+      }
     }
   }
 
   installUpdate() {
     if (!this.downloadedInstallerPath || !fs.existsSync(this.downloadedInstallerPath)) {
       console.error('[GlassUpdater] Installer file not found:', this.downloadedInstallerPath);
+      sendToPrimaryWindow('update-status', 'error', 'Файл обновления не найден');
       return;
     }
 
     try {
-      console.log('[GlassUpdater] Launching installer:', this.downloadedInstallerPath);
+      console.log('[GlassUpdater] Preparing clean runner for installer:', this.downloadedInstallerPath);
       
       if (process.platform === 'win32') {
-        // Run via a detached helper script so it waits for GlassPlayer.exe to release file handles
-        // before running the NSIS installer.
-        const installerCmd = `Start-Sleep -Milliseconds 600; Start-Process -FilePath "${this.downloadedInstallerPath}"`;
-        const child = spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', installerCmd], {
+        const installerPath = this.downloadedInstallerPath;
+        const currentPid = process.pid;
+        const runnerScript = path.join(app.getPath('temp'), 'glassplayer-update-runner.bat');
+
+        // Bulletproof detached batch runner:
+        // 1. Give Electron time to initiate clean shutdown.
+        // 2. Kill current PID and any remaining GlassPlayer sub-processes to completely free locked files.
+        // 3. Launch NSIS installer with --updated /S --force-run for seamless background install and auto-restart.
+        // 4. Delete the temporary runner batch.
+        const batchContent = `@echo off
+timeout /t 1 /nobreak >nul
+taskkill /F /PID ${currentPid} >nul 2>&1
+timeout /t 1 /nobreak >nul
+taskkill /F /IM GlassPlayer.exe >nul 2>&1
+timeout /t 1 /nobreak >nul
+start "" "${installerPath}" --updated /S --force-run
+del "%~f0" >nul 2>&1
+exit
+`;
+        fs.writeFileSync(runnerScript, batchContent, 'utf-8');
+
+        const child = spawn('cmd.exe', ['/c', runnerScript], {
           detached: true,
-          stdio: 'ignore'
+          stdio: 'ignore',
+          windowsHide: true
         });
         child.unref();
       } else {
-        const installer = spawn(this.downloadedInstallerPath, [], {
+        const installer = spawn(this.downloadedInstallerPath, ['--updated', '/S', '--force-run'], {
           detached: true,
           stdio: 'ignore'
         });
         installer.unref();
       }
 
-      app.removeAllListeners('window-all-closed');
-      BrowserWindow.getAllWindows().forEach(w => {
-        if (!w.isDestroyed()) w.destroy();
-      });
-      app.quit();
+      setTimeout(() => {
+        app.removeAllListeners('window-all-closed');
+        BrowserWindow.getAllWindows().forEach(w => {
+          if (!w.isDestroyed()) w.destroy();
+        });
+        app.quit();
+      }, 200);
     } catch (e) {
       console.error('[GlassUpdater Launch Error]:', e);
+      sendToPrimaryWindow('update-status', 'error', `Ошибка запуска обновления: ${e.message}`);
     }
   }
 }

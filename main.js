@@ -833,27 +833,26 @@ class GlassUpdater {
       
       if (process.platform === 'win32') {
         const installerPath = this.downloadedInstallerPath;
-        const currentPid = process.pid;
-        const runnerScript = path.join(app.getPath('temp'), 'glassplayer-update-runner.bat');
+        // Robust detached PowerShell command:
+        // 1. Wait 600ms for Electron app.quit to initiate cleanly.
+        // 2. Force-kill all GlassPlayer processes so no handles remain open.
+        // 3. Loop until all GlassPlayer processes are confirmed terminated (up to 10s).
+        // 4. Sleep 1.2s to guarantee Windows kernel releases all file locks on GlassPlayer.exe, DLLs and resources.
+        // 5. Launch the NSIS installer with --updated /S --force-run for seamless background install and auto-restart.
+        const psCommand = [
+          'Start-Sleep -Milliseconds 600;',
+          'Stop-Process -Name "GlassPlayer" -Force -ErrorAction SilentlyContinue;',
+          '$w = 10; while ((Get-Process -Name "GlassPlayer" -ErrorAction SilentlyContinue) -and ($w -gt 0)) { Start-Sleep -Milliseconds 300; $w -= 0.3 };',
+          'Start-Sleep -Milliseconds 1200;',
+          `Start-Process -FilePath "${installerPath.replace(/"/g, '`"')}" -ArgumentList "--updated", "/S", "--force-run";`
+        ].join(' ');
 
-        // Bulletproof detached batch runner:
-        // 1. Give Electron time to initiate clean shutdown.
-        // 2. Kill current PID and any remaining GlassPlayer sub-processes to completely free locked files.
-        // 3. Launch NSIS installer with --updated /S --force-run for seamless background install and auto-restart.
-        // 4. Delete the temporary runner batch.
-        const batchContent = `@echo off
-timeout /t 1 /nobreak >nul
-taskkill /F /PID ${currentPid} >nul 2>&1
-timeout /t 1 /nobreak >nul
-taskkill /F /IM GlassPlayer.exe >nul 2>&1
-timeout /t 1 /nobreak >nul
-start "" "${installerPath}" --updated /S --force-run
-del "%~f0" >nul 2>&1
-exit
-`;
-        fs.writeFileSync(runnerScript, batchContent, 'utf-8');
-
-        const child = spawn('cmd.exe', ['/c', runnerScript], {
+        const child = spawn('powershell.exe', [
+          '-NoProfile',
+          '-ExecutionPolicy', 'Bypass',
+          '-WindowStyle', 'Hidden',
+          '-Command', psCommand
+        ], {
           detached: true,
           stdio: 'ignore',
           windowsHide: true
@@ -873,7 +872,7 @@ exit
           if (!w.isDestroyed()) w.destroy();
         });
         app.quit();
-      }, 200);
+      }, 300);
     } catch (e) {
       console.error('[GlassUpdater Launch Error]:', e);
       sendToPrimaryWindow('update-status', 'error', `Ошибка запуска обновления: ${e.message}`);

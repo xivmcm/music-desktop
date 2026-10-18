@@ -98,6 +98,72 @@
     }
   }
 
+  // Merge Guest Data (Likes & History) into Authenticated User Account
+  async function mergeGuestDataToAccount(user, authToken) {
+    if (!user || typeof localStorage === 'undefined') return;
+
+    // 1. Merge Guest Likes
+    try {
+      const guestLikesRaw = localStorage.getItem('gp_likes_Default');
+      let guestLikes = [];
+      try { guestLikes = guestLikesRaw ? JSON.parse(guestLikesRaw) : []; } catch (e) {}
+      const cloudLikes = Array.isArray(user.likedTracks) ? user.likedTracks : [];
+
+      if (guestLikes.length > 0) {
+        const seenIds = new Set();
+        const mergedLikes = [];
+        for (const t of [...guestLikes, ...cloudLikes]) {
+          if (!t || t.id === undefined || t.id === null) continue;
+          const sId = String(t.id);
+          if (!seenIds.has(sId)) {
+            seenIds.add(sId);
+            mergedLikes.push(t);
+          }
+        }
+
+        user.likedTracks = mergedLikes;
+        const ownerSuffix = `account_${String(user.id || user._id || 'user').replace(/[^a-z0-9_-]/gi, '_')}`;
+        const accountLikesKey = typeof window.getStorageKey === 'function' ? window.getStorageKey('likes') : `gp_likes_${ownerSuffix}`;
+        localStorage.setItem(accountLikesKey, JSON.stringify(mergedLikes));
+
+        if (mergedLikes.length > cloudLikes.length && authToken) {
+          syncLikesWithBackend(mergedLikes);
+        }
+      }
+    } catch (err) {
+      console.warn('[Auth Merge] Likes merge failed:', err);
+    }
+
+    // 2. Merge Guest History
+    try {
+      const guestHistoryRaw = localStorage.getItem('gp_history_Default');
+      let guestHistory = [];
+      try { guestHistory = guestHistoryRaw ? JSON.parse(guestHistoryRaw) : []; } catch (e) {}
+
+      const ownerSuffix = `account_${String(user.id || user._id || 'user').replace(/[^a-z0-9_-]/gi, '_')}`;
+      const accountHistoryKey = typeof window.getStorageKey === 'function' ? window.getStorageKey('history') : `gp_history_${ownerSuffix}`;
+      const accountHistoryRaw = localStorage.getItem(accountHistoryKey);
+      let accountHistory = [];
+      try { accountHistory = accountHistoryRaw ? JSON.parse(accountHistoryRaw) : []; } catch (e) {}
+
+      if (guestHistory.length > 0) {
+        const seenHistory = new Set();
+        const mergedHistory = [];
+        for (const t of [...guestHistory, ...accountHistory]) {
+          if (!t || t.id === undefined || t.id === null) continue;
+          const sId = String(t.id);
+          if (!seenHistory.has(sId)) {
+            seenHistory.add(sId);
+            mergedHistory.push(t);
+          }
+        }
+        localStorage.setItem(accountHistoryKey, JSON.stringify(mergedHistory.slice(0, 100)));
+      }
+    } catch (err) {
+      console.warn('[Auth Merge] History merge failed:', err);
+    }
+  }
+
   // Handle Authentication Submission
   async function handleAuthSubmit() {
     if (typeof document === 'undefined') return;
@@ -151,12 +217,19 @@
       if (data.status === 'success') {
         token = data.token;
         currentUser = data.user;
+
+        // Smart Merge: Merge offline/guest likes & history into user account
+        await mergeGuestDataToAccount(currentUser, token);
+
         if (typeof window !== 'undefined' && typeof window.invalidateHomeRecommendations === 'function') {
           window.invalidateHomeRecommendations();
         }
         if (typeof localStorage !== 'undefined') {
           localStorage.setItem('auth_token', token);
           localStorage.setItem('auth_user', JSON.stringify(currentUser));
+          if (currentUser.hideLikes !== undefined) {
+            localStorage.setItem('gp_hide_likes', String(Boolean(currentUser.hideLikes)));
+          }
         }
 
         if (typeof window !== 'undefined' && typeof window.loadLikedTracks === 'function') {
@@ -198,12 +271,14 @@
   function handleLogout() {
     currentUser = null;
     token = null;
-    if (typeof window !== 'undefined' && typeof window.invalidateHomeRecommendations === 'function') {
-      window.invalidateHomeRecommendations();
-    }
+    currentProfile = 'Default';
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem('auth_token');
       localStorage.removeItem('auth_user');
+      localStorage.setItem('gp_active_profile', 'Default');
+    }
+    if (typeof window !== 'undefined' && typeof window.invalidateHomeRecommendations === 'function') {
+      window.invalidateHomeRecommendations();
     }
 
     if (typeof window !== 'undefined' && typeof window.loadLikedTracks === 'function') window.loadLikedTracks();

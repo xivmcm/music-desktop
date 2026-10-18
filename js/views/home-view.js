@@ -1132,9 +1132,6 @@
         <div class="carousel-dots" id="carousel-dots">
           ${dotsHTML}
         </div>
-        <button type="button" class="carousel-pause-btn" aria-label="Приостановить автоматическую смену рекомендаций" aria-pressed="false">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-        </button>
       </div>
     `;
 
@@ -1145,7 +1142,6 @@
     const wrapper = carouselSection.querySelector('#carousel-wrapper');
     const dots = carouselSection.querySelectorAll('.carousel-dot');
     const slides = carouselSection.querySelectorAll('.carousel-slide');
-    const pauseButton = carouselSection.querySelector('.carousel-pause-btn');
 
     slides.forEach((slide, index) => {
       const thumbnail = carouselTracks[index]?.thumbnail;
@@ -1173,22 +1169,10 @@
     const mediaMatch = typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
     const reduceMotion = mediaMatch ? mediaMatch.matches : false;
     const hasMultipleSlides = carouselTracks.length > 1;
-    let autoPlayPaused = reduceMotion;
-
-    const updatePauseButton = () => {
-      if (!pauseButton) return;
-      pauseButton.setAttribute('aria-pressed', String(autoPlayPaused));
-      pauseButton.setAttribute('aria-label', autoPlayPaused
-        ? 'Возобновить автоматическую смену рекомендаций'
-        : 'Приостановить автоматическую смену рекомендаций');
-      pauseButton.innerHTML = autoPlayPaused
-        ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4v16l12-8z"/></svg>'
-        : '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
-    };
 
     const startAutoSlide = () => {
       clearInterval(_carouselTimer);
-      if (autoPlayPaused || reduceMotion || !hasMultipleSlides) return;
+      if (reduceMotion || !hasMultipleSlides) return;
       _carouselTimer = setInterval(() => {
         updateCarousel(_homeCarouselIndex + 1);
       }, 5000);
@@ -1201,18 +1185,9 @@
     if (prevBtn) prevBtn.hidden = !hasMultipleSlides;
     if (nextBtn) nextBtn.hidden = !hasMultipleSlides;
     if (dotsWrap) dotsWrap.hidden = !hasMultipleSlides;
-    if (pauseButton) pauseButton.hidden = reduceMotion || !hasMultipleSlides;
 
     updateCarousel(0);
-    updatePauseButton();
     startAutoSlide();
-
-    pauseButton?.addEventListener('click', () => {
-      autoPlayPaused = !autoPlayPaused;
-      updatePauseButton();
-      if (autoPlayPaused) clearInterval(_carouselTimer);
-      else startAutoSlide();
-    });
 
     carouselSection.addEventListener('mouseenter', () => clearInterval(_carouselTimer));
     carouselSection.addEventListener('mouseleave', startAutoSlide);

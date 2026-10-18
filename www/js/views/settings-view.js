@@ -739,6 +739,32 @@
         </div>
       </div>
 
+      <div class="settings-section" data-section="privacy-integrations">
+        <h3>Приватность и интеграции</h3>
+        
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+          <div style="padding-right: 12px;">
+            <div style="font-size: 13px; color: rgba(255,255,255,0.85); font-weight: 500;">Трансляция в Discord (Rich Presence)</div>
+            <div style="font-size: 11px; color: rgba(255,255,255,0.45); margin-top: 2px;">Показывать текущий трек и статус воспроизведения в вашем профиле Discord</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="discord-rpc-checkbox" ${(typeof localStorage !== 'undefined' && localStorage.getItem('gp_discord_rpc_enabled') === 'false') ? '' : 'checked'}>
+            <span class="slider round"></span>
+          </label>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;">
+          <div style="padding-right: 12px;">
+            <div style="font-size: 13px; color: rgba(255,255,255,0.85); font-weight: 500;">Скрывать избранные треки</div>
+            <div style="font-size: 11px; color: rgba(255,255,255,0.45); margin-top: 2px;">Другие пользователи не увидят список ваших лайков при просмотре профиля</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="hide-likes-checkbox" ${(typeof localStorage !== 'undefined' && (localStorage.getItem('gp_hide_likes') === 'true' || (window.currentUser && window.currentUser.hideLikes))) ? 'checked' : ''}>
+            <span class="slider round"></span>
+          </label>
+        </div>
+      </div>
+
       <div class="settings-section" data-section="audio-effects">
         <h3>Аудиоэффекты</h3>
         
@@ -878,7 +904,7 @@
     tracksContainer.appendChild(panel);
 
     const visibleSectionsByScope = {
-      settings: ['interface-effects', 'mobile-player-style', 'user-info'],
+      settings: ['interface-effects', 'mobile-player-style', 'privacy-integrations', 'user-info'],
       studio: studioTab === 'audio'
         ? ['audio-effects']
         : ['theme-presets', 'theme-constructor', 'background-image', 'mobile-player-style'],
@@ -1416,6 +1442,50 @@
             window.GP.Visualizer.stopVisualizer();
           } else if (typeof window.stopVisualizer === 'function') {
             window.stopVisualizer();
+          }
+        }
+      });
+    }
+
+    // Privacy & Integrations
+    const discordRpcCheckbox = panel.querySelector('#discord-rpc-checkbox');
+    if (discordRpcCheckbox) {
+      discordRpcCheckbox.addEventListener('change', (e) => {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('gp_discord_rpc_enabled', String(e.target.checked));
+        }
+        if (typeof window.sendDiscordPresence === 'function') {
+          window.sendDiscordPresence();
+        }
+      });
+    }
+
+    const hideLikesCheckbox = panel.querySelector('#hide-likes-checkbox');
+    if (hideLikesCheckbox) {
+      hideLikesCheckbox.addEventListener('change', async (e) => {
+        const isHidden = e.target.checked;
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('gp_hide_likes', String(isHidden));
+        }
+        const currentUser = (typeof window !== 'undefined' && window.currentUser) || null;
+        const token = (typeof window !== 'undefined' && window.token) || (typeof localStorage !== 'undefined' && localStorage.getItem('auth_token')) || null;
+        if (currentUser && token) {
+          currentUser.hideLikes = isHidden;
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('auth_user', JSON.stringify(currentUser));
+          }
+          try {
+            const bUrl = (typeof window !== 'undefined' && window.BACKEND_URL) || (typeof window !== 'undefined' && window.API_URL ? `${window.API_URL}/api` : 'https://music-backend-iyni.onrender.com/api');
+            await fetch(`${bUrl}/auth/profile`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({ hideLikes: isHidden })
+            });
+          } catch (err) {
+            console.warn('[Settings View] Failed to sync hideLikes to backend:', err);
           }
         }
       });

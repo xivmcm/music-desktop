@@ -288,6 +288,13 @@ function registerIpcHandlers() {
   ipcMain.on('update-presence', (event, trackData) => {
     if (!rpcClient || !rpcConnected) return;
 
+    if (!trackData || trackData.isCleared) {
+      try {
+        rpcClient.clearActivity().catch(() => {});
+      } catch (err) {}
+      return;
+    }
+
     try {
       const activity = {
         largeImageKey: trackData.artwork_url || 'glassplayer_logo',

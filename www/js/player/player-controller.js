@@ -1074,25 +1074,23 @@
       player.addEventListener('ended', () => {
         if (isRepeat) {
           currentSeekOffset = 0;
-          const track = playlist[currentTrackIndex];
-          if (track) {
-            player.crossOrigin = 'anonymous';
-            player.src = getAudioStreamUrl(track);
-            const playPromise = player.play();
-            currentPlayPromise = playPromise;
-            if (playPromise && typeof playPromise.then === 'function') {
-              playPromise
-                .then(() => {
-                  if (currentPlayPromise === playPromise) {
-                    setPlayState(true);
-                  }
-                })
-                .catch(err => {
-                  if (err.name !== 'AbortError') {
-                    console.error('Repeat playback failed:', err);
-                  }
-                });
-            }
+          player.currentTime = 0;
+          const playPromise = player.play();
+          currentPlayPromise = playPromise;
+          if (playPromise && typeof playPromise.then === 'function') {
+            playPromise
+              .then(() => {
+                if (currentPlayPromise === playPromise) {
+                  setPlayState(true);
+                  updateCoverPlayButtons();
+                }
+              })
+              .catch(err => {
+                if (err.name !== 'AbortError') {
+                  console.warn('Repeat replay failed, reloading track:', err);
+                  playTrack(currentTrackIndex);
+                }
+              });
           }
         } else {
           playNext();

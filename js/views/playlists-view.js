@@ -633,7 +633,10 @@
     if (existingMsg) existingMsg.remove();
 
     try {
-      const response = await fetch(`${getBackendUrl()}/users/${userId}`);
+      const token = (typeof window !== 'undefined' && window.token) || (typeof localStorage !== 'undefined' && localStorage.getItem('auth_token')) || null;
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const response = await fetch(`${getBackendUrl()}/users/${userId}`, { headers });
       const data = await response.json();
 
       if (loadingIndicator) loadingIndicator.classList.add('hidden');
@@ -659,6 +662,21 @@
           ? '<div class="friend-profile-presence online"><span class="presence-dot"></span><span>В сети</span></div>'
           : `<div class="friend-profile-presence offline" title="${escapeHTML(fullDate)}"><span class="presence-dot"></span><span>${escapeHTML(formatLastSeen(lastSeen))}</span></div>`;
 
+        const currentUser = (typeof window !== 'undefined' && window.currentUser) || null;
+        const isSelf = currentUser && String(currentUser.id || currentUser._id) === String(friend.id);
+        const isFollowing = currentUser && Array.isArray(currentUser.following) && currentUser.following.some(f => {
+          const fId = typeof f === 'object' && f !== null ? (f.id || f._id) : f;
+          return String(fId) === String(friend.id);
+        });
+
+        const followBtnHtml = !isSelf && currentUser ? `
+          <button id="friend-profile-follow-btn" class="view-btn ${isFollowing ? 'active' : ''}" style="margin-top: 10px; padding: 6px 18px; font-size: 12px; border-radius: 20px;">
+            <span>${isFollowing ? 'Подписан' : 'Подписаться'}</span>
+          </button>
+        ` : '';
+
+        const isLikesHidden = Boolean(friend.hideLikes) && !isSelf;
+
         const headerCard = document.createElement('div');
         headerCard.className = 'friend-profile-banner';
         headerCard.innerHTML = `
@@ -668,11 +686,43 @@
           <div class="friend-profile-presence-wrap">${presenceHtml}</div>
           <p class="friend-profile-bio">${escapeHTML(friend.bio || 'Нет описания')}</p>
           <div class="friend-profile-stats">
-            <span><strong>${friend.likedTracks ? friend.likedTracks.length : 0}</strong> лайков</span>
+            <span><strong>${isLikesHidden ? 'Скрыто' : (friend.likedTracks ? friend.likedTracks.length : 0)}</strong> лайков</span>
             <span><strong>${friend.playlists ? friend.playlists.length : 0}</strong> плейлистов</span>
           </div>
+          ${followBtnHtml}
         `;
         tracksContainer.appendChild(headerCard);
+
+        const followBtn = headerCard.querySelector('#friend-profile-follow-btn');
+        if (followBtn) {
+          followBtn.addEventListener('click', async () => {
+            if (!token) return;
+            try {
+              const fRes = await fetch(`${getBackendUrl()}/users/follow/${friend.id}`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                }
+              });
+              if (fRes.status === 200) {
+                const fData = await fRes.json();
+                if (fData.status === 'success') {
+                  if (currentUser) {
+                    currentUser.following = fData.following;
+                    if (typeof localStorage !== 'undefined') {
+                      localStorage.setItem('auth_user', JSON.stringify(currentUser));
+                    }
+                  }
+                  followBtn.classList.toggle('active', fData.isFollowing);
+                  followBtn.querySelector('span').textContent = fData.isFollowing ? 'Подписан' : 'Подписаться';
+                }
+              }
+            } catch (err) {
+              console.error('[Friend Profile Follow Error]:', err);
+            }
+          });
+        }
 
         const playlistsSection = document.createElement('div');
         playlistsSection.className = 'friend-playlists-section';
@@ -694,7 +744,7 @@
           </div>
           <div class="friend-playlist-info">
             <span class="friend-playlist-name">Избранное</span>
-            <span class="friend-playlist-count">${likesCount} треков</span>
+            <span class="friend-playlist-count">${isLikesHidden ? 'Скрыто автором' : `${likesCount} треков`}</span>
           </div>
         `;
         pRow.appendChild(likesCard);
@@ -746,7 +796,14 @@
         gridContainer.className = 'tracks-layout-grid';
         tracksContainer.appendChild(gridContainer);
 
-        if (friend.likedTracks && friend.likedTracks.length > 0) {
+        if (isLikesHidden) {
+          const noTracksMsg = document.createElement('div');
+          noTracksMsg.className = 'welcome-state';
+          noTracksMsg.style.minHeight = '150px';
+          noTracksMsg.style.marginTop = '10px';
+          noTracksMsg.innerHTML = '<p style="color: rgba(255,255,255,0.45);">Пользователь скрыл список избранных треков</p>';
+          gridContainer.appendChild(noTracksMsg);
+        } else if (friend.likedTracks && friend.likedTracks.length > 0) {
           if (typeof window !== 'undefined') window.playlist = friend.likedTracks;
           if (typeof window.renderTracks === 'function') window.renderTracks(friend.likedTracks, gridContainer, true);
         } else {
@@ -792,6 +849,17 @@
       const gridContainer = tracksContainer.querySelector('.tracks-layout-grid');
       if (gridContainer) {
         gridContainer.innerHTML = '';
+        const currentUser = (typeof window !== 'undefined' && window.currentUser) || null;
+        const isSelf = currentUser && String(currentUser.id || currentUser._id) === String(friend.id);
+        if (friend.hideLikes && !isSelf) {
+          const noTracksMsg = document.createElement('div');
+          noTracksMsg.className = 'welcome-state';
+          noTracksMsg.style.minHeight = '150px';
+          noTracksMsg.style.marginTop = '10px';
+          noTracksMsg.innerHTML = '<p style="color: rgba(255,255,255,0.45);">Пользователь скрыл список избранных треков</p>';
+          gridContainer.appendChild(noTracksMsg);
+          return;
+        }
         if (friend.likedTracks && friend.likedTracks.length > 0) {
           if (typeof window !== 'undefined') window.playlist = friend.likedTracks;
           if (typeof window.renderTracks === 'function') window.renderTracks(friend.likedTracks, gridContainer, true);

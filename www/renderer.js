@@ -835,6 +835,12 @@ let rpcInterval = null;
 function sendDiscordPresence() {
   if (!isElectron || !window.electronAPI || !window.electronAPI.updatePresence) return;
 
+  const isRpcEnabled = typeof localStorage !== 'undefined' ? localStorage.getItem('gp_discord_rpc_enabled') !== 'false' : true;
+  if (!isRpcEnabled) {
+    window.electronAPI.updatePresence({ isCleared: true });
+    return;
+  }
+
   if (currentTrackIndex === -1 || !playlist[currentTrackIndex]) {
     window.electronAPI.updatePresence({
       title: 'Not Playing',

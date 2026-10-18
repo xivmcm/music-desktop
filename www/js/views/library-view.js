@@ -123,9 +123,23 @@
   async function loadLikedTracks() {
     const currentUser = typeof window !== 'undefined' && window.currentUser;
     if (currentUser) {
+      const localLikes = getLikedTracks();
       const cloudLikes = Array.isArray(currentUser.likedTracks) ? currentUser.likedTracks : [];
-      saveLikedTracks(cloudLikes);
-      _likedTrackIds = new Set(cloudLikes.map(t => t.id));
+      let merged = cloudLikes;
+      if (localLikes && localLikes.length > 0) {
+        const seen = new Set();
+        merged = [];
+        for (const t of [...cloudLikes, ...localLikes]) {
+          if (!t || t.id === undefined || t.id === null) continue;
+          const sId = String(t.id);
+          if (!seen.has(sId)) {
+            seen.add(sId);
+            merged.push(t);
+          }
+        }
+      }
+      saveLikedTracks(merged);
+      _likedTrackIds = new Set(merged.map(t => t.id));
     } else {
       const likes = getLikedTracks();
       _likedTrackIds = new Set(likes.map(t => t.id));

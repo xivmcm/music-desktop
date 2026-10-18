@@ -293,7 +293,10 @@
     const currentUser = getUser();
     findFriendsList.innerHTML = '';
     users.forEach(user => {
-      const isFollowing = currentUser && currentUser.following && currentUser.following.includes(user.id);
+      const isFollowing = currentUser && Array.isArray(currentUser.following) && currentUser.following.some(f => {
+        const fId = typeof f === 'object' && f !== null ? (f.id || f._id) : f;
+        return String(fId) === String(user.id);
+      });
       const liveStatus = friendStatuses.get(user.id);
       const isOnline = liveStatus ? Boolean(liveStatus.isOnline) : Boolean(user.isOnline);
       const lastSeen = (liveStatus && liveStatus.lastSeen) || user.lastSeen;
@@ -313,7 +316,7 @@
           </div>
         </div>
         <button class="follow-btn ${isFollowing ? 'following' : ''}" data-user-id="${user.id}">
-          ${isFollowing ? 'Following' : 'Follow'}
+          ${isFollowing ? 'Подписан' : 'Подписаться'}
         </button>
       `;
 
@@ -344,7 +347,7 @@
                 }
 
                 btn.classList.toggle('following', fData.isFollowing);
-                btn.textContent = fData.isFollowing ? 'Following' : 'Follow';
+                btn.textContent = fData.isFollowing ? 'Подписан' : 'Подписаться';
 
                 await loadMutualFriends();
               }

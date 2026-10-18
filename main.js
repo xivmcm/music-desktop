@@ -6,6 +6,11 @@ const https = require('https');
 const { spawn } = require('child_process');
 const DiscordRPC = require('discord-rpc');
 
+// Set Windows AppUserModelId so taskbar & notifications group properly as GlassPlayer
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.glassplayer.app');
+}
+
 // Configure Chromium DNS-over-HTTPS (DoH) before app ready to bypass DNS blocking in RU (Cloudflare + Google + Yandex + AdGuard + Quad9)
 app.commandLine.appendSwitch('enable-features', 'DnsOverHttps');
 app.commandLine.appendSwitch('dns-over-https-templates', 'https://cloudflare-dns.com/dns-query,https://dns.google/dns-query,https://common.dot.dns.yandex.net/dns-query,https://dns.adguard-dns.com/dns-query,https://dns.quad9.net/dns-query');
@@ -322,6 +327,21 @@ function registerIpcHandlers() {
         }
       }
 
+      // Add clickable buttons for Discord profile viewers (up to 2 buttons supported by Discord)
+      const buttons = [];
+      const trackUrl = trackData.permalink_url || trackData.url;
+      if (trackUrl && typeof trackUrl === 'string' && /^https?:\/\//i.test(trackUrl)) {
+        buttons.push({
+          label: 'Слушать трек',
+          url: trackUrl
+        });
+      }
+      buttons.push({
+        label: 'Сайт GlassPlayer',
+        url: 'https://xivmcm.github.io/music-desktop/'
+      });
+      activity.buttons = buttons.slice(0, 2);
+
       rpcClient.setActivity(activity).catch(err => {
         console.error('[Discord RPC] Failed to set activity:', err.message);
       });
@@ -498,13 +518,19 @@ class GlassUpdater {
       const data = await res.json();
       const version = String(data.tag_name || data.name || '').replace(/^v/, '');
       const exeAsset = (data.assets || []).find(a => a.name.endsWith('.exe'));
-      const downloadUrl = exeAsset ? exeAsset.browser_download_url : `https://github.com/xivmcm/music-desktop/releases/download/v${version}/GlassPlayer-Setup-${version}.exe`;
+      
+      // If release does not have an .exe asset yet, return null to fallback to version.json
+      if (!exeAsset) {
+        console.warn(`[GlassUpdater] Release v${version} found on GitHub, but no .exe asset is available yet.`);
+        return null;
+      }
+
       return {
         version,
         changelog: data.body || 'Новые улучшения и исправления ошибок',
-        downloadUrl,
-        filename: exeAsset?.name || `GlassPlayer-Setup-${version}.exe`,
-        size: exeAsset?.size || 0
+        downloadUrl: exeAsset.browser_download_url,
+        filename: exeAsset.name || `GlassPlayer-Setup-${version}.exe`,
+        size: exeAsset.size || 0
       };
     } catch (e) {
       return null;
@@ -607,11 +633,24 @@ class GlassUpdater {
     }
 
     try {
-      const installer = spawn(this.downloadedInstallerPath, [], {
-        detached: true,
-        stdio: 'ignore'
-      });
-      installer.unref();
+      console.log('[GlassUpdater] Launching installer:', this.downloadedInstallerPath);
+      
+      if (process.platform === 'win32') {
+        // Run via a detached helper script so it waits for GlassPlayer.exe to release file handles
+        // before running the NSIS installer.
+        const installerCmd = `Start-Sleep -Milliseconds 600; Start-Process -FilePath "${this.downloadedInstallerPath}"`;
+        const child = spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', installerCmd], {
+          detached: true,
+          stdio: 'ignore'
+        });
+        child.unref();
+      } else {
+        const installer = spawn(this.downloadedInstallerPath, [], {
+          detached: true,
+          stdio: 'ignore'
+        });
+        installer.unref();
+      }
 
       app.removeAllListeners('window-all-closed');
       BrowserWindow.getAllWindows().forEach(w => {
@@ -638,6 +677,7 @@ function createWindow() {
     hasShadow: false,       // Disable DWM shadow quad that creates black borders on Windows
     thickFrame: false,      // Disable DWM thick frame that creates black quad margins
     show: false,            // Prevent white flashes on load
+    icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

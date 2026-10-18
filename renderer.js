@@ -1064,6 +1064,8 @@ const updateInstallBtn = document.getElementById('update-install-btn');
 const updateCloseBtn = document.getElementById('update-close-btn');
 const updateProgressBar = document.getElementById('update-progress-bar');
 
+const updateManualBtn = document.getElementById('update-manual-btn');
+
 let currentUpdateInfo = null;
 
 if (isElectron && window.electronAPI && window.electronAPI.onUpdateStatus) {
@@ -1077,6 +1079,12 @@ if (isElectron && window.electronAPI && window.electronAPI.onUpdateStatus) {
       updateBannerText.textContent = `Доступна новая версия GlassPlayer: v${verText}!`;
       updateDownloadBtn.classList.remove('hidden');
       updateInstallBtn.classList.add('hidden');
+      if (updateManualBtn) {
+        updateManualBtn.classList.remove('hidden');
+        if (payload && payload.downloadUrl) {
+          updateManualBtn.href = payload.downloadUrl;
+        }
+      }
       if (bannerLoader) bannerLoader.classList.add('hidden');
       if (updateProgressBar) updateProgressBar.style.width = '0%';
       if (updateBanner) updateBanner.classList.remove('hidden');
@@ -1085,6 +1093,14 @@ if (isElectron && window.electronAPI && window.electronAPI.onUpdateStatus) {
     } else if (status === 'error') {
       console.error('[Auto-Updater Error]:', payload);
       showToastNotification(`Ошибка проверки обновлений: ${payload || 'Сервер недоступен'}`, 'error', 'Обновления');
+      if (updateBannerText) updateBannerText.textContent = `Ошибка автообновления: ${payload || 'Сервер недоступен'}`;
+      if (bannerLoader) bannerLoader.classList.add('hidden');
+      if (updateDownloadBtn) updateDownloadBtn.classList.add('hidden');
+      if (updateManualBtn) {
+        updateManualBtn.classList.remove('hidden');
+        updateManualBtn.href = 'https://github.com/xivmcm/music-desktop/releases/latest';
+      }
+      if (updateBanner) updateBanner.classList.remove('hidden');
     }
   });
 
@@ -1098,6 +1114,7 @@ if (isElectron && window.electronAPI && window.electronAPI.onUpdateStatus) {
     updateBannerText.textContent = 'Обновление скачано и готово к установке!';
     updateDownloadBtn.classList.add('hidden');
     updateInstallBtn.classList.remove('hidden');
+    if (updateManualBtn) updateManualBtn.classList.add('hidden');
     if (bannerLoader) bannerLoader.classList.add('hidden');
     if (updateProgressBar) updateProgressBar.style.width = '100%';
   });
@@ -1162,7 +1179,8 @@ function sendDiscordPresence() {
     isPaused: isPaused,
     position: position,
     duration: duration,
-    artwork_url: track.thumbnail || null
+    artwork_url: track.thumbnail || null,
+    permalink_url: track.permalink_url || track.url || null
   });
 }
 

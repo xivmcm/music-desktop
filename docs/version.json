@@ -1,10 +1,10 @@
 {
-  "version": "1.20.0",
+  "version": "1.20.2",
   "releaseDate": "2026-10-18",
-  "changelog": "• Исправления и улучшения (v1.20.0):\n  - Полностью восстановлено воспроизведение треков SoundCloud (обновлен системный client_id, устранена ошибка 401 Unauthorized)\n  - Внедрена динамическая авто-ротация и сохранение client_id из бэкенда в кэш без сброса на устаревшие ключи\n  - Увеличены таймауты проверки зеркал и разрешения CDN-потоков до 8000мс для защиты от 502 Bad Gateway при холодном старте бэкенда\n  - Исправлена необработанная ошибка консоли при отсутствии текста песни в LRCLIB",
+  "changelog": "• Исправления и улучшения (v1.20.2):\n  - Исправлена идентификация в Windows: закрепление в панели задач без метки Electron, корректное отображение системной иконки\n  - Обновлен Discord Rich Presence: добавлены кнопки перехода на сайт GlassPlayer и трека, оптимизирован отсчет времени\n  - Усовершенствована надежность автоапдейтера: безопасная тихая установка и кнопка резервного скачивания\n  - Адаптивные цвета под кастомные темы, компактные альбомы 160px и полная загрузка треков альбомов SoundCloud",
   "windows": {
-    "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.20.0.exe",
-    "filename": "GlassPlayer-Setup-1.20.0.exe"
+    "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.20.2.exe",
+    "filename": "GlassPlayer-Setup-1.20.2.exe"
   },
   "android": {
     "url": "https://xivmcm.github.io/music-desktop/GlassPlayer-1.20.0.apk",

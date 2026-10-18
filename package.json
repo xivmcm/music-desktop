@@ -27,12 +27,15 @@
     "directories": {
       "output": "dist"
     },
+    "artifactName": "${productName}-Setup-${version}.${ext}",
     "win": {
       "target": "nsis",
       "icon": "assets/icon.png"
     },
     "nsis": {
-      "guid": "com.glassplayer.app",
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "shortcutName": "GlassPlayer",
+      "uninstallDisplayName": "GlassPlayer",
       "oneClick": true,
       "perMachine": false,
       "allowToChangeInstallationDirectory": false,

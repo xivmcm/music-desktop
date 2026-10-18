@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.20.0';
+const APP_VERSION = '1.20.1';
 document.documentElement.classList.toggle('electron-runtime', isElectron);
 document.documentElement.classList.toggle('web-runtime', !isElectron);
 document.body.classList.toggle('electron-runtime', isElectron);
@@ -519,6 +519,98 @@ const DirectSoundCloudEngine = {
       this.rotateClientId();
     }
     return null;
+  },
+
+  async getAlbums(query = 'album phonk trap hits', limit = 10) {
+    let attempts = 0;
+    while (attempts < SC_CLIENT_IDS.length + 1) {
+      try {
+        const clientId = this.getClientId();
+        const url = `https://api-v2.soundcloud.com/search/albums?q=${encodeURIComponent(query)}&client_id=${clientId}&limit=${limit}`;
+        const res = await fetchWithTimeout(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+        }, 5000);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.collection)) {
+            return data.collection.map(pl => ({
+              id: String(pl.id),
+              name: pl.title || pl.name || 'Альбом',
+              title: pl.title || pl.name || 'Альбом',
+              author: pl.user?.username || pl.user?.name || 'SoundCloud Artist',
+              artist: pl.user?.username || pl.user?.name || 'SoundCloud Artist',
+              tracksCount: pl.track_count || pl.tracks?.length || 0,
+              thumbnail: pl.artwork_url || (pl.tracks && pl.tracks[0]?.artwork_url) || pl.user?.avatar_url || ''
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn('[Direct SC Engine] Albums fetch failed:', err.message);
+      }
+      attempts++;
+      this.rotateClientId();
+    }
+    return [];
+  },
+
+  async getFollowedArtistsTracks(artists = [], limitPerArtist = 4) {
+    if (!Array.isArray(artists) || artists.length === 0) return [];
+    const clientId = this.getClientId();
+    const tracks = [];
+    const sample = artists.slice(0, 8);
+
+    await Promise.allSettled(sample.map(async (art) => {
+      try {
+        let numericId = /^\d+$/.test(String(art.id).trim()) ? String(art.id).trim() : null;
+        if (!numericId && art.name) {
+          const uRes = await fetchWithTimeout(`https://api-v2.soundcloud.com/search/users?q=${encodeURIComponent(art.name)}&client_id=${clientId}&limit=1`, {
+            headers: { 'User-Agent': 'Mozilla/5.0' }
+          }, 4000);
+          if (uRes.ok) {
+            const uData = await uRes.json();
+            if (uData?.collection?.[0]?.id) numericId = String(uData.collection[0].id);
+          }
+        }
+        if (!numericId) return;
+
+        const tRes = await fetchWithTimeout(`https://api-v2.soundcloud.com/users/${numericId}/tracks?client_id=${clientId}&limit=${limitPerArtist}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0' }
+        }, 4000);
+        if (tRes.ok) {
+          const tData = await tRes.json();
+          if (tData && Array.isArray(tData.collection)) {
+            tData.collection.forEach(track => {
+              const durSec = Math.floor((track.duration || 0) / 1000);
+              const min = Math.floor(durSec / 60);
+              const sec = durSec % 60;
+              tracks.push({
+                id: String(track.id),
+                title: track.title || 'Unknown Track',
+                artist: track.user?.username || track.user?.name || art.name,
+                artistId: numericId,
+                duration: `${min}:${String(sec).padStart(2, '0')}`,
+                source: 'soundcloud',
+                thumbnail: track.artwork_url || track.user?.avatar_url || art.avatar || '',
+                playbackCount: track.playback_count,
+                playback_count: track.playback_count,
+                created_at: track.created_at,
+                isNewRelease: true,
+                track_authorization: track.track_authorization || '',
+                media: track.media
+              });
+            });
+          }
+        }
+      } catch (e) {}
+    }));
+
+    tracks.sort((a, b) => {
+      const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return timeB - timeA;
+    });
+
+    return tracks;
   }
 };
 window.DirectSoundCloudEngine = DirectSoundCloudEngine;

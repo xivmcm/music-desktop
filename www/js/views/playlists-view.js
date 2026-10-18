@@ -178,6 +178,7 @@
 
       playlists.forEach(pl => {
         const isCollab = pl.isCollaborative || false;
+        const isPrivate = pl.isPrivate || false;
         let isFriendListening = false;
         if (isCollab && friendStatuses instanceof Map) {
           for (const [, status] of friendStatuses.entries()) {
@@ -195,18 +196,26 @@
         }
 
         const card = document.createElement('div');
-        card.className = `playlist-card ${isCollab ? 'collaborative' : ''} ${isFriendListening ? 'friend-listening' : ''}`;
+        card.className = `playlist-card ${isCollab ? 'collaborative' : ''} ${isPrivate ? 'private' : ''} ${isFriendListening ? 'friend-listening' : ''}`;
 
         const iconHtml = isCollab 
           ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>`
-          : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>`;
+          : isPrivate
+            ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>`
+            : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>`;
 
         card.innerHTML = `
           <div class="playlist-card-icon">
             ${iconHtml}
           </div>
           <div class="playlist-card-title">${escapeHTML(pl.name)}</div>
-          <div class="playlist-card-count">${pl.tracks ? pl.tracks.length : 0} tracks</div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap;">
+            <div class="playlist-card-count">${pl.tracks ? pl.tracks.length : 0} tracks</div>
+            <div class="playlist-card-badges">
+              ${isPrivate ? '<span class="playlist-tag-badge private">🔒 Приватный</span>' : ''}
+              ${isCollab ? '<span class="playlist-tag-badge collab">👥 Совместный</span>' : ''}
+            </div>
+          </div>
           <button class="playlist-delete-btn" title="Delete Playlist">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
           </button>
@@ -267,13 +276,14 @@
     const mutualFriends = (typeof window !== 'undefined' && window.mutualFriends) || [];
     const isOwner = currentUser && (!pl.userId || pl.userId === currentUser.id);
     const isCollab = pl.isCollaborative || false;
+    const isPrivate = pl.isPrivate || false;
 
     let collabBtnHtml = '';
     if (isOwner) {
       collabBtnHtml = `
-        <button id="make-collab-btn" class="card-more-btn-horizontal" style="margin-left: 12px; font-size: 11px; padding: 6px 12px; border-radius: 12px; display: inline-flex; align-items: center; gap: 6px;" title="Настройки совместного доступа">
+        <button id="make-collab-btn" class="card-more-btn-horizontal" style="margin-left: 12px; font-size: 11px; padding: 6px 12px; border-radius: 12px; display: inline-flex; align-items: center; gap: 6px;" title="Настройки совместного доступа и приватности">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-          <span>${isCollab ? 'Совместный (Настройки)' : 'Сделать совместным'}</span>
+          <span>${isCollab ? 'Совместный (Настройки)' : 'Совместный (Настройки)'}</span>
         </button>
       `;
     }
@@ -316,13 +326,15 @@
     viewHeader.style.gap = '8px';
     viewHeader.innerHTML = `
       <div style="display: flex; align-items: center; width: 100%; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-        <div class="view-header-title" style="display: flex; align-items: center; gap: 8px;">
+        <div class="view-header-title" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
           <button id="back-to-playlists" class="view-btn">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
             <span>Back</span>
           </button>
           <span style="font-size: 20px; font-weight: 600;">${escapeHTML(pl.name)}</span>
           <span class="view-header-subtitle" style="margin-left: 6px;">(${pl.tracks ? pl.tracks.length : 0} tracks)</span>
+          ${isPrivate ? '<span class="playlist-tag-badge private" style="font-size: 11px; padding: 3px 8px;">🔒 Приватный</span>' : ''}
+          ${isCollab ? '<span class="playlist-tag-badge collab" style="font-size: 11px; padding: 3px 8px;">👥 Совместный</span>' : ''}
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
           ${playAllBtnHtml}
@@ -451,7 +463,7 @@
     renderPlaylists();
   }
 
-  function createPlaylist(name) {
+  function createPlaylist(name, isPrivate = false) {
     const cleanedName = (name || '').trim();
     if (!cleanedName) return;
 
@@ -465,6 +477,9 @@
     const newPl = {
       id: 'pl_' + Date.now(),
       name: cleanedName,
+      isPrivate: Boolean(isPrivate),
+      isCollaborative: false,
+      collaborators: [],
       tracks: []
     };
 
@@ -923,6 +938,8 @@
       cancelPlaylistBtn.addEventListener('click', () => {
         if (playlistModal) playlistModal.classList.add('hidden');
         if (newPlaylistInput) newPlaylistInput.value = '';
+        const privCb = document.getElementById('new-playlist-private');
+        if (privCb) privCb.checked = false;
       });
     }
 
@@ -930,9 +947,12 @@
       savePlaylistBtn.dataset.gpBound = '1';
       savePlaylistBtn.addEventListener('click', () => {
         if (newPlaylistInput) {
-          createPlaylist(newPlaylistInput.value);
+          const privCb = document.getElementById('new-playlist-private');
+          const isPriv = privCb ? privCb.checked : false;
+          createPlaylist(newPlaylistInput.value, isPriv);
           if (playlistModal) playlistModal.classList.add('hidden');
           newPlaylistInput.value = '';
+          if (privCb) privCb.checked = false;
         }
       });
     }
@@ -941,9 +961,12 @@
       newPlaylistInput.dataset.gpBound = '1';
       newPlaylistInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
-          createPlaylist(newPlaylistInput.value);
+          const privCb = document.getElementById('new-playlist-private');
+          const isPriv = privCb ? privCb.checked : false;
+          createPlaylist(newPlaylistInput.value, isPriv);
           if (playlistModal) playlistModal.classList.add('hidden');
           newPlaylistInput.value = '';
+          if (privCb) privCb.checked = false;
         }
       });
     }

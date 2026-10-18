@@ -365,3 +365,222 @@ body.glass-style-flat :is(.track-card, .track-card-horizontal, .carousel-banner-
   -webkit-backdrop-filter: none !important;
   box-shadow: none !important;
 }
+
+/* --- My Wave Banner Card --- */
+.my-wave-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 26px;
+  margin-bottom: 24px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(112, 0, 255, 0.16) 0%, rgba(255, 255, 255, 0.03) 100%);
+  border: 1px solid var(--accent-glow, rgba(112, 0, 255, 0.28));
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2), var(--glass-glow);
+  backdrop-filter: var(--glass-filter, blur(20px));
+  -webkit-backdrop-filter: var(--glass-filter, blur(20px));
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.my-wave-card::before {
+  content: "";
+  position: absolute;
+  top: -40px;
+  left: -40px;
+  width: 160px;
+  height: 160px;
+  background: var(--accent-color, #7000ff);
+  opacity: 0.25;
+  filter: blur(50px);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.my-wave-info {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  position: relative;
+  z-index: 1;
+}
+
+.my-wave-icon-wrap {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: var(--accent-color, #7000ff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  box-shadow: 0 6px 20px var(--accent-glow, rgba(112, 0, 255, 0.4));
+  flex-shrink: 0;
+}
+
+.my-wave-text h3 {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-color);
+  letter-spacing: -0.02em;
+}
+
+.my-wave-text p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.my-wave-play-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 24px;
+  border-radius: 999px;
+  background: var(--accent-color, #7000ff);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 6px 24px var(--accent-glow, rgba(112, 0, 255, 0.4));
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
+
+.my-wave-play-btn:hover {
+  transform: scale(1.04);
+  box-shadow: 0 8px 30px var(--accent-glow, rgba(112, 0, 255, 0.6));
+}
+
+.my-wave-play-btn:active {
+  transform: scale(0.98);
+}
+
+/* --- New Releases Prompt Card --- */
+.new-releases-prompt {
+  background: var(--card-bg, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
+  border-radius: 16px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  box-sizing: border-box;
+}
+
+.new-releases-prompt-text {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 16px;
+}
+
+.suggested-artists-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.suggested-artist-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px 6px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--card-border);
+  color: var(--text-color);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.suggested-artist-chip:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--accent-color);
+}
+
+.suggested-artist-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.suggested-follow-btn {
+  background: none;
+  border: none;
+  color: var(--accent-color);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.suggested-follow-btn:hover {
+  text-decoration: underline;
+}
+
+/* --- Album Card on Home --- */
+.album-card-horizontal {
+  flex: 0 0 170px;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--card-bg, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
+  cursor: pointer;
+  transition: transform 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
+  user-select: none;
+}
+
+.album-card-horizontal:hover {
+  transform: translateY(-3px);
+  background: var(--card-hover-bg, rgba(255, 255, 255, 0.07));
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  border-color: var(--accent-color, #7000ff);
+}
+
+.album-card-cover {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+
+.album-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.album-card-author {
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge-new-release {
+  background: var(--accent-color, #7000ff);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

@@ -864,10 +864,293 @@
     if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(updateArrows);
   }
 
+  function appendHomeAlbumRail(parent, { id, title, subtitle, albums }) {
+    if (!albums || !albums.length || !parent) return;
+    const section = document.createElement('section');
+    section.className = 'home-section scrollable';
+    section.setAttribute('aria-labelledby', `${id}-title`);
+    section.innerHTML = `
+      <div class="home-section-header">
+        <div class="home-section-heading"><h3 id="${id}-title">${escapeHTML(title)}</h3><p>${escapeHTML(subtitle)}</p></div>
+      </div>
+      <div class="scroller-container-outer">
+        <button class="scroll-chevron prev" type="button" aria-label="Прокрутить назад"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg></button>
+        <div class="scroller-container" tabindex="0"></div>
+        <button class="scroll-chevron next" type="button" aria-label="Прокрутить вперёд"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></button>
+      </div>
+    `;
+    parent.appendChild(section);
+
+    const scroller = section.querySelector('.scroller-container');
+    albums.forEach(album => {
+      const card = document.createElement('div');
+      card.className = 'album-card-horizontal';
+      const optimalCover = getOptimalCover(album.thumbnail);
+      const fallbackCover = getFallbackCover(album.thumbnail);
+
+      card.innerHTML = `
+        <img class="album-card-cover" src="${optimalCover}" alt="" loading="lazy" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='${fallbackCover}';}">
+        <div class="album-card-title">${escapeHTML(album.title || album.name || 'Альбом')}</div>
+        <div class="album-card-author">${escapeHTML(album.artist || album.author || 'SoundCloud')} • ${album.tracksCount || 0} треков</div>
+      `;
+
+      card.addEventListener('click', () => {
+        if (typeof root.loadArtistPlaylist === 'function') {
+          root.loadArtistPlaylist(album.id, album.title || album.name);
+        } else if (root.GP?.Views?.Artist?.loadArtistPlaylist) {
+          root.GP.Views.Artist.loadArtistPlaylist(album.id, album.title || album.name);
+        }
+      });
+
+      scroller.appendChild(card);
+    });
+
+    const prev = section.querySelector('.scroll-chevron.prev');
+    const next = section.querySelector('.scroll-chevron.next');
+    const updateArrows = () => {
+      if (prev && scroller) prev.disabled = scroller.scrollLeft <= 4;
+      if (next && scroller) next.disabled = scroller.scrollLeft + scroller.clientWidth >= scroller.scrollWidth - 4;
+    };
+    prev?.addEventListener('click', () => scroller?.scrollBy({ left: -280, behavior: 'smooth' }));
+    next?.addEventListener('click', () => scroller?.scrollBy({ left: 280, behavior: 'smooth' }));
+    scroller?.addEventListener('scroll', updateArrows, { passive: true });
+    if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(updateArrows);
+  }
+
+  function appendMyWaveCard(parent) {
+    if (!parent) return;
+    const waveCard = document.createElement('div');
+    waveCard.className = 'my-wave-card';
+    waveCard.innerHTML = `
+      <div class="my-wave-info">
+        <div class="my-wave-icon-wrap">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M2 12h2a2 2 0 0 0 2-2V7a2 2 0 0 1 4 0v10a2 2 0 0 0 4 0V9a2 2 0 0 1 4 0v3a2 2 0 0 0 2 2h2"/>
+          </svg>
+        </div>
+        <div class="my-wave-text">
+          <h3>Моя волна</h3>
+          <p>Персональный бесконечный поток музыки на основе ваших предпочтений</p>
+        </div>
+      </div>
+      <button class="my-wave-play-btn" type="button">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+          <polygon points="5 3 19 12 5 21 5 3"/>
+        </svg>
+        <span>Запустить волну</span>
+      </button>
+    `;
+    parent.appendChild(waveCard);
+
+    waveCard.querySelector('.my-wave-play-btn')?.addEventListener('click', () => {
+      startMyWave();
+    });
+  }
+
+  async function startMyWave() {
+    const playHistory = getPlayHistory();
+    const likedTracks = typeof root.getLikedTracks === 'function' ? root.getLikedTracks() : (root.GP?.Views?.Library?.getLikedTracks ? root.GP.Views.Library.getLikedTracks() : []);
+    const followed = typeof root.getFollowedArtists === 'function' ? root.getFollowedArtists() : (root.GP?.Views?.Artist?.getFollowedArtists ? root.GP.Views.Artist.getFollowedArtists() : []);
+
+    let waveTracks = [];
+    const usedIds = new Set();
+
+    [...likedTracks, ...playHistory].forEach(t => {
+      if (t && t.id && !usedIds.has(String(t.id))) {
+        usedIds.add(String(t.id));
+        waveTracks.push(t);
+      }
+    });
+
+    if (followed.length > 0) {
+      const directSCEngine = getDirectSCEngine();
+      if (directSCEngine && typeof directSCEngine.getFollowedArtistsTracks === 'function') {
+        try {
+          const followedTracks = await directSCEngine.getFollowedArtistsTracks(followed.slice(0, 4), 3);
+          followedTracks.forEach(t => {
+            if (t && t.id && !usedIds.has(String(t.id))) {
+              usedIds.add(String(t.id));
+              waveTracks.push(t);
+            }
+          });
+        } catch (e) {}
+      }
+    }
+
+    if (waveTracks.length < 15 && _originalHomeData?.trending) {
+      _originalHomeData.trending.forEach(t => {
+        if (t && t.id && !usedIds.has(String(t.id))) {
+          usedIds.add(String(t.id));
+          waveTracks.push(t);
+        }
+      });
+    }
+
+    if (waveTracks.length === 0) {
+      if (typeof root.showToastNotification === 'function') {
+        root.showToastNotification('Не удалось собрать волну. Проверьте соединение.', 'warning');
+      }
+      return;
+    }
+
+    const shuffled = [...waveTracks].sort(() => Math.random() - 0.5);
+    const flow = [];
+    let lastArtist = '';
+    for (let i = 0; i < shuffled.length; i++) {
+      const cur = shuffled[i];
+      if (cur.artist && cur.artist === lastArtist && i + 1 < shuffled.length) {
+        const next = shuffled[i + 1];
+        shuffled[i + 1] = cur;
+        flow.push(next);
+        lastArtist = next.artist || '';
+      } else {
+        flow.push(cur);
+        lastArtist = cur.artist || '';
+      }
+    }
+
+    root.playlist = flow;
+    if (typeof root.playTrack === 'function') {
+      root.playTrack(0);
+    } else if (root.GP?.Player?.playTrack) {
+      root.GP.Player.playTrack(0);
+    }
+
+    if (typeof root.showToastNotification === 'function') {
+      root.showToastNotification('«Моя волна» запущена', 'info');
+    }
+  }
+
+  async function appendNewReleasesRail(parent) {
+    if (!parent) return;
+    const followed = typeof root.getFollowedArtists === 'function' ? root.getFollowedArtists() : (root.GP?.Views?.Artist?.getFollowedArtists ? root.GP.Views.Artist.getFollowedArtists() : []);
+
+    if (followed.length === 0) {
+      const promptCard = document.createElement('div');
+      promptCard.className = 'new-releases-prompt';
+      promptCard.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+          <h3 style="margin: 0; font-size: 18px; font-weight: 650; color: var(--text-color);">Новинки</h3>
+          <span style="font-size: 12px; color: var(--accent-color); font-weight: 500;">Подписки</span>
+        </div>
+        <p class="new-releases-prompt-text">Подпишитесь на любимых исполнителей, чтобы первыми слушать их новые релизы в этой ленте.</p>
+        <div class="suggested-artists-row">
+          <div class="suggested-artist-chip" data-artist="3g0th2002">
+            <img class="suggested-artist-avatar" src="https://i1.sndcdn.com/avatars-3OHnCrB0WSOQuZQO-nQyV3Q-large.jpg" alt="" onerror="this.style.display='none'">
+            <span>3g0th2002</span>
+            <button class="suggested-follow-btn" type="button">Подписаться</button>
+          </div>
+          <div class="suggested-artist-chip" data-artist="shadowraze">
+            <span style="padding-left: 6px;">shadowraze</span>
+            <button class="suggested-follow-btn" type="button">Подписаться</button>
+          </div>
+          <div class="suggested-artist-chip" data-artist="toxis">
+            <span style="padding-left: 6px;">toxis</span>
+            <button class="suggested-follow-btn" type="button">Подписаться</button>
+          </div>
+          <div class="suggested-artist-chip" data-artist="lil peep">
+            <span style="padding-left: 6px;">Lil Peep</span>
+            <button class="suggested-follow-btn" type="button">Подписаться</button>
+          </div>
+        </div>
+      `;
+      parent.appendChild(promptCard);
+
+      promptCard.querySelectorAll('.suggested-artist-chip').forEach(chip => {
+        const artistName = chip.dataset.artist;
+        const btn = chip.querySelector('.suggested-follow-btn');
+        btn?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (typeof root.toggleFollowArtist === 'function') {
+            root.toggleFollowArtist({ id: `art_${artistName}`, name: artistName });
+            btn.textContent = 'Подписан';
+            chip.style.borderColor = 'var(--accent-color)';
+            setTimeout(() => {
+              renderHome(_originalHomeData, _cachedForYouData);
+            }, 600);
+          }
+        });
+        chip.addEventListener('click', () => {
+          if (typeof root.loadArtistView === 'function') {
+            root.loadArtistView(artistName, artistName);
+          }
+        });
+      });
+      return;
+    }
+
+    const cacheKey = `gp_feed_cache_${getOwnerSuffix()}`;
+    let cachedFeed = null;
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Date.now() - parsed.timestamp < 60 * 60 * 1000 && Array.isArray(parsed.tracks) && parsed.tracks.length > 0) {
+          cachedFeed = parsed.tracks;
+        }
+      }
+    } catch (e) {}
+
+    let newReleases = cachedFeed;
+
+    if (!newReleases) {
+      const directSCEngine = getDirectSCEngine();
+      if (directSCEngine && typeof directSCEngine.getFollowedArtistsTracks === 'function') {
+        try {
+          newReleases = await directSCEngine.getFollowedArtistsTracks(followed, 4);
+          if (newReleases && newReleases.length > 0) {
+            try {
+              localStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), tracks: newReleases }));
+            } catch (e) {}
+          }
+        } catch (err) {
+          console.warn('[Home Feed] Followed artists tracks fetch failed:', err.message);
+        }
+      }
+    }
+
+    if (newReleases && newReleases.length > 0) {
+      appendHomeRail(parent, {
+        id: 'followed-releases',
+        title: 'Новинки от ваших подписок',
+        subtitle: 'Свежие релизы исполнителей, за которыми вы следите',
+        tracks: newReleases.slice(0, 16)
+      });
+    }
+  }
+
+  async function appendSoundCloudAlbumsRail(parent) {
+    if (!parent) return;
+    const directSCEngine = getDirectSCEngine();
+    if (!directSCEngine || typeof directSCEngine.getAlbums !== 'function') return;
+
+    let albums = [];
+    try {
+      albums = await directSCEngine.getAlbums('album phonk trap hits', 10);
+    } catch (e) {
+      console.warn('[Home Albums] Albums fetch failed:', e.message);
+    }
+
+    if (albums && albums.length > 0) {
+      appendHomeAlbumRail(parent, {
+        id: 'soundcloud-albums',
+        title: 'Популярные альбомы и сборники',
+        subtitle: 'Альбомы и плейлисты из SoundCloud',
+        albums
+      });
+    }
+  }
+
   function renderHomeContent(sectionsData, forYouData) {
     const contentArea = document.getElementById('home-content-area');
     if (!contentArea) return;
     contentArea.innerHTML = '';
+
+    // 1. My Wave Interactive Banner Card
+    appendMyWaveCard(contentArea);
+
+    // 2. New Releases from Followed Artists
+    appendNewReleasesRail(contentArea);
 
     const filterBySource = (trackList) => (trackList || []).filter((track) => track.source === _activeHomeSource);
     const trackKeys = (track) => [
@@ -895,35 +1178,30 @@
     const continueTracks = takeUnique(getPlayHistory(), 8);
     let personalTracks = takeUnique(forYouData?.tracks, 14);
     if (!personalTracks.length) personalTracks = takeUnique(sectionsData?.top, 14);
-    const discoverySources = [sectionsData?.electronic || [], sectionsData?.rock || [], sectionsData?.pop || []];
-    const discoveryPool = [];
-    const discoveryDepth = Math.max(0, ...discoverySources.map((list) => list.length));
-    for (let index = 0; index < discoveryDepth; index += 1) {
-      discoverySources.forEach((list) => {
-        if (list[index]) discoveryPool.push(list[index]);
-      });
-    }
-    const discoveryTracks = takeUnique(discoveryPool, 14);
     const trendingTracks = takeUnique(sectionsData?.trending, 14);
 
-    appendHomeRail(contentArea, {
-      id: 'continue-listening',
-      title: 'Продолжить слушать',
-      subtitle: 'Недавние треки — без повторного поиска',
-      tracks: continueTracks
-    });
+    // 3. Continue Listening
+    if (continueTracks.length > 0) {
+      appendHomeRail(contentArea, {
+        id: 'continue-listening',
+        title: 'Продолжить слушать',
+        subtitle: 'Недавние треки — без повторного поиска',
+        tracks: continueTracks
+      });
+    }
+
+    // 4. Made For You
     appendHomeRail(contentArea, {
       id: 'made-for-you',
       title: forYouData?.personalized ? 'Для вас' : 'С чего начать',
       subtitle: forYouData?.personalized ? forYouData.source : 'Подборка станет точнее после нескольких прослушиваний',
       tracks: personalTracks
     });
-    appendHomeRail(contentArea, {
-      id: 'fresh-discovery',
-      title: 'Новые находки',
-      subtitle: 'Смешиваем жанры, чтобы Home не застывал на одном настроении',
-      tracks: discoveryTracks
-    });
+
+    // 5. Popular SoundCloud Albums and Compilations
+    appendSoundCloudAlbumsRail(contentArea);
+
+    // 6. Trending Now
     appendHomeRail(contentArea, {
       id: 'trending-now',
       title: 'Сейчас в тренде',
@@ -962,8 +1240,9 @@
       <img src="${coverUrl}" class="card-cover-horizontal" alt="" loading="lazy" decoding="async" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='${fallbackCoverUrl}';}">
       <div class="card-details-horizontal">
         <div class="card-title-horizontal">${escapeHTML(trackTitle)}</div>
-        <div class="card-artist-horizontal">${escapeHTML(trackArtist)}</div>
+        <div class="card-artist-horizontal" title="Открыть профиль артиста">${escapeHTML(trackArtist)}</div>
         <div class="card-meta-horizontal">
+          ${track.isNewRelease ? '<span class="badge-new-release" style="margin-right: 4px;">Новинка</span>' : ''}
           <span class="badge ${track.source}" style="display:inline-flex;align-items:center;">
             ${track.source === 'soundcloud'
               ? `<svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" style="margin-right:3px"><path d="M23.95 14.47c0-2.45-1.92-4.44-4.29-4.44h-.35c-.48-2.61-2.73-4.6-5.46-4.6-2.58 0-4.73 1.83-5.32 4.26-.26-.06-.53-.09-.81-.09-2.58 0-4.67 2.09-4.67 4.67 0 .16.01.32.02.48C1.29 14.53 0 16.03 0 17.84c0 2.08 1.68 3.76 3.76 3.76h16.5c1.96 0 3.69-1.55 3.69-3.51 0-1.74-1.28-3.18-2.97-3.52z"/></svg>SC`
@@ -989,8 +1268,20 @@
     `;
 
     card.addEventListener('click', (e) => {
-      if (e.target.closest('.card-more-btn-horizontal') || e.target.closest('.card-play-btn-horizontal') || e.target.closest('.card-like-btn-horizontal')) return;
+      if (e.target.closest('.card-more-btn-horizontal') || e.target.closest('.card-play-btn-horizontal') || e.target.closest('.card-like-btn-horizontal') || e.target.closest('.card-artist-horizontal')) return;
       playOrToggle(track, index, sectionTracks);
+    });
+
+    card.querySelector('.card-artist-horizontal')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const targetArtistId = track.artistId || track.artist || trackArtist;
+      if (targetArtistId) {
+        if (typeof root.loadArtistView === 'function') {
+          root.loadArtistView(targetArtistId, track.artist || trackArtist);
+        } else if (root.GP?.Views?.Artist?.loadArtistView) {
+          root.GP.Views.Artist.loadArtistView(targetArtistId, track.artist || trackArtist);
+        }
+      }
     });
 
     card.querySelector('.card-play-btn-horizontal')?.addEventListener('click', (e) => {

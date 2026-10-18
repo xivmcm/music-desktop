@@ -378,6 +378,10 @@
     if (!pl) return;
 
     const activeCollabIds = pl.collaborators || [];
+    const isPrivateCheckbox = document.getElementById('collab-is-private-checkbox');
+    if (isPrivateCheckbox) {
+      isPrivateCheckbox.checked = Boolean(pl.isPrivate);
+    }
 
     if (mutualFriends.length === 0) {
       friendsListContainer.innerHTML = '<div style="text-align: center; color: var(--text-dim); font-size: 12px; padding: 20px;">У вас пока нет взаимных друзей для добавления в совместный плейлист.</div>';
@@ -412,6 +416,9 @@
           if (cb.checked) selectedIds.push(cb.dataset.friendId);
         });
 
+        if (isPrivateCheckbox) {
+          pl.isPrivate = isPrivateCheckbox.checked;
+        }
         pl.isCollaborative = selectedIds.length > 0;
         pl.collaborators = selectedIds;
 

@@ -161,3 +161,41 @@
   color: #ff453a;
   background: rgba(255, 69, 58, 0.1);
 }
+
+.playlist-card.private {
+  border-color: rgba(255, 159, 10, 0.25);
+}
+
+.playlist-card.collaborative {
+  border-color: rgba(10, 132, 255, 0.25);
+}
+
+.playlist-card-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.playlist-tag-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  width: fit-content;
+}
+
+.playlist-tag-badge.private {
+  background: rgba(255, 159, 10, 0.15);
+  color: #ff9f0a;
+  border: 1px solid rgba(255, 159, 10, 0.3);
+}
+
+.playlist-tag-badge.collab {
+  background: rgba(10, 132, 255, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(10, 132, 255, 0.3);
+}

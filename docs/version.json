@@ -1,10 +1,10 @@
 {
-  "version": "1.20.6",
+  "version": "1.20.7",
   "releaseDate": "2026-10-18",
-  "changelog": "• GlassPlayer v1.20.6:\n  - Интерактивный лог обновлений: аккуратное модальное окно «Что нового» с историей версий и описанием всех изменений\n  - Аналитика прослушивания: расширенный дашборд Stats, честный учет времени, фикс зацикленного повтора (loop), облачный бэкап данных\n  - Бесшовный тихий автоапдейтер: фоновая тихая загрузка, локальное кэширование без повторных 150 МБ, тихий автоперезапуск и интеграция с меню «Пуск»\n  - Умное караоке: авто-синхронизация Genius (Auto-Pacing) и фильтрация ложных текстов LRCLIB\n  - Приватность и интеграции: скрытие лайков в профиле и обновленный Discord Rich Presence",
+  "changelog": "• GlassPlayer v1.20.7:\n  - Точная аналитика прослушивания: устранен баг с фиксацией 3 минут, время звучания треков и артистов рассчитывается до секунд\n  - Сетевое присутствие: устранен фантомный статус «В сети», добавлена очистка устаревших сессий и heartbeat-проверка соединений\n  - Стабильность и точность: сохранение истории и прогресса прослушивания",
   "windows": {
-    "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.20.6.exe",
-    "filename": "GlassPlayer-Setup-1.20.6.exe"
+    "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.20.7.exe",
+    "filename": "GlassPlayer-Setup-1.20.7.exe"
   },
   "android": {
     "url": "https://xivmcm.github.io/music-desktop/GlassPlayer-1.20.0.apk",

@@ -563,8 +563,8 @@ function registerIpcHandlers() {
     if (!terms) return null;
     const { artist, songName, directQuery } = terms;
     const LRCLIB_HEADERS = {
-      'User-Agent': 'GlassPlayer/1.20.6 (https://github.com/xivmcm/music-desktop)',
-      'Lrclib-Client': 'GlassPlayer v1.20.6'
+      'User-Agent': 'GlassPlayer/1.20.7 (https://github.com/xivmcm/music-desktop)',
+      'Lrclib-Client': 'GlassPlayer v1.20.7'
     };
 
     // 1. Try LRCLIB with strict match validation

@@ -26,10 +26,14 @@
    */
   function formatDuration(totalSeconds) {
     const sec = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+    if (sec === 0) return '0 сек';
     if (sec < 60) return `${sec} сек`;
     
     const minutes = Math.floor(sec / 60);
-    if (minutes < 60) return `${minutes} мин`;
+    const remSec = sec % 60;
+    if (minutes < 60) {
+      return remSec > 0 ? `${minutes} мин ${remSec} сек` : `${minutes} мин`;
+    }
 
     const hours = Math.floor(minutes / 60);
     const remMinutes = minutes % 60;
@@ -124,7 +128,23 @@
 
     history.forEach(item => {
       periodPlays += 1;
-      const sec = 180; // approximate play duration
+
+      // Extract precise listening seconds from history or track record
+      const trackRecord = stats.tracks && stats.tracks[item.id];
+      const avgTrackSeconds = (trackRecord && trackRecord.count > 0 && trackRecord.seconds > 0)
+        ? Math.round(trackRecord.seconds / trackRecord.count)
+        : 0;
+
+      const sec = (item.playedSeconds && item.playedSeconds > 0)
+        ? Math.round(item.playedSeconds)
+        : (avgTrackSeconds > 0)
+          ? avgTrackSeconds
+          : (item.duration && item.duration > 0)
+            ? Math.round(item.duration)
+            : (trackRecord && trackRecord.seconds > 0)
+              ? Math.round(trackRecord.seconds)
+              : 0;
+
       periodSeconds += sec;
 
       const date = new Date(item.timestamp);
@@ -277,7 +297,7 @@
             <span class="stats-hero-badge">Главный трек #1</span>
             <span class="stats-hero-title">${escapeHTML(data.heroTrack.title)}</span>
             <span class="stats-hero-artist">${escapeHTML(data.heroTrack.artist)}</span>
-            <span class="stats-hero-stats">${data.heroTrack.count} воспр. • ${formatDuration(data.heroTrack.seconds || data.heroTrack.count * 180)} звучания</span>
+            <span class="stats-hero-stats">${data.heroTrack.count} воспр. • ${formatDuration(data.heroTrack.seconds || 0)} звучания</span>
           </div>
         </div>
         <div class="stats-hero-actions">
@@ -319,7 +339,7 @@
               <span class="stats-item-title">${escapeHTML(t.title)}</span>
               <span class="stats-item-artist">${escapeHTML(t.artist)}</span>
             </div>
-            <span class="stats-item-count">${t.count} воспр.</span>
+            <span class="stats-item-count">${t.count} воспр.${t.seconds > 0 ? ` • ${formatDuration(t.seconds)}` : ''}</span>
           </div>
         `).join('') : `
           <div class="stats-empty-box">
@@ -354,7 +374,7 @@
             <img src="${a.avatar || 'assets/default-artist.png'}" class="stats-avatar-img" alt="Avatar" onerror="this.src='assets/default-track.png'">
             <div class="stats-item-info">
               <span class="stats-item-title">${escapeHTML(a.name)}</span>
-              <span class="stats-item-artist">${formatDuration(a.seconds || a.count * 180)} звучания</span>
+              <span class="stats-item-artist">${formatDuration(a.seconds || 0)} звучания</span>
             </div>
             <span class="stats-item-count">${a.count} воспр.</span>
           </div>

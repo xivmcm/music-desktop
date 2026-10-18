@@ -396,6 +396,14 @@
         }
         stats.artists[aName].seconds = (stats.artists[aName].seconds || 0) + seconds;
       }
+
+      // Also record precise seconds played to the most recent history item if it matches the current track
+      if (Array.isArray(stats.history) && stats.history.length > 0) {
+        const topHistory = stats.history[0];
+        if (topHistory && topHistory.id === curTrack.id) {
+          topHistory.playedSeconds = (topHistory.playedSeconds || 0) + seconds;
+        }
+      }
     }
 
     saveUnifiedListeningStats(stats);
@@ -440,11 +448,14 @@
 
     // Append to period history log (capped at 200 items)
     if (!Array.isArray(stats.history)) stats.history = [];
+    const trackDuration = _parseDurationToSeconds(track.duration);
     stats.history.unshift({
       id: track.id,
       title: track.title,
       artist: track.artist,
       thumbnail: track.thumbnail,
+      duration: trackDuration > 0 ? trackDuration : 0,
+      playedSeconds: 0,
       timestamp: Date.now()
     });
     if (stats.history.length > 200) {

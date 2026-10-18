@@ -144,7 +144,8 @@
 
     mutualFriends.forEach(friend => {
       const liveStatus = friendStatuses.get(friend.id);
-      const isOnline = liveStatus ? Boolean(liveStatus.isOnline) : Boolean(friend.isOnline);
+      const isRecent = friend.lastSeen && (Date.now() - new Date(friend.lastSeen).getTime() < 3 * 60 * 1000);
+      const isOnline = liveStatus ? Boolean(liveStatus.isOnline) : (Boolean(friend.isOnline) && isRecent);
       const isPlaying = isOnline && liveStatus && liveStatus.isPlaying && liveStatus.trackName;
       const lastSeen = (liveStatus && liveStatus.lastSeen) || friend.lastSeen;
       const fullDate = _getFullDateTooltip(lastSeen);
@@ -298,7 +299,8 @@
         return String(fId) === String(user.id);
       });
       const liveStatus = friendStatuses.get(user.id);
-      const isOnline = liveStatus ? Boolean(liveStatus.isOnline) : Boolean(user.isOnline);
+      const isRecent = user.lastSeen && (Date.now() - new Date(user.lastSeen).getTime() < 3 * 60 * 1000);
+      const isOnline = liveStatus ? Boolean(liveStatus.isOnline) : (Boolean(user.isOnline) && isRecent);
       const lastSeen = (liveStatus && liveStatus.lastSeen) || user.lastSeen;
       const fullDate = _getFullDateTooltip(lastSeen);
       const statusHtml = isOnline

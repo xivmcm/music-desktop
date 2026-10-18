@@ -665,7 +665,8 @@
           (window.GP && window.GP.Social && window.GP.Social.Socket && window.GP.Social.Socket.friendStatuses) ||
           new Map();
         const liveStatus = friendStatuses instanceof Map ? friendStatuses.get(friend.id) : null;
-        const isOnline = liveStatus ? Boolean(liveStatus.isOnline) : Boolean(friend.isOnline);
+        const isRecent = friend.lastSeen && (Date.now() - new Date(friend.lastSeen).getTime() < 3 * 60 * 1000);
+        const isOnline = liveStatus ? Boolean(liveStatus.isOnline) : (Boolean(friend.isOnline) && isRecent);
         const lastSeen = (liveStatus && liveStatus.lastSeen) || friend.lastSeen;
 
         const getFullDateTooltip = (window.GP && window.GP.Utils && window.GP.Utils.getFullDateTooltip) || window.getFullDateTooltip || ((d) => String(d || ''));

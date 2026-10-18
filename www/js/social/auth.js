@@ -75,6 +75,18 @@
             if (currentUser.playlists && typeof window !== 'undefined' && typeof window.mergeAndSyncPlaylists === 'function') {
               window.mergeAndSyncPlaylists(currentUser.playlists);
             }
+            if (currentUser.listeningStats) {
+              if (window.GP?.Player?.mergeCloudStats) {
+                window.GP.Player.mergeCloudStats(currentUser.listeningStats);
+              } else if (typeof window.mergeCloudStats === 'function') {
+                window.mergeCloudStats(currentUser.listeningStats);
+              }
+            }
+            if (window.GP?.Player?.syncStatsWithCloud) {
+              window.GP.Player.syncStatsWithCloud();
+            } else if (typeof window.syncStatsWithCloud === 'function') {
+              window.syncStatsWithCloud();
+            }
             const connect = (window.GP && window.GP.Social && window.GP.Social.connectWS) || (typeof window !== 'undefined' && window.connectWS);
             if (typeof connect === 'function') connect();
           } else {
@@ -280,6 +292,18 @@
         }
         if (currentUser.playlists && typeof window !== 'undefined' && typeof window.mergeAndSyncPlaylists === 'function') {
           window.mergeAndSyncPlaylists(currentUser.playlists);
+        }
+        if (currentUser.listeningStats) {
+          if (window.GP?.Player?.mergeCloudStats) {
+            window.GP.Player.mergeCloudStats(currentUser.listeningStats);
+          } else if (typeof window.mergeCloudStats === 'function') {
+            window.mergeCloudStats(currentUser.listeningStats);
+          }
+        }
+        if (window.GP?.Player?.syncStatsWithCloud) {
+          window.GP.Player.syncStatsWithCloud();
+        } else if (typeof window.syncStatsWithCloud === 'function') {
+          window.syncStatsWithCloud();
         }
 
         showToast(isRegistering ? 'Регистрация успешна!' : 'Успешный вход!');
@@ -849,6 +873,18 @@
         }
         if (currentUser.playlists && typeof window !== 'undefined' && typeof window.mergeAndSyncPlaylists === 'function') {
           window.mergeAndSyncPlaylists(currentUser.playlists);
+        }
+        if (currentUser.listeningStats) {
+          if (window.GP?.Player?.mergeCloudStats) {
+            window.GP.Player.mergeCloudStats(currentUser.listeningStats);
+          } else if (typeof window.mergeCloudStats === 'function') {
+            window.mergeCloudStats(currentUser.listeningStats);
+          }
+        }
+        if (window.GP?.Player?.syncStatsWithCloud) {
+          window.GP.Player.syncStatsWithCloud();
+        } else if (typeof window.syncStatsWithCloud === 'function') {
+          window.syncStatsWithCloud();
         }
         const connect = (window.GP && window.GP.Social && window.GP.Social.connectWS) || (typeof window !== 'undefined' && window.connectWS);
         if (typeof connect === 'function') connect();

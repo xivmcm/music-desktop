@@ -253,46 +253,211 @@
     }
   }
 
-  // --- Play Count & Statistics Tracker ---
-  function getProfilePlayStats() {
-    if (typeof localStorage === 'undefined') return {};
-    const getKey = (typeof window !== 'undefined' && window.getStorageKey) || ((k) => `gp_${k}`);
-    const scopedKey = getKey('stats_counts');
-    const scoped = localStorage.getItem(scopedKey);
-    const legacy = localStorage.getItem('gp_stats_counts');
-    try {
-      return JSON.parse(scoped || legacy || '{}');
-    } catch (err) {
-      return {};
+  // --- Play Count & Enhanced Listening Statistics Tracker (v1.20.5) ---
+  const STATS_STORAGE_KEY = 'listening_stats_v2';
+  let lastPlaybackTimestamp = 0;
+  let statsCloudSyncTimer = null;
+
+  function getUnifiedListeningStats() {
+    if (typeof localStorage === 'undefined') {
+      return { totalSeconds: 0, totalPlays: 0, tracks: {}, artists: {}, hourlyDistribution: new Array(24).fill(0), history: [] };
     }
+    const getKey = (typeof window !== 'undefined' && window.getStorageKey) || ((k) => `gp_${k}`);
+    const key = getKey(STATS_STORAGE_KEY);
+    let stats = null;
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) stats = JSON.parse(raw);
+    } catch (e) {}
+
+    if (!stats || typeof stats !== 'object') {
+      stats = {
+        totalSeconds: 0,
+        totalPlays: 0,
+        tracks: {},
+        artists: {},
+        hourlyDistribution: new Array(24).fill(0),
+        history: []
+      };
+    }
+
+    if (!stats.tracks || typeof stats.tracks !== 'object') stats.tracks = {};
+    if (!stats.artists || typeof stats.artists !== 'object') stats.artists = {};
+    if (!Array.isArray(stats.hourlyDistribution) || stats.hourlyDistribution.length !== 24) {
+      stats.hourlyDistribution = new Array(24).fill(0);
+    }
+    if (!Array.isArray(stats.history)) stats.history = [];
+
+    // --- MIGRATION SAFEGUARD: Preserve 100% of existing accumulated hours & plays ---
+    // 1. Recover legacy seconds from gp_stats_total_seconds
+    const legacySeconds = parseFloat(localStorage.getItem('gp_stats_total_seconds')) || 0;
+    if (legacySeconds > (stats.totalSeconds || 0)) {
+      stats.totalSeconds = legacySeconds;
+    }
+
+    // 2. Recover legacy track counts from stats_counts or gp_stats_counts
+    const legacyCountsRaw = localStorage.getItem(getKey('stats_counts')) || localStorage.getItem('gp_stats_counts');
+    if (legacyCountsRaw) {
+      try {
+        const legacyCounts = JSON.parse(legacyCountsRaw);
+        let playsSum = 0;
+        for (const [id, item] of Object.entries(legacyCounts)) {
+          if (!item) continue;
+          const count = Number(item.count) || 1;
+          playsSum += count;
+          if (!stats.tracks[id]) {
+            stats.tracks[id] = {
+              id: item.id || id,
+              title: item.title || 'Unknown Track',
+              artist: item.artist || 'Unknown Artist',
+              thumbnail: item.thumbnail || '',
+              source: item.source || 'soundcloud',
+              count: count,
+              seconds: count * 180,
+              lastPlayedAt: item.lastPlayedAt || Date.now()
+            };
+          } else {
+            stats.tracks[id].count = Math.max(stats.tracks[id].count || 0, count);
+            if (item.thumbnail && !stats.tracks[id].thumbnail) stats.tracks[id].thumbnail = item.thumbnail;
+          }
+
+          const aName = (item.artist || 'Unknown Artist').trim();
+          if (aName) {
+            if (!stats.artists[aName]) {
+              stats.artists[aName] = {
+                name: aName,
+                count: count,
+                seconds: count * 180,
+                avatar: item.thumbnail || ''
+              };
+            } else {
+              stats.artists[aName].count = Math.max(stats.artists[aName].count || 0, count);
+              if (item.thumbnail && !stats.artists[aName].avatar) stats.artists[aName].avatar = item.thumbnail;
+            }
+          }
+        }
+        if (playsSum > (stats.totalPlays || 0)) {
+          stats.totalPlays = playsSum;
+        }
+      } catch (e) {}
+    }
+
+    return stats;
+  }
+
+  function saveUnifiedListeningStats(stats) {
+    if (!stats || typeof localStorage === 'undefined') return;
+    try {
+      const getKey = (typeof window !== 'undefined' && window.getStorageKey) || ((k) => `gp_${k}`);
+      localStorage.setItem(getKey(STATS_STORAGE_KEY), JSON.stringify(stats));
+      // Keep legacy keys updated for 100% backward compatibility
+      localStorage.setItem('gp_stats_total_seconds', stats.totalSeconds);
+      localStorage.setItem(getKey('stats_counts'), JSON.stringify(stats.tracks));
+    } catch (e) {}
+  }
+
+  function getProfilePlayStats() {
+    return getUnifiedListeningStats().tracks;
+  }
+
+  function recordListeningSeconds(seconds) {
+    if (!Number.isFinite(seconds) || seconds <= 0) return;
+    const stats = getUnifiedListeningStats();
+    stats.totalSeconds = (stats.totalSeconds || 0) + seconds;
+
+    const hour = new Date().getHours();
+    stats.hourlyDistribution[hour] = (stats.hourlyDistribution[hour] || 0) + seconds;
+
+    const curTrack = playlist[currentTrackIndex];
+    if (curTrack && curTrack.id) {
+      if (!stats.tracks[curTrack.id]) {
+        stats.tracks[curTrack.id] = {
+          id: curTrack.id,
+          title: curTrack.title || 'Unknown Track',
+          artist: curTrack.artist || 'Unknown Artist',
+          thumbnail: curTrack.thumbnail || '',
+          source: curTrack.source || 'soundcloud',
+          count: 0,
+          seconds: 0,
+          lastPlayedAt: Date.now()
+        };
+      }
+      stats.tracks[curTrack.id].seconds = (stats.tracks[curTrack.id].seconds || 0) + seconds;
+
+      const aName = (curTrack.artist || 'Unknown Artist').trim();
+      if (aName) {
+        if (!stats.artists[aName]) {
+          stats.artists[aName] = {
+            name: aName,
+            count: 0,
+            seconds: 0,
+            avatar: curTrack.thumbnail || ''
+          };
+        }
+        stats.artists[aName].seconds = (stats.artists[aName].seconds || 0) + seconds;
+      }
+    }
+
+    saveUnifiedListeningStats(stats);
   }
 
   function incrementPlayCount(track) {
-    if (!track || typeof localStorage === 'undefined') return;
-    try {
-      const stats = getProfilePlayStats();
-      if (!stats[track.id]) {
-        stats[track.id] = {
-          id: track.id,
-          title: track.title,
-          artist: track.artist,
-          thumbnail: track.thumbnail,
-          source: track.source,
-          count: 0
+    if (!track) return;
+    const stats = getUnifiedListeningStats();
+    stats.totalPlays = (stats.totalPlays || 0) + 1;
+
+    if (!stats.tracks[track.id]) {
+      stats.tracks[track.id] = {
+        id: track.id,
+        title: track.title,
+        artist: track.artist,
+        thumbnail: track.thumbnail,
+        source: track.source,
+        count: 0,
+        seconds: 0,
+        lastPlayedAt: Date.now()
+      };
+    }
+    stats.tracks[track.id].count = (stats.tracks[track.id].count || 0) + 1;
+    stats.tracks[track.id].lastPlayedAt = Date.now();
+    if (track.thumbnail) stats.tracks[track.id].thumbnail = track.thumbnail;
+
+    const aName = (track.artist || 'Unknown Artist').trim();
+    if (aName) {
+      if (!stats.artists[aName]) {
+        stats.artists[aName] = {
+          name: aName,
+          count: 0,
+          seconds: 0,
+          avatar: track.thumbnail || ''
         };
       }
-      stats[track.id].count += 1;
-      stats[track.id].lastPlayedAt = Date.now();
-
-      const getKey = (typeof window !== 'undefined' && window.getStorageKey) || ((k) => `gp_${k}`);
-      localStorage.setItem(getKey('stats_counts'), JSON.stringify(stats));
-
-      if (typeof window !== 'undefined' && typeof window.invalidateHomeRecommendations === 'function') {
-        window.invalidateHomeRecommendations();
+      stats.artists[aName].count = (stats.artists[aName].count || 0) + 1;
+      if (track.thumbnail && !stats.artists[aName].avatar) {
+        stats.artists[aName].avatar = track.thumbnail;
       }
-    } catch (err) {
-      console.error('Failed to update play count statistics:', err);
     }
+
+    // Append to period history log (capped at 200 items)
+    if (!Array.isArray(stats.history)) stats.history = [];
+    stats.history.unshift({
+      id: track.id,
+      title: track.title,
+      artist: track.artist,
+      thumbnail: track.thumbnail,
+      timestamp: Date.now()
+    });
+    if (stats.history.length > 200) {
+      stats.history = stats.history.slice(0, 200);
+    }
+
+    saveUnifiedListeningStats(stats);
+
+    if (typeof window !== 'undefined' && typeof window.invalidateHomeRecommendations === 'function') {
+      window.invalidateHomeRecommendations();
+    }
+
+    scheduleStatsCloudSync();
   }
 
   function resetPlayCountSession(track) {
@@ -318,28 +483,79 @@
     }
   }
 
-  // Periodic 10s playback count tracker
-  if (typeof window !== 'undefined') {
-    if (statsIntervalTimer) clearInterval(statsIntervalTimer);
-    statsIntervalTimer = setInterval(() => {
-      const player = getAudioPlayer();
-      if (!player || player.paused || isSeeking) return;
+  function scheduleStatsCloudSync() {
+    if (statsCloudSyncTimer) return;
+    statsCloudSyncTimer = setTimeout(() => {
+      statsCloudSyncTimer = null;
+      syncStatsWithCloud();
+    }, 45000);
+  }
 
-      const track = playlist[currentTrackIndex];
-      if (!track) return;
+  async function syncStatsWithCloud() {
+    if (typeof window === 'undefined') return;
+    const token = localStorage.getItem('token') || (window.currentUser && window.currentUser.token);
+    if (!token) return;
 
-      if (typeof localStorage !== 'undefined') {
-        let totalSeconds = parseFloat(localStorage.getItem('gp_stats_total_seconds')) || 0;
-        totalSeconds += 10;
-        localStorage.setItem('gp_stats_total_seconds', totalSeconds);
+    try {
+      const stats = getUnifiedListeningStats();
+      const backendUrl = (window.API_URL || (typeof window.getBackendUrl === 'function' && window.getBackendUrl())) || 'https://music-backend-iyni.onrender.com';
+      const cleanUrl = backendUrl.replace(/\/api$/, '');
+      const res = await fetch(`${cleanUrl}/api/users/stats/sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(stats)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.stats) {
+          mergeCloudStats(data.stats);
+        }
       }
+    } catch (e) {}
+  }
 
-      if (playCountSession.trackId !== track.id) {
-        resetPlayCountSession(track);
+  function mergeCloudStats(cloudStats) {
+    if (!cloudStats || typeof cloudStats !== 'object') return;
+    const stats = getUnifiedListeningStats();
+    stats.totalSeconds = Math.max(stats.totalSeconds || 0, Number(cloudStats.totalSeconds) || 0);
+    stats.totalPlays = Math.max(stats.totalPlays || 0, Number(cloudStats.totalPlays) || 0);
+
+    if (cloudStats.tracks && typeof cloudStats.tracks === 'object') {
+      for (const [id, t] of Object.entries(cloudStats.tracks)) {
+        if (!t) continue;
+        if (!stats.tracks[id]) {
+          stats.tracks[id] = t;
+        } else {
+          stats.tracks[id].count = Math.max(stats.tracks[id].count || 0, Number(t.count) || 0);
+          stats.tracks[id].seconds = Math.max(stats.tracks[id].seconds || 0, Number(t.seconds) || 0);
+          if (t.thumbnail && !stats.tracks[id].thumbnail) stats.tracks[id].thumbnail = t.thumbnail;
+        }
       }
-      playCountSession.continuousSeconds += 10;
-      maybeCommitQualifiedPlay();
-    }, 10000);
+    }
+
+    if (cloudStats.artists && typeof cloudStats.artists === 'object') {
+      for (const [name, a] of Object.entries(cloudStats.artists)) {
+        if (!a) continue;
+        if (!stats.artists[name]) {
+          stats.artists[name] = a;
+        } else {
+          stats.artists[name].count = Math.max(stats.artists[name].count || 0, Number(a.count) || 0);
+          stats.artists[name].seconds = Math.max(stats.artists[name].seconds || 0, Number(a.seconds) || 0);
+          if (a.avatar && !stats.artists[name].avatar) stats.artists[name].avatar = a.avatar;
+        }
+      }
+    }
+
+    if (Array.isArray(cloudStats.hourlyDistribution)) {
+      for (let h = 0; h < 24; h++) {
+        stats.hourlyDistribution[h] = Math.max(stats.hourlyDistribution[h] || 0, Number(cloudStats.hourlyDistribution[h]) || 0);
+      }
+    }
+
+    saveUnifiedListeningStats(stats);
   }
 
   // --- UI Updates ---
@@ -1091,6 +1307,28 @@
           if (miniProgressSlider) miniProgressSlider.value = 0;
         }
 
+        // Accurate playback time & play qualification tracker
+        if (!player.paused && !isSeeking) {
+          const perfNow = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+          if (lastPlaybackTimestamp > 0) {
+            const deltaSec = (perfNow - lastPlaybackTimestamp) / 1000;
+            lastPlaybackTimestamp = perfNow;
+            if (deltaSec > 0 && deltaSec < 2) {
+              recordListeningSeconds(deltaSec);
+              const track = playlist[currentTrackIndex];
+              if (track) {
+                if (playCountSession.trackId !== track.id) {
+                  resetPlayCountSession(track);
+                }
+                playCountSession.continuousSeconds += deltaSec;
+                maybeCommitQualifiedPlay();
+              }
+            }
+          } else {
+            lastPlaybackTimestamp = perfNow;
+          }
+        }
+
         // Synchronize karaoke/lyrics
         if (window.GP && window.GP.Lyrics && typeof window.GP.Lyrics.syncLyricsToTime === 'function') {
           window.GP.Lyrics.syncLyricsToTime(current);
@@ -1103,6 +1341,11 @@
         if (isRepeat) {
           currentSeekOffset = 0;
           player.currentTime = 0;
+          const curTrack = playlist[currentTrackIndex];
+          if (curTrack) {
+            // Crucial: reset session so every repeat loop qualifies and counts as a new play!
+            resetPlayCountSession(curTrack);
+          }
           const playPromise = player.play();
           currentPlayPromise = playPromise;
           if (playPromise && typeof playPromise.then === 'function') {
@@ -1125,7 +1368,12 @@
         }
       });
 
+      player.addEventListener('seeking', () => {
+        lastPlaybackTimestamp = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      });
+
       player.addEventListener('play', () => {
+        lastPlaybackTimestamp = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
         const curTrack = playlist[currentTrackIndex];
         updateMediaSessionPlaybackState(true);
         updateMediaSessionPositionState();
@@ -1150,7 +1398,7 @@
       });
 
       player.addEventListener('pause', () => {
-        playCountSession.continuousSeconds = 0;
+        lastPlaybackTimestamp = 0;
         const curTrack = playlist[currentTrackIndex];
         updateMediaSessionPlaybackState(false);
         updateMediaSessionPositionState();
@@ -1352,6 +1600,11 @@
     incrementPlayCount,
     resetPlayCountSession,
     maybeCommitQualifiedPlay,
+    getUnifiedListeningStats,
+    getListeningStats: getUnifiedListeningStats,
+    recordListeningSeconds,
+    syncStatsWithCloud,
+    mergeCloudStats,
     initPlayerEventListeners,
     getAudioPlayer,
     getPlaylist: () => playlist,
@@ -1390,6 +1643,11 @@
   window.incrementPlayCount = incrementPlayCount;
   window.resetPlayCountSession = resetPlayCountSession;
   window.maybeCommitQualifiedPlay = maybeCommitQualifiedPlay;
+  window.getUnifiedListeningStats = getUnifiedListeningStats;
+  window.getListeningStats = getUnifiedListeningStats;
+  window.syncStatsWithCloud = syncStatsWithCloud;
+  window.mergeCloudStats = mergeCloudStats;
+  window.recordListeningSeconds = recordListeningSeconds;
 
   Object.defineProperty(window, 'playlist', {
     get: () => playlist,

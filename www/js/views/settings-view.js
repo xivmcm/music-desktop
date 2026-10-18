@@ -167,8 +167,22 @@
     if (loadingIndicator) loadingIndicator.classList.remove('hidden');
 
     setTimeout(() => {
-      renderSettings({ scope: 'stats' });
-    }, 100);
+      if (loadingIndicator) loadingIndicator.classList.add('hidden');
+      if (tracksContainer) {
+        tracksContainer.innerHTML = '';
+        if (window.GP?.Views?.Stats?.renderStatsView) {
+          window.GP.Views.Stats.renderStatsView(tracksContainer);
+        } else if (typeof window.renderStatsView === 'function') {
+          window.renderStatsView(tracksContainer);
+        } else {
+          renderSettings({ scope: 'stats' });
+        }
+        tracksContainer.classList.remove('hidden');
+      }
+      if (typeof window.updateActiveTab === 'function') {
+        window.updateActiveTab('stats');
+      }
+    }, 50);
   }
 
   function openSettings(scope = 'settings', studioTab = 'visual') {
@@ -364,6 +378,19 @@
       ? window.GP.Theme.getStoredCustomTheme()
       : ((typeof window.getStoredCustomTheme === 'function') ? window.getStoredCustomTheme() : (window.DEFAULT_CUSTOM_THEME || {}));
 
+    if (scope === 'stats') {
+      if (window.GP?.Views?.Stats?.renderStatsView) {
+        window.GP.Views.Stats.renderStatsView(tracksContainer);
+      } else if (typeof window.renderStatsView === 'function') {
+        window.renderStatsView(tracksContainer);
+      }
+      tracksContainer.classList.remove('hidden');
+      if (typeof window.updateActiveTab === 'function') {
+        window.updateActiveTab('stats');
+      }
+      return;
+    }
+
     const viewHeader = document.createElement('div');
     viewHeader.className = 'view-header';
     const headerCopy = scope === 'studio'
@@ -371,14 +398,10 @@
           title: 'Studio',
           subtitle: studioTab === 'audio' ? 'Audio effects and equalizer' : 'Visual theme constructor'
         }
-      : scope === 'stats'
-        ? { title: 'Stats', subtitle: 'Listening analytics' }
-        : { title: 'Profile & Settings', subtitle: '' };
+      : { title: 'Profile & Settings', subtitle: '' };
     const headerIcon = scope === 'studio'
       ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18h1.2a2 2 0 0 0 0-4H12a2 2 0 0 1 0-4h5a4 4 0 0 0 4-4c0-3.3-4-6-9-6Z"/><circle cx="7.5" cy="10" r="1" fill="currentColor" stroke="none"/><circle cx="10" cy="6.7" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="7" r="1" fill="currentColor" stroke="none"/></svg>'
-      : scope === 'stats'
-        ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>'
-        : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+      : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
     viewHeader.innerHTML = `
       <div class="view-header-title">
         ${headerIcon}
@@ -825,13 +848,16 @@
       </div>
 
       <div class="settings-section" data-section="listening-stats">
-        <h3>Статистика прослушивания</h3>
+        <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255, 255, 255, 0.06); padding-bottom: 8px;">
+          <h3 style="margin: 0; padding: 0; border: none;">Статистика прослушивания</h3>
+          <button id="open-full-stats-btn" type="button" style="background: color-mix(in srgb, var(--accent-color, #fff) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent-color, #fff) 25%, transparent); color: var(--accent-color, #fff); font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 8px; cursor: pointer;">Подробнее</button>
+        </div>
         <div class="settings-info-row">
           <span class="settings-info-label">Общее время прослушивания:</span>
           <span class="settings-info-value">${totalHours} ч</span>
         </div>
-        <div style="margin-top: 12px; margin-bottom: 8px; font-weight: 500; font-size: 14px; color: rgba(255,255,255,0.7);">
-          Топ-3 трека:
+        <div style="margin-top: 10px; margin-bottom: 8px; font-weight: 500; font-size: 13px; color: var(--text-dim, rgba(255,255,255,0.7));">
+          Топ треки:
         </div>
         <div style="display: flex; flex-direction: column; gap: 8px;">
           ${topTracks.length > 0 ? topTracks.map((track, i) => {
@@ -839,16 +865,16 @@
             const fallbackTrackCover = getFallbackCover(track.thumbnail);
             return `
               <div style="display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.03); padding: 6px 10px; border-radius: 6px;">
-                <div style="font-weight: bold; color: #30d158; width: 15px;">${i + 1}</div>
+                <div style="font-weight: bold; color: var(--accent-color, #ffffff); width: 15px;">${i + 1}</div>
                 <img src="${trackCover}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='${fallbackTrackCover}';}" style="width: 32px; height: 32px; border-radius: 4px; object-fit: cover;">
                 <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                  <div style="font-weight: 500; font-size: 13px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(track.title)}</div>
-                  <div style="font-size: 11px; color: rgba(255,255,255,0.5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(track.artist)}</div>
+                  <div style="font-weight: 500; font-size: 13px; color: var(--text-color, #fff); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(track.title)}</div>
+                  <div style="font-size: 11px; color: var(--text-dim, rgba(255,255,255,0.5)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(track.artist)}</div>
                 </div>
-                <div style="font-size: 12px; color: rgba(255,255,255,0.4);">${track.count} воспр.</div>
+                <div style="font-size: 12px; color: var(--text-dim, rgba(255,255,255,0.4));">${track.count} воспр.</div>
               </div>
             `;
-          }).join('') : '<div style="color: rgba(255,255,255,0.4); font-size: 12px; padding: 4px 0;">Нет данных о прослушиваниях</div>'}
+          }).join('') : '<div style="color: var(--text-dim, rgba(255,255,255,0.4)); font-size: 12px; padding: 4px 0;">Нет данных о прослушиваниях</div>'}
         </div>
       </div>
 
@@ -1678,6 +1704,13 @@
     if (clearCacheBtn) {
       clearCacheBtn.addEventListener('click', () => {
         clearAppCache();
+      });
+    }
+
+    const openFullStatsBtn = panel.querySelector('#open-full-stats-btn');
+    if (openFullStatsBtn) {
+      openFullStatsBtn.addEventListener('click', () => {
+        loadStatsView();
       });
     }
 

@@ -1,13 +1,13 @@
 {
-  "version": "1.19.9",
-  "releaseDate": "2026-10-17",
-  "changelog": "• Исправления и улучшения (v1.19.9):\n  - Полностью исправлены рамки и закругление углов мини-плеера (изолирован мобильный медиа-запрос max-width: 768px, сбрасывавший --window-radius в 0px)\n  - Восстановлена прямая привязка углов мини-плеера к ползунку радиуса скругления в Настройках приложения\n  - Добавлено согласованное скругление верхней планки (mini-titlebar) и контентной области мини-плеера",
+  "version": "1.20.0",
+  "releaseDate": "2026-10-18",
+  "changelog": "• Исправления и улучшения (v1.20.0):\n  - Полностью восстановлено воспроизведение треков SoundCloud (обновлен системный client_id, устранена ошибка 401 Unauthorized)\n  - Внедрена динамическая авто-ротация и сохранение client_id из бэкенда в кэш без сброса на устаревшие ключи\n  - Увеличены таймауты проверки зеркал и разрешения CDN-потоков до 8000мс для защиты от 502 Bad Gateway при холодном старте бэкенда\n  - Исправлена необработанная ошибка консоли при отсутствии текста песни в LRCLIB",
   "windows": {
-    "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.19.9.exe",
-    "filename": "GlassPlayer-Setup-1.19.9.exe"
+    "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.20.0.exe",
+    "filename": "GlassPlayer-Setup-1.20.0.exe"
   },
   "android": {
-    "url": "https://xivmcm.github.io/music-desktop/GlassPlayer-1.19.9.apk",
-    "filename": "GlassPlayer-1.19.9.apk"
+    "url": "https://xivmcm.github.io/music-desktop/GlassPlayer-1.20.0.apk",
+    "filename": "GlassPlayer-1.20.0.apk"
   }
 }

@@ -527,9 +527,15 @@
 
     // Trigger lyrics load if Lyrics module exists
     if (window.GP && window.GP.Lyrics && typeof window.GP.Lyrics.loadLyrics === 'function') {
-      window.GP.Lyrics.loadLyrics(track);
+      try {
+        const p = window.GP.Lyrics.loadLyrics(track);
+        if (p && typeof p.catch === 'function') p.catch(() => {});
+      } catch (e) {}
     } else if (typeof window.loadLyrics === 'function') {
-      window.loadLyrics(track);
+      try {
+        const p = window.loadLyrics(track);
+        if (p && typeof p.catch === 'function') p.catch(() => {});
+      } catch (e) {}
     }
 
     // Clear any previous loading timeout before starting a new track
@@ -628,7 +634,7 @@
             startPlaybackWithUrl(directCdnUrl, false);
           } else {
             const fetchFn = getFetchWithTimeout();
-            fetchFn(`${rawStreamUrl}&direct=true`, {}, 4000)
+            fetchFn(`${rawStreamUrl}&direct=true`, {}, 8000)
               .then(r => r.json())
               .then(data => {
                 if (data && data.status === 'success' && data.directUrl) {
@@ -651,7 +657,7 @@
         startPlaybackWithUrl(rawStreamUrl, false);
       } else {
         const fetchFn = getFetchWithTimeout();
-        fetchFn(`${rawStreamUrl}&direct=true`, {}, 4000)
+        fetchFn(`${rawStreamUrl}&direct=true`, {}, 8000)
           .then(r => r.json())
           .then(data => {
             if (data && data.status === 'success' && data.directUrl) {

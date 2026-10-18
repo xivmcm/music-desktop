@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.19.9';
+const APP_VERSION = '1.20.0';
 document.documentElement.classList.toggle('electron-runtime', isElectron);
 document.documentElement.classList.toggle('web-runtime', !isElectron);
 document.body.classList.toggle('electron-runtime', isElectron);
@@ -162,8 +162,11 @@ async function initApiFailover() {
     return;
   }
   console.log('[API Failover] Verifying backend mirrors...');
+  if (window.DirectSoundCloudEngine && typeof window.DirectSoundCloudEngine.fetchBackendClientId === 'function') {
+    window.DirectSoundCloudEngine.fetchBackendClientId();
+  }
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 1500);
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
   const checkMirror = async (url) => {
     try {
       const response = await fetch(`${url}/api/health`, { 
@@ -203,8 +206,19 @@ async function initApiFailover() {
 
 // ── Direct SoundCloud Client Engine (Zero-Cost & Anti-Block Fallback) ──────
 const SC_CLIENT_IDS = [
-  'V7f0p2q7JD4vcOlEsqq6bwwtNYCyAtLC'
+  'tHVbSbDP4TaoMbPppngv6Tdry83vNbMQ'
 ];
+
+if (typeof localStorage !== 'undefined') {
+  try {
+    const cachedCid = localStorage.getItem('gp_sc_client_id');
+    if (cachedCid && typeof cachedCid === 'string' && cachedCid.length >= 16) {
+      if (!SC_CLIENT_IDS.includes(cachedCid)) {
+        SC_CLIENT_IDS.unshift(cachedCid);
+      }
+    }
+  } catch (e) {}
+}
 
 const DirectSoundCloudEngine = {
   clientIndex: 0,
@@ -221,6 +235,9 @@ const DirectSoundCloudEngine = {
       }
       this.clientId = newId;
       this.clientIndex = 0;
+      if (typeof localStorage !== 'undefined') {
+        try { localStorage.setItem('gp_sc_client_id', newId); } catch (e) {}
+      }
       console.log('[Direct SC Engine] Updated active client_id from backend:', newId);
     }
   },
@@ -229,7 +246,7 @@ const DirectSoundCloudEngine = {
     try {
       const bUrl = (typeof window !== 'undefined' && window.BACKEND_URL) || (typeof BACKEND_URL !== 'undefined' ? BACKEND_URL : null);
       if (!bUrl) return null;
-      const res = await fetchWithTimeout(`${bUrl}/stream/client-id`, {}, 3500);
+      const res = await fetchWithTimeout(`${bUrl}/stream/client-id`, {}, 8000);
       if (res.ok) {
         const data = await res.json();
         if (data && data.status === 'success' && data.clientId) {
@@ -262,8 +279,13 @@ const DirectSoundCloudEngine = {
           }
         }, 5000);
         if (res.status === 401 || res.status === 429) {
-          if (attempts === 0) {
-            await this.fetchBackendClientId();
+          if (attempts === 0 && res.status === 401) {
+            const freshId = await this.fetchBackendClientId();
+            if (freshId) {
+              this.clientId = freshId;
+              attempts++;
+              continue;
+            }
           }
           this.rotateClientId();
           attempts++;
@@ -316,14 +338,18 @@ const DirectSoundCloudEngine = {
         if (!transcodings || !trackAuth) {
           const detailsRes = await fetchWithTimeout(`https://api-v2.soundcloud.com/tracks/${track.id}?client_id=${clientId}`, {
             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-          }, 4000);
+          }, 6000);
           if (detailsRes.ok) {
             const details = await detailsRes.json();
             transcodings = details.media?.transcodings || transcodings;
             trackAuth = details.track_authorization || trackAuth;
           } else if (detailsRes.status === 401 && attempts === 0) {
-            await this.fetchBackendClientId();
-            this.rotateClientId();
+            const freshId = await this.fetchBackendClientId();
+            if (freshId) {
+              this.clientId = freshId;
+            } else {
+              this.rotateClientId();
+            }
             attempts++;
             continue;
           }
@@ -344,11 +370,16 @@ const DirectSoundCloudEngine = {
             const authParam = trackAuth ? `&track_authorization=${encodeURIComponent(trackAuth)}` : '';
             const streamRes = await fetchWithTimeout(`${chosen.url}?client_id=${clientId}${authParam}`, {
               headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-            }, 4000);
+            }, 6000);
 
             if (streamRes.status === 401) {
               if (attempts === 0) {
-                await this.fetchBackendClientId();
+                const freshId = await this.fetchBackendClientId();
+                if (freshId) {
+                  this.clientId = freshId;
+                  attempts++;
+                  break;
+                }
               }
               this.rotateClientId();
               attempts++;
@@ -406,6 +437,10 @@ window.DirectSoundCloudEngine = DirectSoundCloudEngine;
         }
       })
       .catch(e => console.warn('[Keep-Alive] Ping failed:', e.message));
+
+    if (window.DirectSoundCloudEngine && typeof window.DirectSoundCloudEngine.fetchBackendClientId === 'function') {
+      window.DirectSoundCloudEngine.fetchBackendClientId();
+    }
   };
   ping(); // immediate ping on app launch
   setInterval(ping, PING_INTERVAL_MS);

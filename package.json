@@ -1,14 +1,15 @@
 {
   "name": "music-desktop",
-  "version": "1.20.10",
+  "version": "1.20.11",
   "description": "Cross-platform music player aggregator desktop application",
   "author": "GlassPlayer",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "hot": "node scripts/build-hot-update.js",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
-    "build": "electron-builder --win",
+    "build": "node scripts/build-hot-update.js && electron-builder --win",
     "publish": "electron-builder --win --publish always"
   },
   "devDependencies": {

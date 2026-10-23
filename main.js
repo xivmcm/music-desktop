@@ -3,7 +3,50 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
+const zlib = require('zlib');
+const crypto = require('crypto');
 const { spawn } = require('child_process');
+
+// --- Instant Hot-Update Bootstrap ---
+// If a verified hot-update bundle with a strictly newer version than the built-in app.asar
+// exists in userData/hot-update, delegate execution to hot-update/main.js.
+// If the built-in app.asar is equal or newer (e.g. after a fresh .exe install), remove stale hot-update.
+if (!global.__GP_HOT_BOOTSTRAPPED) {
+  try {
+    const parseVer = (v) => String(v || '').replace(/^[^\d]*/, '').split('.').map(n => parseInt(n, 10) || 0);
+    const isStrictlyNewer = (remoteV, localV) => {
+      const [rMaj = 0, rMin = 0, rPat = 0] = parseVer(remoteV);
+      const [lMaj = 0, lMin = 0, lPat = 0] = parseVer(localV);
+      if (rMaj !== lMaj) return rMaj > lMaj;
+      if (rMin !== lMin) return rMin > lMin;
+      return rPat > lPat;
+    };
+    const hotDir = path.join(app.getPath('userData'), 'hot-update');
+    const hotPkgPath = path.join(hotDir, 'package.json');
+    const hotMainPath = path.join(hotDir, 'main.js');
+    const hotIndexPath = path.join(hotDir, 'index.html');
+    if (fs.existsSync(hotPkgPath) && fs.existsSync(hotMainPath) && fs.existsSync(hotIndexPath)) {
+      const hotPkg = JSON.parse(fs.readFileSync(hotPkgPath, 'utf8'));
+      if (hotPkg.version && isStrictlyNewer(hotPkg.version, app.getVersion())) {
+        global.__GP_HOT_BOOTSTRAPPED = hotPkg.version;
+        global.__GP_HOT_DIR = hotDir;
+        const Module = require('module');
+        const asarNodeModules = path.join(__dirname, 'node_modules');
+        if (!Module.globalPaths.includes(asarNodeModules)) {
+          Module.globalPaths.push(asarNodeModules);
+        }
+        console.log(`[HotUpdate] Bootstrapping v${hotPkg.version} from ${hotDir}`);
+        require(hotMainPath);
+        return;
+      } else {
+        fs.rmSync(hotDir, { recursive: true, force: true });
+      }
+    }
+  } catch (bootErr) {
+    console.error('[HotUpdate] Bootstrap error, falling back to built-in app.asar:', bootErr);
+  }
+}
+
 const DiscordRPC = require('discord-rpc');
 
 // Set Windows AppUserModelId so taskbar & notifications group properly as GlassPlayer
@@ -562,9 +605,10 @@ function registerIpcHandlers() {
   ipcMain.handle('fetch-lyrics', async (event, terms) => {
     if (!terms) return null;
     const { artist, songName, directQuery } = terms;
+    const activeVer = glassUpdater ? glassUpdater.currentVersion : '1.20.11';
     const LRCLIB_HEADERS = {
-      'User-Agent': 'GlassPlayer/1.20.10 (https://github.com/xivmcm/music-desktop)',
-      'Lrclib-Client': 'GlassPlayer v1.20.10'
+      'User-Agent': `GlassPlayer/${activeVer} (https://github.com/xivmcm/music-desktop)`,
+      'Lrclib-Client': `GlassPlayer v${activeVer}`
     };
 
     // 1. Try LRCLIB with strict match validation
@@ -625,10 +669,24 @@ function registerIpcHandlers() {
 
 class GlassUpdater {
   constructor() {
-    this.currentVersion = app.getVersion();
+    this.currentVersion = this.resolveCurrentVersion();
     this.latestUpdate = null;
     this.downloadedInstallerPath = null;
+    this.downloadedHotUpdatePath = null;
     this.isDownloading = false;
+  }
+
+  resolveCurrentVersion() {
+    if (global.__GP_HOT_BOOTSTRAPPED) return global.__GP_HOT_BOOTSTRAPPED;
+    try {
+      const activeDir = global.__GP_HOT_DIR || __dirname;
+      const pkgPath = path.join(activeDir, 'package.json');
+      if (fs.existsSync(pkgPath)) {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+        if (pkg?.version) return pkg.version;
+      }
+    } catch (_) {}
+    return app.getVersion();
   }
 
   isNewerVersion(remoteVersion, localVersion = this.currentVersion) {
@@ -641,17 +699,59 @@ class GlassUpdater {
   }
 
   async checkForUpdates() {
+    this.currentVersion = this.resolveCurrentVersion();
     sendToPrimaryWindow('update-status', 'checking');
     try {
-      let updateInfo = await this.checkGitHubReleases();
-      if (!updateInfo) {
-        updateInfo = await this.checkVersionJson();
+      const [ghRes, vjRes] = await Promise.allSettled([
+        this.checkGitHubReleases(),
+        this.checkVersionJson()
+      ]);
+      const ghInfo = ghRes.status === 'fulfilled' ? ghRes.value : null;
+      const vjInfo = vjRes.status === 'fulfilled' ? vjRes.value : null;
+
+      let updateInfo = null;
+      if (ghInfo && vjInfo) {
+        if (this.isNewerVersion(vjInfo.version, ghInfo.version)) {
+          updateInfo = vjInfo;
+        } else if (this.isNewerVersion(ghInfo.version, vjInfo.version)) {
+          updateInfo = ghInfo;
+        } else {
+          // Same version: combine GitHub release asset info with hotUpdate metadata from version.json
+          updateInfo = {
+            ...ghInfo,
+            hotUpdate: vjInfo.hotUpdate || null
+          };
+        }
+      } else {
+        updateInfo = vjInfo || ghInfo;
       }
 
       if (updateInfo && this.isNewerVersion(updateInfo.version)) {
         this.latestUpdate = updateInfo;
 
-        // Check if full installer is already downloaded and cached in Temp
+        // 1. Check if verified Hot-Update bundle (~675 KB) is already cached in Temp
+        const hotTempPath = path.join(app.getPath('temp'), `GlassPlayer-HotUpdate-${updateInfo.version}.gz`);
+        if (fs.existsSync(hotTempPath)) {
+          try {
+            const raw = fs.readFileSync(hotTempPath);
+            const expectedSha = updateInfo.hotUpdate?.sha256;
+            const actualSha = crypto.createHash('sha256').update(raw).digest('hex');
+            if (!expectedSha || actualSha === expectedSha) {
+              const parsed = JSON.parse(zlib.gunzipSync(raw).toString('utf8'));
+              if (parsed && parsed.version === updateInfo.version && parsed.files) {
+                console.log(`[GlassUpdater] Cached Hot-Update bundle verified for v${updateInfo.version} (${raw.length} bytes).`);
+                this.downloadedHotUpdatePath = hotTempPath;
+                sendToPrimaryWindow('update-status', 'available', updateInfo);
+                sendToPrimaryWindow('update-ready', updateInfo);
+                return;
+              }
+            }
+          } catch (hotErr) {
+            console.warn('[GlassUpdater] Failed to verify cached hot-update:', hotErr.message);
+          }
+        }
+
+        // 2. Check if full installer is already downloaded and cached in Temp
         const tempPath = path.join(app.getPath('temp'), `GlassPlayer-Setup-${updateInfo.version}.exe`);
         const expectedSize = updateInfo.size || 0;
         if (fs.existsSync(tempPath)) {
@@ -670,7 +770,7 @@ class GlassUpdater {
         }
 
         sendToPrimaryWindow('update-status', 'available', updateInfo);
-        // Start silent background download so user gets a seamless update without manual waiting
+        // Start silent background download (prefers lightweight ~675 KB Hot-Update if available)
         this.downloadUpdate(updateInfo.downloadUrl, true);
       } else {
         this.latestUpdate = null;
@@ -712,97 +812,56 @@ class GlassUpdater {
   }
 
   async checkVersionJson() {
+    const urls = [
+      `https://raw.githubusercontent.com/xivmcm/music-desktop/main/docs/version.json?t=${Date.now()}`,
+      `https://xivmcm.github.io/music-desktop/version.json?t=${Date.now()}`
+    ];
+    for (const u of urls) {
+      try {
+        const res = await fetch(u, {
+          headers: { 'Cache-Control': 'no-cache' },
+          signal: AbortSignal.timeout(6000)
+        });
+        if (!res.ok) continue;
+        const data = await res.json();
+        if (!data || !data.version) continue;
+        const downloadUrl = data.platforms?.win64?.url || data.windows?.url || `https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-${data.version}.exe`;
+        const filename = data.platforms?.win64?.filename || data.windows?.filename || `GlassPlayer-Setup-${data.version}.exe`;
+        return {
+          version: data.version,
+          changelog: data.changelog || 'Обновление GlassPlayer',
+          downloadUrl,
+          filename,
+          hotUpdate: data.hotUpdate || null
+        };
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  isTrustedDownloadUrl(candidateUrl) {
     try {
-      const res = await fetch('https://xivmcm.github.io/music-desktop/version.json', {
-        headers: { 'Cache-Control': 'no-cache' },
-        signal: AbortSignal.timeout(6000)
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
-      const downloadUrl = data.platforms?.win64?.url || data.windows?.url || `https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-${data.version}.exe`;
-      const filename = data.platforms?.win64?.filename || data.windows?.filename || `GlassPlayer-Setup-${data.version}.exe`;
-      return {
-        version: data.version,
-        changelog: data.changelog || 'Обновление GlassPlayer',
-        downloadUrl,
-        filename
-      };
-    } catch (e) {
-      return null;
+      const parsedUrl = new URL(candidateUrl);
+      const host = parsedUrl.hostname.toLowerCase();
+      return host === 'github.com' ||
+        host.endsWith('.github.com') ||
+        host.endsWith('.githubusercontent.com') ||
+        host.endsWith('.github.io') ||
+        host.endsWith('.windows.net');
+    } catch (_) {
+      return false;
     }
   }
 
-  async downloadUpdate(targetUrl, isBackground = false) {
-    let url = targetUrl || this.latestUpdate?.downloadUrl;
-    if (!url) {
-      if (!isBackground) sendToPrimaryWindow('update-status', 'error', 'No download URL provided');
-      return;
-    }
-
-    // Security: Only allow official GitHub domains and storage CDNs
-    try {
-      const parsedUrl = new URL(url);
-      const host = parsedUrl.hostname.toLowerCase();
-      const isAllowedHost = host === 'github.com' ||
-        host.endsWith('.github.com') ||
-        host.endsWith('.githubusercontent.com') ||
-        host.endsWith('.windows.net');
-      if (!isAllowedHost) {
-        console.warn('[GlassUpdater] Blocked untrusted download URL host:', host);
-        url = this.latestUpdate?.downloadUrl;
-      }
-    } catch (_) {
-      url = this.latestUpdate?.downloadUrl;
-    }
-
-    if (this.isDownloading) return;
-
-    const versionStr = this.latestUpdate?.version || 'latest';
-    const tempPath = path.join(app.getPath('temp'), `GlassPlayer-Setup-${versionStr}.exe`);
-    this.downloadedInstallerPath = tempPath;
-
-    // Clean up older installer leftovers in Temp folder
-    try {
-      const tempDir = app.getPath('temp');
-      const files = fs.readdirSync(tempDir);
-      for (const f of files) {
-        if ((f.startsWith('GlassPlayer-Setup-') && (f.endsWith('.exe') || f.endsWith('.part'))) && !f.includes(versionStr)) {
-          try { fs.unlinkSync(path.join(tempDir, f)); } catch (_) {}
-        }
-      }
-    } catch (_) {}
-
-    // Check if fully downloaded already in cache
-    const expectedSize = this.latestUpdate?.size || 0;
-    if (fs.existsSync(tempPath)) {
-      try {
-        const stat = fs.statSync(tempPath);
-        if ((expectedSize > 0 && Math.abs(stat.size - expectedSize) < 2048) || (!expectedSize && stat.size > 50 * 1024 * 1024)) {
-          console.log(`[GlassUpdater] Reusing existing complete installer (${stat.size} bytes).`);
-          this.isDownloading = false;
-          sendToPrimaryWindow('update-progress', 100);
-          sendToPrimaryWindow('update-ready', this.latestUpdate);
-          return;
-        }
-      } catch (err) {
-        // Continue downloading
-      }
-    }
-
-    this.isDownloading = true;
-
-    // Download into a .part file and rename only after full, verified completion.
-    // Otherwise an interrupted download leaves a truncated .exe that gets "reused" next time.
-    const partPath = `${tempPath}.part`;
-    const downloadStream = (fileUrl, redirectsLeft = 5) => new Promise((resolve, reject) => {
-      const req = https.get(fileUrl, { headers: { 'User-Agent': 'GlassPlayer-Desktop' } }, (res) => {
+  downloadFileAtomically(fileUrl, destPath) {
+    const partPath = `${destPath}.part`;
+    const streamOnce = (currentUrl, redirectsLeft = 5) => new Promise((resolve, reject) => {
+      const req = https.get(currentUrl, { headers: { 'User-Agent': 'GlassPlayer-Desktop' } }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           res.resume();
           if (redirectsLeft <= 0) return reject(new Error('Too many redirects'));
-          // GitHub release assets always redirect; the file stream is created only for the final 200
-          // response (previously an async unlink here could delete the freshly created file).
-          const next = new URL(res.headers.location, fileUrl).toString();
-          return downloadStream(next, redirectsLeft - 1).then(resolve).catch(reject);
+          const next = new URL(res.headers.location, currentUrl).toString();
+          return streamOnce(next, redirectsLeft - 1).then(resolve).catch(reject);
         }
 
         if (res.statusCode !== 200) {
@@ -828,9 +887,9 @@ class GlassUpdater {
         res.on('data', (chunk) => {
           downloadedBytes += chunk.length;
           const now = Date.now();
-          if (now - lastReportTime > 150 || downloadedBytes === totalBytes) {
+          if (now - lastReportTime > 120 || downloadedBytes === totalBytes) {
             lastReportTime = now;
-            const percent = totalBytes > 0 ? Math.min(99, (downloadedBytes / totalBytes) * 100) : 0;
+            const percent = totalBytes > 0 ? Math.min(99, (downloadedBytes / totalBytes) * 100) : 50;
             sendToPrimaryWindow('update-progress', percent);
           }
         });
@@ -847,9 +906,9 @@ class GlassUpdater {
               return fail(new Error(`Incomplete download (${downloadedBytes}/${totalBytes})`));
             }
             try {
-              if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-              fs.renameSync(partPath, tempPath);
-              resolve(tempPath);
+              if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+              fs.renameSync(partPath, destPath);
+              resolve(destPath);
             } catch (e) {
               fail(e);
             }
@@ -857,13 +916,112 @@ class GlassUpdater {
         });
       });
 
-      // Stalled connection must not leave isDownloading stuck forever
       req.setTimeout(30000, () => req.destroy(new Error('Download timeout')));
       req.on('error', reject);
     });
 
+    return streamOnce(fileUrl);
+  }
+
+  async downloadHotUpdate(hotInfo, versionStr) {
+    const candidateUrls = [hotInfo.url, hotInfo.fallbackUrl].filter(u => u && this.isTrustedDownloadUrl(u));
+    if (candidateUrls.length === 0) return false;
+
+    const hotTempPath = path.join(app.getPath('temp'), `GlassPlayer-HotUpdate-${versionStr}.gz`);
+    for (const hotUrl of candidateUrls) {
+      try {
+        await this.downloadFileAtomically(`${hotUrl}?t=${Date.now()}`, hotTempPath);
+        const raw = fs.readFileSync(hotTempPath);
+        if (hotInfo.sha256) {
+          const actualSha = crypto.createHash('sha256').update(raw).digest('hex');
+          if (actualSha !== hotInfo.sha256) {
+            throw new Error(`Hot-update SHA-256 mismatch (expected ${hotInfo.sha256.slice(0, 12)}, got ${actualSha.slice(0, 12)})`);
+          }
+        }
+        const parsed = JSON.parse(zlib.gunzipSync(raw).toString('utf8'));
+        if (!parsed || parsed.version !== versionStr || !parsed.files || typeof parsed.files !== 'object') {
+          throw new Error('Invalid hot-update bundle structure');
+        }
+        console.log(`[GlassUpdater] Hot-update v${versionStr} downloaded and verified (${(raw.length / 1024).toFixed(1)} KB).`);
+        this.downloadedHotUpdatePath = hotTempPath;
+        return true;
+      } catch (err) {
+        console.warn(`[GlassUpdater] Hot-update attempt from ${hotUrl} failed:`, err.message);
+        try { if (fs.existsSync(hotTempPath)) fs.unlinkSync(hotTempPath); } catch (_) {}
+      }
+    }
+    return false;
+  }
+
+  async downloadUpdate(targetUrl, isBackground = false) {
+    if (this.isDownloading) return;
+
+    const versionStr = this.latestUpdate?.version || 'latest';
+
+    // Clean up older installer & hot-update leftovers in Temp folder
     try {
-      await downloadStream(url);
+      const tempDir = app.getPath('temp');
+      const files = fs.readdirSync(tempDir);
+      for (const f of files) {
+        if (
+          (f.startsWith('GlassPlayer-Setup-') || f.startsWith('GlassPlayer-HotUpdate-')) &&
+          (f.endsWith('.exe') || f.endsWith('.gz') || f.endsWith('.part')) &&
+          !f.includes(versionStr)
+        ) {
+          try { fs.unlinkSync(path.join(tempDir, f)); } catch (_) {}
+        }
+      }
+    } catch (_) {}
+
+    // 1. Prefer lightweight ~675 KB Instant Hot-Update bundle if metadata is available
+    if (this.latestUpdate?.hotUpdate?.url) {
+      this.isDownloading = true;
+      const hotSuccess = await this.downloadHotUpdate(this.latestUpdate.hotUpdate, versionStr);
+      if (hotSuccess) {
+        this.isDownloading = false;
+        sendToPrimaryWindow('update-progress', 100);
+        sendToPrimaryWindow('update-ready', this.latestUpdate);
+        return;
+      }
+      this.isDownloading = false;
+    }
+
+    // 2. Fallback to full NSIS .exe installer
+    let url = targetUrl || this.latestUpdate?.downloadUrl;
+    if (!url) {
+      if (!isBackground) sendToPrimaryWindow('update-status', 'error', 'No download URL provided');
+      return;
+    }
+
+    if (!this.isTrustedDownloadUrl(url)) {
+      console.warn('[GlassUpdater] Blocked untrusted download URL:', url);
+      url = this.latestUpdate?.downloadUrl;
+    }
+
+    const tempPath = path.join(app.getPath('temp'), `GlassPlayer-Setup-${versionStr}.exe`);
+    this.downloadedInstallerPath = tempPath;
+
+    // Check if fully downloaded already in cache
+    const expectedSize = this.latestUpdate?.size || 0;
+    if (fs.existsSync(tempPath)) {
+      try {
+        const stat = fs.statSync(tempPath);
+        if ((expectedSize > 0 && Math.abs(stat.size - expectedSize) < 2048) || (!expectedSize && stat.size > 50 * 1024 * 1024)) {
+          console.log(`[GlassUpdater] Reusing existing complete installer (${stat.size} bytes).`);
+          this.isDownloading = false;
+          sendToPrimaryWindow('update-progress', 100);
+          sendToPrimaryWindow('update-ready', this.latestUpdate);
+          return;
+        }
+      } catch (err) {
+        // Continue downloading
+      }
+    }
+
+    this.isDownloading = true;
+
+    try {
+      await this.downloadFileAtomically(url, tempPath);
       this.isDownloading = false;
       sendToPrimaryWindow('update-progress', 100);
       sendToPrimaryWindow('update-ready', this.latestUpdate);
@@ -876,7 +1034,65 @@ class GlassUpdater {
     }
   }
 
+  applyHotUpdateInPlace() {
+    if (!this.downloadedHotUpdatePath || !fs.existsSync(this.downloadedHotUpdatePath)) {
+      return false;
+    }
+    try {
+      const raw = fs.readFileSync(this.downloadedHotUpdatePath);
+      const bundle = JSON.parse(zlib.gunzipSync(raw).toString('utf8'));
+      if (!bundle || !bundle.version || !bundle.files) {
+        throw new Error('Malformed hot-update bundle');
+      }
+
+      const userDataDir = app.getPath('userData');
+      const hotDir = path.join(userDataDir, 'hot-update');
+      const stagingDir = path.join(userDataDir, 'hot-update-staging');
+
+      if (fs.existsSync(stagingDir)) {
+        fs.rmSync(stagingDir, { recursive: true, force: true });
+      }
+      fs.mkdirSync(stagingDir, { recursive: true });
+
+      for (const [relPath, b64] of Object.entries(bundle.files)) {
+        // Prevent path traversal
+        const safeRel = path.normalize(relPath).replace(/^(\.\.(\/|\\|$))+/, '');
+        const targetFile = path.join(stagingDir, safeRel);
+        fs.mkdirSync(path.dirname(targetFile), { recursive: true });
+        fs.writeFileSync(targetFile, Buffer.from(b64, 'base64'));
+      }
+
+      if (fs.existsSync(hotDir)) {
+        fs.rmSync(hotDir, { recursive: true, force: true });
+      }
+      fs.renameSync(stagingDir, hotDir);
+
+      global.__GP_HOT_DIR = hotDir;
+      global.__GP_HOT_BOOTSTRAPPED = bundle.version;
+      this.currentVersion = bundle.version;
+      this.latestUpdate = null;
+
+      console.log(`[GlassUpdater] Applied instant hot-update v${bundle.version} without closing window!`);
+      const win = getPrimaryWindow();
+      if (win && !win.isDestroyed()) {
+        win.loadFile(path.join(hotDir, 'index.html'));
+      }
+      return true;
+    } catch (err) {
+      console.error('[GlassUpdater] Hot-update apply error, falling back to installer if available:', err);
+      return false;
+    }
+  }
+
   installUpdate() {
+    // 1. Try instant zero-close Hot-Update first (~0.15s in-place reload, no window close!)
+    if (this.downloadedHotUpdatePath && fs.existsSync(this.downloadedHotUpdatePath)) {
+      if (this.applyHotUpdateInPlace()) {
+        return;
+      }
+    }
+
+    // 2. Fallback to full NSIS .exe installer
     if (!this.downloadedInstallerPath || !fs.existsSync(this.downloadedInstallerPath)) {
       console.error('[GlassUpdater] Installer file not found:', this.downloadedInstallerPath);
       sendToPrimaryWindow('update-status', 'error', 'Файл обновления не найден');
@@ -991,6 +1207,7 @@ class GlassUpdater {
 const glassUpdater = new GlassUpdater();
 
 function createWindow() {
+  const activeAppDir = global.__GP_HOT_DIR || __dirname;
   mainWindow = new BrowserWindow({
     width: 1100,
     height: 750,
@@ -1002,9 +1219,9 @@ function createWindow() {
     hasShadow: false,       // Disable DWM shadow quad that creates black borders on Windows
     thickFrame: false,      // Disable DWM thick frame that creates black quad margins
     show: false,            // Prevent white flashes on load
-    icon: path.join(__dirname, 'assets', 'icon.png'),
+    icon: path.join(activeAppDir, 'assets', 'icon.png'),
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(activeAppDir, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false
     }
@@ -1019,8 +1236,8 @@ function createWindow() {
   };
   windowStates.set(window, state);
 
-  console.log('[MAIN] Loading index.html...');
-  window.loadFile('index.html');
+  console.log('[MAIN] Loading index.html from:', activeAppDir);
+  window.loadFile(path.join(activeAppDir, 'index.html'));
 
   const displayWindow = () => {
     if (window && !window.isDestroyed()) {

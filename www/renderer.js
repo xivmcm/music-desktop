@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.20.10';
+const APP_VERSION = '1.20.11';
 window.APP_VERSION = APP_VERSION;
 if (typeof document !== 'undefined') {
   const syncVersionBadges = () => {
@@ -1160,7 +1160,7 @@ if (isElectron && window.electronAPI && window.electronAPI.onUpdateStatus) {
       updateInstallBtn.disabled = true;
       updateInstallBtn.textContent = 'Установка...';
       const ver = currentUpdateInfo?.version ? ` до v${currentUpdateInfo.version}` : '';
-      if (updateBannerText) updateBannerText.textContent = `Перезапуск и установка обновления${ver}...`;
+      if (updateBannerText) updateBannerText.textContent = `Применение обновления${ver}...`;
       if (bannerLoader) bannerLoader.classList.remove('hidden');
       setTimeout(() => {
         window.electronAPI.installUpdate();

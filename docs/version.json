@@ -1,11 +1,18 @@
 {
-  "version": "1.20.10",
+  "version": "1.20.11",
   "pub_date": "2026-10-23T12:30:00Z",
   "changelog": "  GlassPlayer v1.20.10:\n  - Загрузчик: атомарная загрузка во временный .part с валидацией размера\n  - Стабильность: таймауты сетевых соединений и обработка редиректов GitHub\n  - Безопасность: валидация доменов и автоочистка старых файлов в Temp",
   "platforms": {
     "win64": {
-      "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.20.10.exe",
-      "filename": "GlassPlayer-Setup-1.20.10.exe"
+      "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.20.11.exe",
+      "filename": "GlassPlayer-Setup-1.20.11.exe"
     }
+  },
+  "releaseDate": "2026-10-23",
+  "hotUpdate": {
+    "url": "https://raw.githubusercontent.com/xivmcm/music-desktop/main/docs/hot-update.gz",
+    "fallbackUrl": "https://xivmcm.github.io/music-desktop/hot-update.gz",
+    "sha256": "334a7b6ad416a503b61fd90bf406f14bce659cf337e1659ff7603bac70a7f3d7",
+    "size": 695004
   }
 }

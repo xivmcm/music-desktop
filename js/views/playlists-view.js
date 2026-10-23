@@ -627,7 +627,10 @@
   }
 
   async function loadFriendProfile(userId) {
-    if (typeof window !== 'undefined') window.activeView = 'friend-profile';
+    if (typeof window !== 'undefined') {
+      window.activeView = 'friend-profile';
+      window.activeFriendProfileId = String(userId);
+    }
     const searchInput = document.getElementById('search-input');
     if (searchInput) searchInput.value = '';
 
@@ -660,14 +663,25 @@
         const friend = data.user;
         if (tracksContainer) tracksContainer.innerHTML = '';
 
+        const currentUser = (window.GP && window.GP.Social && window.GP.Social.Auth && window.GP.Social.Auth.getCurrentUser && window.GP.Social.Auth.getCurrentUser()) ||
+          (typeof window !== 'undefined' && (window.currentUser || window.authUser)) ||
+          (typeof localStorage !== 'undefined' && localStorage.getItem('auth_user') ? JSON.parse(localStorage.getItem('auth_user')) : null);
+
+        const currentUserId = currentUser ? String(currentUser.id || currentUser._id) : null;
+        const targetUserId = String(friend.id || friend._id || userId);
+        const isSelf = Boolean(currentUserId && currentUserId === targetUserId);
+
         const avatarSrc = friend.avatarBase64 || DEFAULT_AVATAR_100;
-        const friendStatuses = (typeof window !== 'undefined' && window.friendStatuses) ||
-          (window.GP && window.GP.Social && window.GP.Social.Socket && window.GP.Social.Socket.friendStatuses) ||
+        const friendStatuses = (window.GP && window.GP.Social && window.GP.Social.Friends && window.GP.Social.Friends.getStatuses && window.GP.Social.Friends.getStatuses()) ||
+          (typeof window !== 'undefined' && window.friendStatuses) ||
           new Map();
-        const liveStatus = friendStatuses instanceof Map ? friendStatuses.get(friend.id) : null;
-        const isRecent = friend.lastSeen && (Date.now() - new Date(friend.lastSeen).getTime() < 3 * 60 * 1000);
-        const isOnline = liveStatus ? Boolean(liveStatus.isOnline) : (Boolean(friend.isOnline) && isRecent);
-        const lastSeen = (liveStatus && liveStatus.lastSeen) || friend.lastSeen;
+
+        const liveStatus = friendStatuses instanceof Map
+          ? (friendStatuses.get(targetUserId) || friendStatuses.get(friend.id) || (friend._id && friendStatuses.get(friend._id)))
+          : null;
+
+        const isOnline = isSelf ? true : (liveStatus !== null && liveStatus !== undefined ? Boolean(liveStatus.isOnline) : Boolean(friend.isOnline));
+        const lastSeen = isSelf ? new Date() : ((liveStatus && liveStatus.lastSeen) || (isOnline ? new Date() : friend.lastSeen));
 
         const getFullDateTooltip = (window.GP && window.GP.Utils && window.GP.Utils.getFullDateTooltip) || window.getFullDateTooltip || ((d) => String(d || ''));
         const formatLastSeen = (window.GP && window.GP.Utils && window.GP.Utils.formatLastSeen) || window.formatLastSeen || ((d) => String(d || ''));
@@ -677,9 +691,6 @@
         const presenceHtml = isOnline
           ? '<div class="friend-profile-presence online"><span class="presence-dot"></span><span>В сети</span></div>'
           : `<div class="friend-profile-presence offline" title="${escapeHTML(fullDate)}"><span class="presence-dot"></span><span>${escapeHTML(formatLastSeen(lastSeen))}</span></div>`;
-
-        const currentUser = (typeof window !== 'undefined' && window.currentUser) || null;
-        const isSelf = currentUser && String(currentUser.id || currentUser._id) === String(friend.id);
         const isFollowing = currentUser && Array.isArray(currentUser.following) && currentUser.following.some(f => {
           const fId = typeof f === 'object' && f !== null ? (f.id || f._id) : f;
           return String(fId) === String(friend.id);

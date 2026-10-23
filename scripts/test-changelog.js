@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 
 console.log('====================================================');
-console.log('     GLASSPLAYER CHANGELOG UNIT TESTS (v1.20.6)     ');
+console.log('     GLASSPLAYER CHANGELOG UNIT TESTS (v1.20.8)     ');
 console.log('====================================================\n');
 
 let passCount = 0;
@@ -82,7 +82,7 @@ const mockDocument = {
 };
 
 const mockWindow = {
-  APP_VERSION: '1.20.6',
+  APP_VERSION: '1.20.8',
   localStorage: mockLocalStorage,
   document: mockDocument,
   requestAnimationFrame: (cb) => cb(),
@@ -104,49 +104,54 @@ test('GP.Components.Changelog namespace is defined', () => {
   assert.ok(mockWindow.GP.Components.Changelog);
 });
 
-test('CHANGELOG_REGISTRY has at least 1 version entry', () => {
+test('CHANGELOG_REGISTRY has at least 3 version entries', () => {
   const reg = mockWindow.GP.Components.Changelog.CHANGELOG_REGISTRY;
   assert.ok(Array.isArray(reg));
-  assert.ok(reg.length >= 1);
+  assert.ok(reg.length >= 3);
 });
 
-test('First changelog entry is v1.20.6', () => {
+test('First changelog entry is v1.20.8', () => {
   const latest = mockWindow.GP.Components.Changelog.CHANGELOG_REGISTRY[0];
-  assert.strictEqual(latest.version, '1.20.6');
-  assert.strictEqual(latest.tag, 'v1.20.6');
+  assert.strictEqual(latest.version, '1.20.8');
+  assert.strictEqual(latest.tag, 'v1.20.8');
 });
 
-test('Changelog categories contain stats, updater, lyrics, privacy, discovery', () => {
+test('Changelog categories for v1.20.8 contain presence, stability', () => {
   const latest = mockWindow.GP.Components.Changelog.CHANGELOG_REGISTRY[0];
   const ids = latest.categories.map(c => c.id);
-  assert.ok(ids.includes('stats'));
-  assert.ok(ids.includes('updater'));
-  assert.ok(ids.includes('lyrics'));
-  assert.ok(ids.includes('privacy'));
-  assert.ok(ids.includes('discovery'));
+  assert.ok(ids.includes('presence'));
+  assert.ok(ids.includes('stability'));
 });
 
-test('Changelog content contains zero emojis', () => {
+test('Changelog content contains zero emojis across all entries', () => {
   const emojiRegex = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u;
-  const latest = mockWindow.GP.Components.Changelog.CHANGELOG_REGISTRY[0];
-  const textBlob = JSON.stringify(latest);
+  const reg = mockWindow.GP.Components.Changelog.CHANGELOG_REGISTRY;
+  const textBlob = JSON.stringify(reg);
   assert.strictEqual(emojiRegex.test(textBlob), false, 'Found emoji in changelog!');
 });
 
-test('openChangelogModal creates overlay and modal element', () => {
-  mockWindow.openChangelogModal('1.20.6');
+test('Preserves v1.20.6 in changelog history', () => {
+  const v1206 = mockWindow.GP.Components.Changelog.CHANGELOG_REGISTRY.find(e => e.version === '1.20.6');
+  assert.ok(v1206);
+  const ids = v1206.categories.map(c => c.id);
+  assert.ok(ids.includes('stats'));
+  assert.ok(ids.includes('updater'));
+});
+
+test('openChangelogModal creates overlay and modal element for v1.20.8', () => {
+  mockWindow.openChangelogModal('1.20.8');
   const overlay = mockDocument.getElementById('changelog-modal-overlay');
   assert.ok(overlay);
   assert.ok(overlay.classList.contains('visible'));
-  assert.ok(overlay.innerHTML.includes('v1.20.6'));
-  assert.ok(overlay.innerHTML.includes('Статистика прослушивания'));
+  assert.ok(overlay.innerHTML.includes('v1.20.8'));
+  assert.ok(overlay.innerHTML.includes('Сетевой статус'));
 });
 
 test('Clicking confirm button closes modal and marks localStorage', () => {
   const overlay = mockDocument.getElementById('changelog-modal-overlay');
   assert.ok(overlay._btnHandler);
   overlay._btnHandler(); // Click "Понятно"
-  assert.strictEqual(mockLocalStorage.getItem('gp_last_seen_changelog'), '1.20.6');
+  assert.strictEqual(mockLocalStorage.getItem('gp_last_seen_changelog'), '1.20.8');
 });
 
 console.log('\n----------------------------------------------------');

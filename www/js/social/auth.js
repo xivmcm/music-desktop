@@ -53,6 +53,11 @@
     currentUser = localStorage.getItem('auth_user') ? JSON.parse(localStorage.getItem('auth_user')) : null;
 
     if (token) {
+      // Connect WebSocket immediately in parallel from cached token without waiting for HTTP /auth/me
+      const connect = (window.GP && window.GP.Social && window.GP.Social.connectWS) || (typeof window !== 'undefined' && window.connectWS);
+      if (typeof connect === 'function') connect();
+      updateHeaderProfileUI();
+
       try {
         const fetchFn = getFetchWithTimeout();
         const res = await fetchFn(`${getBackendUrl()}/auth/me`, {
@@ -87,7 +92,6 @@
             } else if (typeof window.syncStatsWithCloud === 'function') {
               window.syncStatsWithCloud();
             }
-            const connect = (window.GP && window.GP.Social && window.GP.Social.connectWS) || (typeof window !== 'undefined' && window.connectWS);
             if (typeof connect === 'function') connect();
           } else {
             handleLogout();
@@ -98,11 +102,13 @@
           console.warn('[Auth Auto-login] Server returned error status, keeping offline session:', res.status);
           updateHeaderProfileUI();
           if (typeof window !== 'undefined' && typeof window.loadLikedTracks === 'function') window.loadLikedTracks();
+          if (typeof connect === 'function') connect();
         }
       } catch (err) {
-        console.warn('[Auth Auto-login Error] Backend offline, using offline auth state:', err);
+        console.warn('[Auth Auto-login Error] Backend offline or waking up, using active session:', err);
         updateHeaderProfileUI();
         if (typeof window !== 'undefined' && typeof window.loadLikedTracks === 'function') window.loadLikedTracks();
+        if (typeof connect === 'function') connect();
       }
     } else {
       updateHeaderProfileUI();
@@ -343,6 +349,13 @@
       localStorage.removeItem('auth_token');
       localStorage.removeItem('auth_user');
       localStorage.setItem('gp_active_profile', 'Default');
+    }
+    if (window.GP && window.GP.Social && window.GP.Social.Socket) {
+      if (typeof window.GP.Social.Socket.clearSocketTimers === 'function') window.GP.Social.Socket.clearSocketTimers();
+      const s = typeof window.GP.Social.Socket.getSocket === 'function' && window.GP.Social.Socket.getSocket();
+      if (s) {
+        try { s.close(); } catch (e) {}
+      }
     }
     if (typeof window !== 'undefined' && typeof window.invalidateHomeRecommendations === 'function') {
       window.invalidateHomeRecommendations();

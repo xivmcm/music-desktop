@@ -17,13 +17,26 @@
   }
 
   function getUser() {
-    return (window.GP && window.GP.Social && window.GP.Social.Auth && window.GP.Social.Auth.getCurrentUser && window.GP.Social.Auth.getCurrentUser()) ||
-      (typeof window !== 'undefined' && window.currentUser);
+    let u = (window.GP && window.GP.Social && window.GP.Social.Auth && window.GP.Social.Auth.getCurrentUser && window.GP.Social.Auth.getCurrentUser()) ||
+      (typeof window !== 'undefined' && (window.currentUser || window.authUser));
+    if (!u && typeof localStorage !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('auth_user') || localStorage.getItem('currentUser') || localStorage.getItem('gp_user');
+        if (stored) u = JSON.parse(stored);
+      } catch (e) {}
+    }
+    return u;
   }
 
   function getToken() {
-    return (window.GP && window.GP.Social && window.GP.Social.Auth && window.GP.Social.Auth.getToken && window.GP.Social.Auth.getToken()) ||
-      (typeof window !== 'undefined' && window.token);
+    let t = (window.GP && window.GP.Social && window.GP.Social.Auth && window.GP.Social.Auth.getToken && window.GP.Social.Auth.getToken()) ||
+      (typeof window !== 'undefined' && (window.token || window.authToken));
+    if (!t && typeof localStorage !== 'undefined') {
+      try {
+        t = localStorage.getItem('auth_token') || localStorage.getItem('token') || localStorage.getItem('gp_token');
+      } catch (e) {}
+    }
+    return t;
   }
 
   function showToast(msg, type, title) {
@@ -143,11 +156,10 @@
     containerEl.innerHTML = '';
 
     mutualFriends.forEach(friend => {
-      const liveStatus = friendStatuses.get(friend.id);
-      const isRecent = friend.lastSeen && (Date.now() - new Date(friend.lastSeen).getTime() < 3 * 60 * 1000);
-      const isOnline = liveStatus ? Boolean(liveStatus.isOnline) : (Boolean(friend.isOnline) && isRecent);
+      const liveStatus = friendStatuses.get(friend.id) || friendStatuses.get(String(friend.id));
+      const isOnline = liveStatus !== undefined ? Boolean(liveStatus.isOnline) : Boolean(friend.isOnline);
       const isPlaying = isOnline && liveStatus && liveStatus.isPlaying && liveStatus.trackName;
-      const lastSeen = (liveStatus && liveStatus.lastSeen) || friend.lastSeen;
+      const lastSeen = (liveStatus && liveStatus.lastSeen) || (isOnline ? new Date() : friend.lastSeen);
       const fullDate = _getFullDateTooltip(lastSeen);
 
       const item = document.createElement('div');
@@ -294,14 +306,14 @@
     const currentUser = getUser();
     findFriendsList.innerHTML = '';
     users.forEach(user => {
+      const isSelf = currentUser && String(currentUser.id || currentUser._id) === String(user.id);
       const isFollowing = currentUser && Array.isArray(currentUser.following) && currentUser.following.some(f => {
         const fId = typeof f === 'object' && f !== null ? (f.id || f._id) : f;
         return String(fId) === String(user.id);
       });
-      const liveStatus = friendStatuses.get(user.id);
-      const isRecent = user.lastSeen && (Date.now() - new Date(user.lastSeen).getTime() < 3 * 60 * 1000);
-      const isOnline = liveStatus ? Boolean(liveStatus.isOnline) : (Boolean(user.isOnline) && isRecent);
-      const lastSeen = (liveStatus && liveStatus.lastSeen) || user.lastSeen;
+      const liveStatus = friendStatuses.get(user.id) || friendStatuses.get(String(user.id));
+      const isOnline = isSelf ? true : (liveStatus !== undefined ? Boolean(liveStatus.isOnline) : Boolean(user.isOnline));
+      const lastSeen = isSelf ? new Date() : ((liveStatus && liveStatus.lastSeen) || (isOnline ? new Date() : user.lastSeen));
       const fullDate = _getFullDateTooltip(lastSeen);
       const statusHtml = isOnline
         ? '<span style="color: #30d158; font-weight: 500;">в сети</span>'
@@ -317,9 +329,7 @@
             <span class="user-search-username">${_formatUsername(_escapeHTML(user.username))} • ${statusHtml}</span>
           </div>
         </div>
-        <button class="follow-btn ${isFollowing ? 'following' : ''}" data-user-id="${user.id}">
-          ${isFollowing ? 'Подписан' : 'Подписаться'}
-        </button>
+        ${isSelf ? '' : `<button class="follow-btn ${isFollowing ? 'following' : ''}" data-user-id="${user.id}">${isFollowing ? 'Подписан' : 'Подписаться'}</button>`}
       `;
 
       const followBtn = row.querySelector('.follow-btn');

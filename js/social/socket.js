@@ -28,13 +28,35 @@
   }
 
   function getUser() {
-    return (window.GP && window.GP.Social && window.GP.Social.Auth && window.GP.Social.Auth.getCurrentUser && window.GP.Social.Auth.getCurrentUser()) ||
-      (typeof window !== 'undefined' && window.currentUser);
+    let u = (window.GP && window.GP.Social && window.GP.Social.Auth && window.GP.Social.Auth.getCurrentUser && window.GP.Social.Auth.getCurrentUser()) ||
+      (typeof window !== 'undefined' && (window.currentUser || window.authUser));
+    if (!u && typeof localStorage !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('auth_user') || localStorage.getItem('currentUser') || localStorage.getItem('gp_user');
+        if (stored) u = JSON.parse(stored);
+      } catch (e) {}
+    }
+    return u;
   }
 
   function getToken() {
-    return (window.GP && window.GP.Social && window.GP.Social.Auth && window.GP.Social.Auth.getToken && window.GP.Social.Auth.getToken()) ||
-      (typeof window !== 'undefined' && window.token);
+    let t = (window.GP && window.GP.Social && window.GP.Social.Auth && window.GP.Social.Auth.getToken && window.GP.Social.Auth.getToken()) ||
+      (typeof window !== 'undefined' && (window.token || window.authToken));
+    if (!t && typeof localStorage !== 'undefined') {
+      try {
+        t = localStorage.getItem('auth_token') || localStorage.getItem('token') || localStorage.getItem('gp_token');
+      } catch (e) {}
+    }
+    return t;
+  }
+
+  function scheduleReconnect(delay = 3500) {
+    if (wsReconnectTimeout) clearTimeout(wsReconnectTimeout);
+    wsReconnectTimeout = setTimeout(() => {
+      if (getUser() && getToken()) {
+        connectWS();
+      }
+    }, delay);
   }
 
   function connectWS() {
@@ -56,13 +78,17 @@
       ws = new WebSocket(wsUrl);
     } catch (err) {
       console.warn('[WS Creation Error]:', err.message);
+      scheduleReconnect(4000);
       return;
     }
 
     ws.onopen = () => {
       console.log('[WS] Connected to server.');
       try {
-        ws.send(JSON.stringify({ type: 'auth', userId: user.id }));
+        const uid = String(user.id || user._id || '');
+        if (uid) {
+          ws.send(JSON.stringify({ type: 'auth', userId: uid }));
+        }
       } catch (e) {}
 
       broadcastPlayerStatus();
@@ -93,6 +119,7 @@
             (typeof window !== 'undefined' && window.friendStatuses);
 
           if (friendStatuses && typeof friendStatuses.set === 'function') {
+            friendStatuses.set(String(userId), status);
             friendStatuses.set(userId, status);
           }
 
@@ -100,6 +127,20 @@
             (typeof window !== 'undefined' && window.renderFriendActivity);
           if (typeof renderFriends === 'function') {
             renderFriends();
+          }
+
+          // If currently viewing friend profile, update presence live in DOM
+          if (typeof window !== 'undefined' && window.activeView === 'friend-profile' && typeof document !== 'undefined') {
+            const presenceWrap = document.querySelector('.friend-profile-presence-wrap');
+            if (presenceWrap && (!window.activeFriendProfileId || String(window.activeFriendProfileId) === String(userId))) {
+              const getFullDateTooltip = (window.GP && window.GP.Utils && window.GP.Utils.getFullDateTooltip) || window.getFullDateTooltip || ((d) => String(d || ''));
+              const formatLastSeen = (window.GP && window.GP.Utils && window.GP.Utils.formatLastSeen) || window.formatLastSeen || ((d) => String(d || ''));
+              const isOnline = Boolean(status.isOnline);
+              const lastSeen = status.lastSeen || new Date();
+              presenceWrap.innerHTML = isOnline
+                ? '<div class="friend-profile-presence online"><span class="presence-dot"></span><span>В сети</span></div>'
+                : `<div class="friend-profile-presence offline" title="${getFullDateTooltip(lastSeen)}"><span class="presence-dot"></span><span>${formatLastSeen(lastSeen)}</span></div>`;
+            }
           }
 
           // If currently in playlists view, re-render to update collaborative glow indicator
@@ -118,15 +159,16 @@
     };
 
     ws.onclose = () => {
-      console.log('[WS] Disconnected, reconnecting in 5s...');
+      console.log('[WS] Disconnected, scheduling reconnect...');
       clearSocketTimers();
-      wsReconnectTimeout = setTimeout(() => {
-        if (getUser() && getToken()) connectWS();
-      }, 5000);
+      scheduleReconnect(3500);
     };
 
     ws.onerror = (err) => {
       console.error('[WS Error]:', err);
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        scheduleReconnect(4000);
+      }
     };
   }
 
@@ -199,10 +241,10 @@
     configurable: true
   });
 
-  // Call connectWS on startup if token is active
+  // Call connectWS on startup if credentials exist
   if (typeof window !== 'undefined') {
-    if (getToken()) {
-      connectWS();
+    if (getToken() && getUser()) {
+      setTimeout(connectWS, 100);
     }
   }
 

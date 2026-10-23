@@ -1,13 +1,11 @@
 {
-  "version": "1.20.7",
-  "releaseDate": "2026-10-18",
-  "changelog": "• GlassPlayer v1.20.7:\n  - Точная аналитика прослушивания: устранен баг с фиксацией 3 минут, время звучания треков и артистов рассчитывается до секунд\n  - Сетевое присутствие: устранен фантомный статус «В сети», добавлена очистка устаревших сессий и heartbeat-проверка соединений\n  - Стабильность и точность: сохранение истории и прогресса прослушивания",
-  "windows": {
-    "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.20.7.exe",
-    "filename": "GlassPlayer-Setup-1.20.7.exe"
-  },
-  "android": {
-    "url": "https://xivmcm.github.io/music-desktop/GlassPlayer-1.20.0.apk",
-    "filename": "GlassPlayer-1.20.0.apk"
+  "version": "1.20.8",
+  "pub_date": "2026-10-23T11:00:00Z",
+  "changelog": "  GlassPlayer v1.20.8:\n  - Сетевой статус: мгновенное отображение статуса «В сети» в профиле и у друзей\n  - Присутствие: привязка статуса к соединению без ложного таймаута через 3 минуты\n  - Стабильность: фоновое автоподключение WebSocket и живое обновление карточки профиля",
+  "platforms": {
+    "win64": {
+      "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.20.8.exe",
+      "filename": "GlassPlayer-Setup-1.20.8.exe"
+    }
   }
 }

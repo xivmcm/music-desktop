@@ -54,7 +54,12 @@
     ],
     "files": [
       "**/*",
-      "!dist/**/*"
+      "!dist/**/*",
+      "!android/**/*",
+      "!www/**/*",
+      "!docs/**/*",
+      "!scripts/**/*",
+      "!node_modules/@capacitor/**/*"
     ]
   },
   "dependencies": {

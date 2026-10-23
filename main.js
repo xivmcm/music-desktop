@@ -887,33 +887,80 @@ class GlassUpdater {
       console.log('[GlassUpdater] Preparing clean runner for installer:', this.downloadedInstallerPath);
       
       if (process.platform === 'win32') {
+        const tempDir = app.getPath('temp');
         const installerPath = this.downloadedInstallerPath;
         const appExe = process.execPath;
+        const installDir = path.dirname(appExe);
+        const vbsPath = path.join(tempDir, 'gp-update-runner.vbs');
+        const logPath = path.join(tempDir, 'gp-updater.log');
 
-        // Robust detached PowerShell runner:
-        // 1. Give Electron app.quit time to cleanly initiate shutdown (500ms).
-        // 2. Terminate all remaining GlassPlayer processes to release file handles.
-        // 3. Loop until all GlassPlayer processes are fully stopped.
-        // 4. Run installer silently with /S --updated and wait for it to complete.
-        // 5. Automatically launch the updated GlassPlayer.exe!
-        const psCommand = [
-          'Start-Sleep -Milliseconds 500;',
-          'Stop-Process -Name "GlassPlayer" -Force -ErrorAction SilentlyContinue;',
-          '$w = 20; while ((Get-Process -Name "GlassPlayer" -ErrorAction SilentlyContinue) -and ($w -gt 0)) { Start-Sleep -Milliseconds 250; $w -= 0.25 };',
-          'Start-Sleep -Milliseconds 800;',
-          `$installer = Start-Process -FilePath "${installerPath.replace(/"/g, '`"')}" -ArgumentList "/S", "--updated" -PassThru;`,
-          '$installer.WaitForExit(120000);',
-          'Start-Sleep -Milliseconds 1000;',
-          `$targetExe = "${appExe.replace(/"/g, '`"')}";`,
-          'if (-not (Get-Process -Name "GlassPlayer" -ErrorAction SilentlyContinue)) { if (Test-Path $targetExe) { Start-Process -FilePath $targetExe } else { $fb = "$env:LOCALAPPDATA\\Programs\\music-desktop\\GlassPlayer.exe"; if (Test-Path $fb) { Start-Process -FilePath $fb } } };'
-        ].join(' ');
+        const escVbs = (str) => String(str).replace(/"/g, '""');
 
-        const child = spawn('powershell.exe', [
-          '-NoProfile',
-          '-ExecutionPolicy', 'Bypass',
-          '-WindowStyle', 'Hidden',
-          '-Command', psCommand
-        ], {
+        // Native Windows GUI-subsystem runner (wscript.exe + UTF-16LE BOM VBScript).
+        // Unlike console binaries (powershell.exe / cmd.exe) which abort immediately when
+        // spawned with DETACHED_PROCESS + stdio:'ignore', wscript.exe is a GUI binary that
+        // runs completely hidden, survives app.quit(), handles Cyrillic paths natively via
+        // UTF-16LE, removes legacy >260-char unpacked paths that broke NSIS atomicRMDir,
+        // and runs from %TEMP% so it never locks the installation directory.
+        const vbsLines = [
+          'On Error Resume Next',
+          'Set sh = CreateObject("WScript.Shell")',
+          'Set fso = CreateObject("Scripting.FileSystemObject")',
+          `tempDir = "${escVbs(tempDir)}"`,
+          `logPath = "${escVbs(logPath)}"`,
+          `installerPath = "${escVbs(installerPath)}"`,
+          `appExe = "${escVbs(appExe)}"`,
+          `installDir = "${escVbs(installDir)}"`,
+          'fallbackDir = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\\Programs\\music-desktop"',
+          'fallbackExe = fallbackDir & "\\GlassPlayer.exe"',
+          'sh.CurrentDirectory = tempDir',
+          '',
+          'Set lf = fso.OpenTextFile(logPath, 2, True, -1)',
+          'lf.WriteLine Now & " [Runner] Started. Waiting 600ms for app.quit..."',
+          'lf.Close',
+          '',
+          'WScript.Sleep 600',
+          'killCode = sh.Run("taskkill.exe /F /IM GlassPlayer.exe /T", 0, True)',
+          'WScript.Sleep 1000',
+          '',
+          'sh.Run "cmd.exe /c rmdir /s /q """ & installDir & "\\resources\\app.asar.unpacked""", 0, True',
+          'sh.Run "cmd.exe /c rmdir /s /q """ & fallbackDir & "\\resources\\app.asar.unpacked""", 0, True',
+          '',
+          'Set lf = fso.OpenTextFile(logPath, 8, True, -1)',
+          'lf.WriteLine Now & " [Runner] taskkill exit=" & killCode & ", launching installer: " & installerPath',
+          'lf.Close',
+          '',
+          'instCode = -1',
+          'If fso.FileExists(installerPath) Then',
+          '  instCode = sh.Run("""" & installerPath & """ --updated /S", 0, True)',
+          '  If instCode <> 0 Then',
+          '    WScript.Sleep 1500',
+          '    sh.Run "taskkill.exe /F /IM GlassPlayer.exe /T", 0, True',
+          '    WScript.Sleep 800',
+          '    instCode = sh.Run("""" & installerPath & """ --updated /S", 0, True)',
+          '  End If',
+          'End If',
+          '',
+          'Set lf = fso.OpenTextFile(logPath, 8, True, -1)',
+          'lf.WriteLine Now & " [Runner] Installer finished with code=" & instCode & ". Relaunching app..."',
+          'lf.Close',
+          '',
+          'WScript.Sleep 1000',
+          'If fso.FileExists(appExe) Then',
+          '  sh.Run """" & appExe & """", 1, False',
+          'ElseIf fso.FileExists(fallbackExe) Then',
+          '  sh.Run """" & fallbackExe & """", 1, False',
+          'End If'
+        ].join('\r\n');
+
+        const bom = Buffer.from([0xFF, 0xFE]);
+        const body = Buffer.from(vbsLines, 'utf16le');
+        fs.writeFileSync(vbsPath, Buffer.concat([bom, body]));
+
+        const sysRoot = process.env.SystemRoot || 'C:\\Windows';
+        const wscriptExe = path.join(sysRoot, 'System32', 'wscript.exe');
+        const child = spawn(wscriptExe, ['//B', '//NoLogo', vbsPath], {
+          cwd: tempDir,
           detached: true,
           stdio: 'ignore',
           windowsHide: true

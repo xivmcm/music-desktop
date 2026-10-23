@@ -82,7 +82,7 @@ const mockDocument = {
 };
 
 const mockWindow = {
-  APP_VERSION: '1.20.12',
+  APP_VERSION: '1.20.13',
   localStorage: mockLocalStorage,
   document: mockDocument,
   requestAnimationFrame: (cb) => cb(),
@@ -110,17 +110,17 @@ test('CHANGELOG_REGISTRY has at least 7 version entries', () => {
   assert.ok(reg.length >= 7);
 });
 
-test('First changelog entry is v1.20.12', () => {
+test('First changelog entry is v1.20.13', () => {
   const latest = mockWindow.GP.Components.Changelog.CHANGELOG_REGISTRY[0];
-  assert.strictEqual(latest.version, '1.20.12');
-  assert.strictEqual(latest.tag, 'v1.20.12');
+  assert.strictEqual(latest.version, '1.20.13');
+  assert.strictEqual(latest.tag, 'v1.20.13');
 });
 
-test('Changelog categories for v1.20.12 contain network and updater', () => {
+test('Changelog categories for v1.20.13 contain studio and export', () => {
   const latest = mockWindow.GP.Components.Changelog.CHANGELOG_REGISTRY[0];
   const ids = latest.categories.map(c => c.id);
-  assert.ok(ids.includes('network'));
-  assert.ok(ids.includes('updater'));
+  assert.ok(ids.includes('studio'));
+  assert.ok(ids.includes('export'));
 });
 
 test('Changelog content contains zero emojis across all entries', () => {
@@ -137,20 +137,20 @@ test('Preserves v1.20.11 in changelog history', () => {
   assert.ok(ids.includes('updater'));
 });
 
-test('openChangelogModal creates overlay and modal element for v1.20.12', () => {
-  mockWindow.openChangelogModal('1.20.12');
+test('openChangelogModal creates overlay and modal element for v1.20.13', () => {
+  mockWindow.openChangelogModal('1.20.13');
   const overlay = mockDocument.getElementById('changelog-modal-overlay');
   assert.ok(overlay);
   assert.ok(overlay.classList.contains('visible'));
-  assert.ok(overlay.innerHTML.includes('v1.20.12'));
-  assert.ok(overlay.innerHTML.includes('Сетевой стек и гибридный DNS-резолвер'));
+  assert.ok(overlay.innerHTML.includes('v1.20.13'));
+  assert.ok(overlay.innerHTML.includes('Студия звука и ремиксов 2.0'));
 });
 
 test('Clicking confirm button closes modal and marks localStorage', () => {
   const overlay = mockDocument.getElementById('changelog-modal-overlay');
   assert.ok(overlay._btnHandler);
   overlay._btnHandler(); // Click "Понятно"
-  assert.strictEqual(mockLocalStorage.getItem('gp_last_seen_changelog'), '1.20.12');
+  assert.strictEqual(mockLocalStorage.getItem('gp_last_seen_changelog'), '1.20.13');
 });
 
 console.log('\n----------------------------------------------------');

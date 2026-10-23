@@ -357,3 +357,369 @@ input:checked + .slider:before {
 .slider.round:before {
   border-radius: 50%;
 }
+
+
+/* --- Studio Audio Remixer & FX 2.0 Console --- */
+.studio-audio-console {
+  gap: 16px;
+}
+
+.studio-audio-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--text-color, #fff) 8%, transparent);
+}
+
+.studio-audio-subtitle {
+  font-size: 11.5px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.55));
+  margin-top: 3px;
+}
+
+.studio-reset-pill,
+.studio-mini-action-btn {
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-color, #fff);
+  background: color-mix(in srgb, var(--accent-color, #fff) 10%, var(--card-bg, rgba(255, 255, 255, 0.04)));
+  border: 1px solid color-mix(in srgb, var(--accent-color, #fff) 24%, var(--card-border, rgba(255, 255, 255, 0.1)));
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.studio-reset-pill:hover,
+.studio-mini-action-btn:hover {
+  background: color-mix(in srgb, var(--accent-color, #fff) 22%, var(--card-hover-bg, rgba(255, 255, 255, 0.1)));
+  border-color: var(--accent-color, #fff);
+  transform: translateY(-1px);
+}
+
+.studio-presets-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.studio-block-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.55));
+}
+
+.studio-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 560px) {
+  .studio-preset-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.studio-preset-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 5px;
+  padding: 10px 12px;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--card-bg, rgba(255, 255, 255, 0.04)) 85%, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
+  color: var(--text-color, #fff);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.studio-preset-card:hover {
+  background: var(--card-hover-bg, rgba(255, 255, 255, 0.08));
+  border-color: color-mix(in srgb, var(--accent-color, #fff) 45%, var(--card-border));
+  transform: translateY(-1px);
+}
+
+.studio-preset-card.active {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent-color, #fff) 22%, var(--card-bg)), color-mix(in srgb, var(--accent-color, #fff) 8%, var(--card-bg)));
+  border-color: var(--accent-color, #fff);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--accent-color, #fff) 18%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.studio-preset-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 6px;
+}
+
+.studio-preset-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-color, #fff);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.studio-preset-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent-color, #fff) 16%, transparent);
+  color: var(--accent-color, #fff);
+  border: 1px solid color-mix(in srgb, var(--accent-color, #fff) 30%, transparent);
+  flex-shrink: 0;
+}
+
+.studio-preset-sub {
+  font-size: 11px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.55));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.studio-fx-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--card-bg, rgba(255, 255, 255, 0.03)) 88%, rgba(0, 0, 0, 0.14));
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.studio-fx-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.studio-fx-card-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-color, #fff);
+}
+
+.studio-fx-card-desc {
+  font-size: 11px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.52));
+  margin-top: 2px;
+}
+
+.studio-value-pill {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-color, #fff) 16%, transparent);
+  color: var(--accent-color, #fff);
+  border: 1px solid color-mix(in srgb, var(--accent-color, #fff) 32%, transparent);
+  white-space: nowrap;
+}
+
+.studio-bass-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.studio-mode-pills,
+.studio-speed-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.studio-mode-pill,
+.speed-preset-pill {
+  flex: 1;
+  min-width: 90px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-dim, rgba(255, 255, 255, 0.65));
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
+  cursor: pointer;
+  transition: all 0.18s ease;
+  text-align: center;
+}
+
+.studio-mode-pill:hover,
+.speed-preset-pill:hover {
+  color: var(--text-color, #fff);
+  background: var(--card-hover-bg, rgba(255, 255, 255, 0.08));
+}
+
+.studio-mode-pill.active,
+.speed-preset-pill.active {
+  color: var(--text-color, #fff);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--accent-color, #fff) 20%, transparent);
+  border-color: var(--accent-color, #fff);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent-color, #fff) 14%, transparent);
+}
+
+.studio-slider-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.studio-range-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent-color, #fff) 35%, rgba(255, 255, 255, 0.12)), rgba(255, 255, 255, 0.14));
+  outline: none;
+  cursor: pointer;
+  accent-color: var(--accent-color, #30d158);
+}
+
+.studio-range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-color, #ffffff);
+  border: 2px solid var(--accent-color, #30d158);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.studio-range-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent-color, #fff) 55%, transparent);
+}
+
+.studio-slider-marks {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.45));
+  padding: 0 2px;
+}
+
+.studio-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.studio-toggle-title {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-color, #fff);
+}
+
+.studio-toggle-sub {
+  font-size: 10.5px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.5));
+  margin-top: 2px;
+}
+
+/* Download Remix Choice Modal */
+.gp-download-modal-card {
+  width: min(440px, calc(100vw - 32px));
+  padding: 22px;
+  border-radius: 22px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--accent-color, #fff) 14%, var(--card-bg, rgba(24, 24, 34, 0.62))), color-mix(in srgb, var(--bgColor1, #14141e) 68%, rgba(10, 10, 16, 0.58)));
+  backdrop-filter: var(--glass-filter, blur(32px) saturate(165%));
+  -webkit-backdrop-filter: var(--glass-filter, blur(32px) saturate(165%));
+  border: 1px solid color-mix(in srgb, var(--accent-color, #fff) 32%, var(--card-border, rgba(255, 255, 255, 0.16)));
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  color: var(--text-color, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.gp-download-option-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 13px 15px;
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--card-bg, rgba(255, 255, 255, 0.05)) 80%, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.12));
+  color: var(--text-color, #fff);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gp-download-option-btn:hover {
+  background: color-mix(in srgb, var(--accent-color, #fff) 18%, var(--card-hover-bg, rgba(255, 255, 255, 0.1)));
+  border-color: var(--accent-color, #fff);
+  transform: translateY(-1px);
+}
+
+.gp-download-option-btn.remix-highlight {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent-color, #fff) 22%, rgba(255, 255, 255, 0.05)), color-mix(in srgb, var(--accent-color, #fff) 8%, rgba(255, 255, 255, 0.02)));
+  border-color: color-mix(in srgb, var(--accent-color, #fff) 55%, var(--card-border));
+}
+
+.gp-download-option-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-color, #fff);
+}
+
+.gp-download-option-sub {
+  font-size: 11.5px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.62));
+  margin-top: 3px;
+}
+
+.gp-download-quick-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.gp-download-preset-chip {
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--accent-color, #fff) 12%, rgba(255, 255, 255, 0.04));
+  border: 1px solid color-mix(in srgb, var(--accent-color, #fff) 28%, rgba(255, 255, 255, 0.1));
+  color: var(--text-color, #fff);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.gp-download-preset-chip:hover {
+  background: color-mix(in srgb, var(--accent-color, #fff) 26%, rgba(255, 255, 255, 0.08));
+  border-color: var(--accent-color, #fff);
+}

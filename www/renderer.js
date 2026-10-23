@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.20.12';
+const APP_VERSION = '1.20.13';
 window.APP_VERSION = APP_VERSION;
 if (typeof document !== 'undefined') {
   const syncVersionBadges = () => {
@@ -1370,46 +1370,173 @@ window.updateActiveTab = updateActiveTab;
 
 // ── RELEASE 1.16.5: Hotfix Engine Additions ───────────────────────────────
 
-// 1. Direct Track Download Engine (0 Server Bytes)
-async function downloadCurrentTrack(trackObj) {
+// 1. Direct & Studio Remix Track Download Engine
+async function executeTrackDownload(track, mode = 'original', presetOverride = null) {
+  if (!track) {
+    showToastNotification('Нет активного трека для скачивания', 'warning');
+    return;
+  }
+
+  const isRemix = mode === 'remix';
+  showToastNotification(
+    isRemix ? `Рендеринг ремикса Studio: ${track.title}...` : `Начало скачивания: ${track.title}...`,
+    'info',
+    isRemix ? 'Studio Export' : 'Загрузка'
+  );
+
+  try {
+    const streamUrl = getAudioStreamUrl(track);
+    const response = await fetch(streamUrl);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const rawBlob = await response.blob();
+
+    let finalBlob = rawBlob;
+    let fileExt = 'mp3';
+    let mimeType = 'audio/mpeg';
+    let suffix = '';
+
+    if (isRemix && window.GP && window.GP.Audio && typeof window.GP.Audio.renderTrackWithEffects === 'function') {
+      const rawBuffer = await rawBlob.arrayBuffer();
+      const rendered = await window.GP.Audio.renderTrackWithEffects(rawBuffer, presetOverride);
+      finalBlob = rendered.blob;
+      fileExt = rendered.extension || 'wav';
+      mimeType = rendered.mimeType || 'audio/wav';
+      const labelTag = presetOverride?.label || rendered.tag || 'Studio Remix';
+      suffix = ` (${labelTag})`;
+    }
+
+    const safeFileName = `${track.artist} - ${track.title}${suffix}.${fileExt}`.replace(/[\\/:*?"<>|]/g, '_');
+
+    // Auto-save to IndexedDB local library
+    const file = new File([finalBlob], safeFileName, { type: mimeType });
+    await saveLocalTrack(file);
+
+    // Save to user PC disk if in Electron or browser download
+    if (window.electronAPI && window.electronAPI.saveFile) {
+      const arrayBuffer = await finalBlob.arrayBuffer();
+      await window.electronAPI.saveFile(safeFileName, Buffer.from(arrayBuffer));
+    } else {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(finalBlob);
+      a.download = safeFileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+
+    showToastNotification(
+      isRemix
+        ? `Ремикс «${track.title}${suffix}» готов и сохранен!`
+        : `Трек «${track.title}» скачан в медиатеку!`,
+      'success',
+      isRemix ? 'Studio Export' : 'Готово'
+    );
+    if (activeView === 'library' && currentLibrarySubTab === 'local') {
+      loadFavorites('local');
+    }
+  } catch (err) {
+    console.error('[Download Error]:', err);
+    showToastNotification('Ошибка при скачивании или обработке трека', 'error');
+  }
+}
+
+function openTrackDownloadModal(trackObj) {
   const track = trackObj || playlist[currentTrackIndex];
   if (!track) {
     showToastNotification('Нет активного трека для скачивания', 'warning');
     return;
   }
 
-  showToastNotification(`Начало скачивания: ${track.title}...`, 'info');
-  try {
-    const streamUrl = getAudioStreamUrl(track);
-    const response = await fetch(streamUrl);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const blob = await response.blob();
+  const summary = (window.GP && window.GP.Audio && typeof window.GP.Audio.getActiveEffectsSummary === 'function')
+    ? window.GP.Audio.getActiveEffectsSummary()
+    : { active: false, tag: 'Studio Remix', description: 'Бассбуст, эквалайзер или ускорение' };
 
-    // Auto-save to IndexedDB local library
-    const file = new File([blob], `${track.artist} - ${track.title}.mp3`, { type: 'audio/mpeg' });
-    await saveLocalTrack(file);
+  const existing = document.querySelector('.gp-download-choice-overlay');
+  if (existing) existing.remove();
 
-    // Save to user PC disk if in Electron or browser download
-    if (window.electronAPI && window.electronAPI.saveFile) {
-      const arrayBuffer = await blob.arrayBuffer();
-      await window.electronAPI.saveFile(`${track.artist} - ${track.title}.mp3`, Buffer.from(arrayBuffer));
-    } else {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `${track.artist} - ${track.title}.mp3`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    }
+  const overlay = document.createElement('div');
+  overlay.className = 'gp-confirm-overlay gp-download-choice-overlay';
+  overlay.innerHTML = `
+    <div class="gp-download-modal-card" role="dialog" aria-modal="true" aria-label="Скачивание трека">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
+        <div>
+          <div style="font-size: 15px; font-weight: 700; color: var(--text-color);">Скачать трек на устройство</div>
+          <div style="font-size: 12px; color: var(--text-dim); margin-top: 3px;">${escapeHTML(track.artist)} — ${escapeHTML(track.title)}</div>
+        </div>
+        <button type="button" class="toast-close-btn" id="gp-dl-close-btn" aria-label="Закрыть">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>
+        </button>
+      </div>
 
-    showToastNotification(`Трек «${track.title}» скачан в медиатеку!`, 'success');
-    if (activeView === 'library' && currentLibrarySubTab === 'local') {
-      loadFavorites('local');
-    }
-  } catch (err) {
-    console.error('[Download Error]:', err);
-    showToastNotification('Ошибка при скачивании трека', 'error');
+      <div style="display: flex; flex-direction: column; gap: 9px;">
+        <button type="button" class="gp-download-option-btn" id="gp-dl-original-btn">
+          <div>
+            <div class="gp-download-option-title">Скачать оригинал (MP3)</div>
+            <div class="gp-download-option-sub">Чистая студийная запись без изменений</div>
+          </div>
+          <span class="studio-value-pill">MP3</span>
+        </button>
+
+        <button type="button" class="gp-download-option-btn remix-highlight" id="gp-dl-studio-btn">
+          <div>
+            <div class="gp-download-option-title">${summary.active ? `Скачать с вашими эффектами (${escapeHTML(summary.tag)})` : 'Экспортировать с текущими настройками Studio'}</div>
+            <div class="gp-download-option-sub">${escapeHTML(summary.description)}</div>
+          </div>
+          <span class="studio-value-pill">STUDIO FX</span>
+        </button>
+      </div>
+
+      <div>
+        <div style="font-size: 11px; font-weight: 600; color: var(--text-dim); margin-bottom: 7px;">Или мгновенно создайте готовый ремикс в 1 клик:</div>
+        <div class="gp-download-quick-presets">
+          <button type="button" class="gp-download-preset-chip" data-dl-preset="slowed_reverb">Slowed + Reverb</button>
+          <button type="button" class="gp-download-preset-chip" data-dl-preset="bass_808">808 Bass Boost</button>
+          <button type="button" class="gp-download-preset-chip" data-dl-preset="nightcore">Nightcore 1.25x</button>
+          <button type="button" class="gp-download-preset-chip" data-dl-preset="lofi">Lo-Fi Tape</button>
+          <button type="button" class="gp-download-preset-chip" data-dl-preset="spatial_8d">8D Audio</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const close = () => {
+    overlay.classList.remove('is-visible');
+    setTimeout(() => overlay.remove(), 180);
+  };
+
+  overlay.querySelector('#gp-dl-close-btn')?.addEventListener('click', close);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) close();
+  });
+
+  overlay.querySelector('#gp-dl-original-btn')?.addEventListener('click', () => {
+    close();
+    executeTrackDownload(track, 'original');
+  });
+
+  overlay.querySelector('#gp-dl-studio-btn')?.addEventListener('click', () => {
+    close();
+    executeTrackDownload(track, 'remix');
+  });
+
+  overlay.querySelectorAll('[data-dl-preset]').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const presetKey = chip.dataset.dlPreset;
+      const presetObj = window.GP?.Audio?.STUDIO_PRESETS?.[presetKey] || null;
+      close();
+      executeTrackDownload(track, 'remix', presetObj);
+    });
+  });
+
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('is-visible'));
+}
+
+async function downloadCurrentTrack(trackObj, mode = null) {
+  if (mode === 'original' || mode === 'remix') {
+    return executeTrackDownload(trackObj || playlist[currentTrackIndex], mode);
   }
+  openTrackDownloadModal(trackObj);
 }
 
 const downloadBtn = document.getElementById('download-button');

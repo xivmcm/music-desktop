@@ -32,7 +32,7 @@
   }
 
   function getAppVersion() {
-    return (typeof window !== 'undefined' && window.APP_VERSION) || '1.20.12';
+    return (typeof window !== 'undefined' && window.APP_VERSION) || '1.20.13';
   }
 
   function getApiUrl() {
@@ -378,7 +378,7 @@
       ? window.GP.Theme.getStoredCustomTheme()
       : ((typeof window.getStoredCustomTheme === 'function') ? window.getStoredCustomTheme() : (window.DEFAULT_CUSTOM_THEME || {}));
 
-    if (scope === 'stats') {
+    if (scope === 'stats' && (window.GP?.Views?.Stats?.renderStatsView || typeof window.renderStatsView === 'function')) {
       if (window.GP?.Views?.Stats?.renderStatsView) {
         window.GP.Views.Stats.renderStatsView(tracksContainer);
       } else if (typeof window.renderStatsView === 'function') {
@@ -788,62 +788,193 @@
         </div>
       </div>
 
-      <div class="settings-section" data-section="audio-effects">
-        <h3>Аудиоэффекты</h3>
-        
-        <div class="eq-panel">
-          ${[
-            { hz: 60, label: '60Hz' },
-            { hz: 230, label: '230Hz' },
-            { hz: 910, label: '910Hz' },
-            { hz: 4000, label: '4kHz' },
-            { hz: 14000, label: '14kHz' }
-          ].map(band => `
-            <label class="eq-band">
-              <span class="eq-band-value" id="eq-${band.hz}-value">${(typeof localStorage !== 'undefined' && localStorage.getItem(`gp_eq_${band.hz}`)) || '0'}dB</span>
-              <input class="eq-slider" data-frequency="${band.hz}" type="range" min="-12" max="12" step="1" value="${(typeof localStorage !== 'undefined' && localStorage.getItem(`gp_eq_${band.hz}`)) || '0'}">
-              <span class="eq-band-label">${band.label}</span>
+      <div class="settings-section studio-audio-console" data-section="audio-effects">
+        <div class="studio-audio-header">
+          <div>
+            <h3 style="margin: 0; padding: 0; border: none;">Студия звука и ремиксов</h3>
+            <div class="studio-audio-subtitle" id="studio-fx-summary-text">${(window.GP && window.GP.Audio && typeof window.GP.Audio.getActiveEffectsSummary === 'function') ? escapeHTML(window.GP.Audio.getActiveEffectsSummary().description) : 'Эквалайзер, Pro Bass Boost, Slowed + Reverb и экспорт треков'}</div>
+          </div>
+          <button type="button" id="studio-fx-reset-all-btn" class="studio-reset-pill">Сбросить всё</button>
+        </div>
+
+        <div class="studio-presets-block">
+          <div class="studio-block-label">Быстрые пресеты ремиксов (1-Click Studio FX)</div>
+          <div class="studio-preset-grid">
+            ${[
+              { id: 'original', title: 'Оригинал', sub: 'Чистый звук', badge: 'FLAT' },
+              { id: 'slowed_reverb', title: 'Slowed + Reverb', sub: '0.85x + Холл', badge: 'REMIX' },
+              { id: 'nightcore', title: 'Nightcore', sub: '1.25x + Драйв', badge: '1.25X' },
+              { id: 'bass_808', title: '808 Bass Slam', sub: 'Глубокий 55Hz саб', badge: '808 SUB' },
+              { id: 'lofi', title: 'Lo-Fi Tape', sub: 'Теплый винил 0.95x', badge: 'VINTAGE' },
+              { id: 'spatial_8d', title: '8D Spatial', sub: 'Панорама 360°', badge: '360°' }
+            ].map(p => {
+              const curPreset = (typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_preset')) || 'original';
+              return `
+                <button type="button" class="studio-preset-card ${curPreset === p.id ? 'active' : ''}" data-studio-preset="${p.id}">
+                  <div class="studio-preset-top">
+                    <span class="studio-preset-title">${p.title}</span>
+                    <span class="studio-preset-badge">${p.badge}</span>
+                  </div>
+                  <span class="studio-preset-sub">${p.sub}</span>
+                </button>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+        <div class="studio-fx-card">
+          <div class="studio-fx-card-header">
+            <span class="studio-fx-card-title">5-полосный графический эквалайзер</span>
+            <button type="button" id="studio-eq-reset-btn" class="studio-mini-action-btn">В ноль (0 dB)</button>
+          </div>
+          <div class="eq-panel">
+            ${[
+              { hz: 60, label: '60Hz', desc: 'Sub' },
+              { hz: 230, label: '230Hz', desc: 'Bass' },
+              { hz: 910, label: '910Hz', desc: 'Mid' },
+              { hz: 4000, label: '4kHz', desc: 'Presence' },
+              { hz: 14000, label: '14kHz', desc: 'Air' }
+            ].map(band => {
+              const val = (typeof localStorage !== 'undefined' && localStorage.getItem(`gp_eq_${band.hz}`)) || '0';
+              return `
+                <label class="eq-band">
+                  <span class="eq-band-value" id="eq-${band.hz}-value">${Number(val) > 0 ? '+' + val : val}dB</span>
+                  <input class="eq-slider" data-frequency="${band.hz}" type="range" min="-12" max="12" step="1" value="${val}">
+                  <span class="eq-band-label">${band.label}</span>
+                </label>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+        <div class="studio-fx-card">
+          <div class="studio-fx-card-header">
+            <div>
+              <div class="studio-fx-card-title">Pro Bass Boost & Soft Clipper</div>
+              <div class="studio-fx-card-desc">Двухполосное усиление низких частот с защитой от перегруза и хрипа</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="studio-value-pill" id="bass-gain-val-text">${(typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_bassboost') === 'true') ? '+' + ((typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_bass_gain')) || '10') + ' dB' : 'Выкл'}</span>
+              <label class="switch">
+                <input type="checkbox" id="effect-bassboost-checkbox" ${(typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_bassboost') === 'true') ? 'checked' : ''}>
+                <span class="slider round"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="studio-bass-controls">
+            <div class="studio-mode-pills" role="group" aria-label="Режим баса">
+              ${(() => {
+                const bMode = (typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_bass_mode')) || 'punch';
+                return `
+                  <button type="button" class="studio-mode-pill ${bMode !== 'sub' ? 'active' : ''}" data-bass-mode="punch">Punch Kick (100 Hz — плотный удар)</button>
+                  <button type="button" class="studio-mode-pill ${bMode === 'sub' ? 'active' : ''}" data-bass-mode="sub">Deep Sub 808 (55 Hz — глубокий саб)</button>
+                `;
+              })()}
+            </div>
+            <div class="studio-slider-wrap">
+              <input type="range" id="effect-bass-gain-slider" class="studio-range-slider" min="0" max="18" step="1" value="${(typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_bass_gain')) || '10'}">
+              <div class="studio-slider-marks">
+                <span>0 dB</span>
+                <span>+6 dB (Warm)</span>
+                <span>+10 dB (Club)</span>
+                <span>+14 dB (808)</span>
+                <span>+18 dB (Max)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="studio-fx-card">
+          <div class="studio-fx-card-header">
+            <div>
+              <div class="studio-fx-card-title">Атмосфера, Пространство и Нормализация</div>
+              <div class="studio-fx-card-desc">Студийный ревербератор (Slowed Hall), 8D панорама и выравнивание громкости</div>
+            </div>
+            <span class="studio-value-pill" id="reverb-val-text">${(typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_reverb')) || '0'}%</span>
+          </div>
+
+          <div class="studio-slider-wrap" style="margin-bottom: 12px;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
+              <span style="color: var(--text-dim);">Пространственный Reverb (Hall Mix):</span>
+            </div>
+            <input type="range" id="effect-reverb-slider" class="studio-range-slider" min="0" max="100" step="2" value="${(typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_reverb')) || '0'}">
+            <div class="studio-slider-marks">
+              <span>0% (Сухой)</span>
+              <span>25% (Комната)</span>
+              <span>45% (Slowed Hall)</span>
+              <span>80% (Атмосфера)</span>
+            </div>
+          </div>
+
+          <div class="studio-toggle-row">
+            <div>
+              <div class="studio-toggle-title">8D Spatial Audio (360° в наушниках)</div>
+              <div class="studio-toggle-sub">Плавное вращение звуковой сцены вокруг головы</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="effect-8d-checkbox" ${(typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_8d') === 'true') ? 'checked' : ''}>
+              <span class="slider round"></span>
             </label>
-          `).join('')}
-        </div>
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
-          <span style="font-size: 13px; color: rgba(255,255,255,0.7);">Bass Boost (+10dB 100Hz)</span>
-          <label class="switch">
-            <input type="checkbox" id="effect-bassboost-checkbox" ${(typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_bassboost') === 'true') ? 'checked' : ''}>
-            <span class="slider round"></span>
-          </label>
-        </div>
-
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
-          <span style="font-size: 13px; color: rgba(255,255,255,0.7);">Нормализация звука (Audio Normalization)</span>
-          <label class="switch">
-            <input type="checkbox" id="effect-normalization-checkbox" ${(typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_normalization') === 'true') ? 'checked' : ''}>
-            <span class="slider round"></span>
-          </label>
-        </div>
-
-        <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px;">
-          <div style="display: flex; justify-content: space-between; font-size: 12px;">
-            <span style="color: rgba(255,255,255,0.5);">Скорость воспроизведения:</span>
-            <span id="speed-val-text" style="color: #fff;">${(typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_speed')) || '1.0'}x</span>
           </div>
-          <input type="range" id="effect-speed-slider" min="0.5" max="2.0" step="0.05" value="${(typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_speed')) || '1.0'}" style="width: 100%; accent-color: var(--accent-color, #30d158); cursor: pointer;">
-        </div>
 
-        <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px;">
-          <div style="display: flex; justify-content: space-between; font-size: 12px;">
-            <span style="color: rgba(255,255,255,0.5);">Тональность (Pitch Shift):</span>
-            <span id="pitch-val-text" style="color: #fff;">${(typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_pitch_linked') === 'true') ? (localStorage.getItem('gp_effect_speed') || '1.0') : '1.0'}x</span>
+          <div class="studio-toggle-row" style="margin-top: 8px;">
+            <div>
+              <div class="studio-toggle-title">Нормализация звука (Studio Dynamics Compressor)</div>
+              <div class="studio-toggle-sub">Выравнивает громкость тихих и громких треков без искажений</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="effect-normalization-checkbox" ${(typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_normalization') === 'true') ? 'checked' : ''}>
+              <span class="slider round"></span>
+            </label>
           </div>
-          <input type="range" id="effect-pitch-slider" min="0.5" max="2.0" step="0.05" value="${(typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_pitch_linked') === 'true') ? (localStorage.getItem('gp_effect_speed') || '1.0') : '1.0'}" style="width: 100%; accent-color: var(--accent-color, #30d158); cursor: pointer; ${(typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_pitch_linked') === 'true') ? '' : 'opacity: 0.5; pointer-events: none;'}">
         </div>
 
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;">
-          <span style="font-size: 12px; color: rgba(255,255,255,0.5);">Связать тональность со скоростью (Nightcore)</span>
-          <label class="switch">
-            <input type="checkbox" id="effect-pitch-linked-checkbox" ${(typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_pitch_linked') === 'true') ? 'checked' : ''}>
-            <span class="slider round"></span>
-          </label>
+        <div class="studio-fx-card">
+          <div class="studio-fx-card-header">
+            <div>
+              <div class="studio-fx-card-title">Темп, Тональность и Nightcore / Slowed</div>
+              <div class="studio-fx-card-desc">Управление скоростью и высотой тона в реальном времени</div>
+            </div>
+            <span class="studio-value-pill" id="speed-val-text">${Number((typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_speed')) || '1.0').toFixed(2)}x</span>
+          </div>
+
+          <div class="studio-speed-pills">
+            ${[
+              { val: '0.75', label: '0.75x Deep' },
+              { val: '0.85', label: '0.85x Slowed' },
+              { val: '1.00', label: '1.0x Оригинал' },
+              { val: '1.15', label: '1.15x Drive' },
+              { val: '1.25', label: '1.25x Nightcore' },
+              { val: '1.50', label: '1.5x Turbo' }
+            ].map(sp => {
+              const curSp = Number((typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_speed')) || '1.0').toFixed(2);
+              return `<button type="button" class="speed-preset-pill ${curSp === Number(sp.val).toFixed(2) ? 'active' : ''}" data-speed-val="${sp.val}">${sp.label}</button>`;
+            }).join('')}
+          </div>
+
+          <div class="studio-slider-wrap" style="margin-bottom: 14px;">
+            <input type="range" id="effect-speed-slider" class="studio-range-slider" min="0.5" max="2.0" step="0.05" value="${(typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_speed')) || '1.0'}">
+          </div>
+
+          <div class="studio-slider-wrap" style="margin-bottom: 12px;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
+              <span style="color: var(--text-dim);">Тональность вокала и инструментов (Pitch Shift):</span>
+              <span id="pitch-val-text" style="color: var(--text-color); font-weight: 600;">${Number((typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_pitch_linked') === 'true') ? (localStorage.getItem('gp_effect_speed') || '1.0') : '1.0').toFixed(2)}x</span>
+            </div>
+            <input type="range" id="effect-pitch-slider" class="studio-range-slider" min="0.5" max="2.0" step="0.05" value="${(typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_pitch_linked') === 'true') ? (localStorage.getItem('gp_effect_speed') || '1.0') : '1.0'}" style="${(typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_pitch_linked') === 'true') ? '' : 'opacity: 0.5; pointer-events: none;'}">
+          </div>
+
+          <div class="studio-toggle-row">
+            <div>
+              <div class="studio-toggle-title">Связать тональность со скоростью (Аналоговый винил / Nightcore / Slowed)</div>
+              <div class="studio-toggle-sub">При замедлении голос становится ниже и глубже, при ускорении — выше</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="effect-pitch-linked-checkbox" ${(typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_pitch_linked') === 'true') ? 'checked' : ''}>
+              <span class="slider round"></span>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -1540,13 +1671,121 @@
       });
     });
 
-    // Audio Effects bindings
+    // Audio Effects 2.0 bindings
     const bassboostCheckbox = panel.querySelector('#effect-bassboost-checkbox');
+    const bassGainSlider = panel.querySelector('#effect-bass-gain-slider');
+    const bassGainValText = panel.querySelector('#bass-gain-val-text');
+    const bassModePills = panel.querySelectorAll('.studio-mode-pill');
+    const reverbSlider = panel.querySelector('#effect-reverb-slider');
+    const reverbValText = panel.querySelector('#reverb-val-text');
+    const spatial8dCheckbox = panel.querySelector('#effect-8d-checkbox');
     const normalizationCheckbox = panel.querySelector('#effect-normalization-checkbox');
     const speedSlider = panel.querySelector('#effect-speed-slider');
+    const speedPresetPills = panel.querySelectorAll('.speed-preset-pill');
     const pitchSlider = panel.querySelector('#effect-pitch-slider');
     const pitchLinkedCheckbox = panel.querySelector('#effect-pitch-linked-checkbox');
     const eqSliders = panel.querySelectorAll('.eq-slider');
+    const eqResetBtn = panel.querySelector('#studio-eq-reset-btn');
+    const resetAllFxBtn = panel.querySelector('#studio-fx-reset-all-btn');
+    const studioPresetCards = panel.querySelectorAll('.studio-preset-card');
+    const studioSummaryText = panel.querySelector('#studio-fx-summary-text');
+
+    const refreshStudioSummary = (customPresetId) => {
+      if (customPresetId && typeof localStorage !== 'undefined') {
+        localStorage.setItem('gp_effect_preset', customPresetId);
+      }
+      const activePreset = (typeof localStorage !== 'undefined' && localStorage.getItem('gp_effect_preset')) || 'original';
+      studioPresetCards.forEach((c) => {
+        if (c.classList) c.classList.toggle('active', c.dataset.studioPreset === activePreset);
+      });
+      if (studioSummaryText && window.GP && window.GP.Audio && typeof window.GP.Audio.getActiveEffectsSummary === 'function') {
+        studioSummaryText.textContent = window.GP.Audio.getActiveEffectsSummary().description;
+      }
+    };
+
+    const syncUiFromAudioState = () => {
+      const state = (window.GP && window.GP.Audio && typeof window.GP.Audio.getActiveEffectsState === 'function')
+        ? window.GP.Audio.getActiveEffectsState()
+        : null;
+      if (!state) return;
+
+      if (bassboostCheckbox) bassboostCheckbox.checked = state.bassBoost;
+      if (bassGainSlider) bassGainSlider.value = state.bassGain;
+      if (bassGainValText) bassGainValText.textContent = state.bassBoost ? `+${state.bassGain} dB` : 'Выкл';
+      bassModePills.forEach((pill) => {
+        if (pill.classList) pill.classList.toggle('active', pill.dataset.bassMode === state.bassMode);
+      });
+
+      if (reverbSlider) reverbSlider.value = state.reverb;
+      if (reverbValText) reverbValText.textContent = `${Math.round(state.reverb)}%`;
+      if (spatial8dCheckbox) spatial8dCheckbox.checked = state.spatial8D;
+      if (normalizationCheckbox) normalizationCheckbox.checked = state.normalization;
+
+      if (speedSlider) speedSlider.value = state.speed;
+      const speedValText = panel.querySelector('#speed-val-text');
+      if (speedValText) speedValText.textContent = `${Number(state.speed).toFixed(2)}x`;
+      speedPresetPills.forEach((sp) => {
+        if (sp.classList) sp.classList.toggle('active', Number(sp.dataset.speedVal).toFixed(2) === Number(state.speed).toFixed(2));
+      });
+
+      if (pitchLinkedCheckbox) pitchLinkedCheckbox.checked = state.pitchLinked;
+      if (pitchSlider) {
+        pitchSlider.value = state.pitchLinked ? state.speed : 1.0;
+        pitchSlider.style.opacity = state.pitchLinked ? '' : '0.5';
+        pitchSlider.style.pointerEvents = state.pitchLinked ? '' : 'none';
+      }
+      const pitchValText = panel.querySelector('#pitch-val-text');
+      if (pitchValText) pitchValText.textContent = `${Number(state.pitchLinked ? state.speed : 1.0).toFixed(2)}x`;
+
+      const bands = [60, 230, 910, 4000, 14000];
+      eqSliders.forEach((slider, idx) => {
+        const g = state.eq[idx] || 0;
+        slider.value = g;
+        const lbl = panel.querySelector(`#eq-${bands[idx]}-value`);
+        if (lbl) lbl.textContent = `${g > 0 ? '+' + g : g}dB`;
+      });
+
+      refreshStudioSummary();
+    };
+
+    studioPresetCards.forEach((card) => {
+      card.addEventListener('click', () => {
+        const presetId = card.dataset.studioPreset;
+        if (window.GP && window.GP.Audio && typeof window.GP.Audio.applyStudioPreset === 'function') {
+          const applied = window.GP.Audio.applyStudioPreset(presetId);
+          syncUiFromAudioState();
+          if (applied) {
+            showToast(`Пресет «${applied.label}» активирован`, 'success', 'Studio FX');
+          }
+        }
+      });
+    });
+
+    if (resetAllFxBtn) {
+      resetAllFxBtn.addEventListener('click', () => {
+        if (window.GP && window.GP.Audio && typeof window.GP.Audio.applyStudioPreset === 'function') {
+          window.GP.Audio.applyStudioPreset('original');
+          syncUiFromAudioState();
+          showToast('Все аудиоэффекты сброшены к оригиналу', 'info', 'Studio FX');
+        }
+      });
+    }
+
+    if (eqResetBtn) {
+      eqResetBtn.addEventListener('click', () => {
+        [60, 230, 910, 4000, 14000].forEach((freq, idx) => {
+          localStorage.setItem(`gp_eq_${freq}`, '0');
+          if (window.GP && window.GP.Audio && typeof window.GP.Audio.setEqBand === 'function') {
+            window.GP.Audio.setEqBand(freq, 0);
+          }
+          if (eqSliders[idx]) eqSliders[idx].value = 0;
+          const lbl = panel.querySelector(`#eq-${freq}-value`);
+          if (lbl) lbl.textContent = '0dB';
+        });
+        refreshStudioSummary('custom');
+        showToast('Полосы эквалайзера сброшены в 0 dB', 'info', 'Эквалайзер');
+      });
+    }
 
     eqSliders.forEach((slider, index) => {
       slider.addEventListener('input', (e) => {
@@ -1555,52 +1794,119 @@
         localStorage.setItem(`gp_eq_${frequency}`, gain);
         const valueLabel = panel.querySelector(`#eq-${frequency}-value`);
         if (valueLabel) {
-          valueLabel.textContent = `${gain}dB`;
+          valueLabel.textContent = `${gain > 0 ? '+' + gain : gain}dB`;
         }
-        if (window.GP && window.GP.Audio && typeof window.GP.Audio.initAudioEffects === 'function') {
-          window.GP.Audio.initAudioEffects();
-        } else if (typeof window.initAudioEffects === 'function') {
-          window.initAudioEffects();
+        if (window.GP && window.GP.Audio && typeof window.GP.Audio.setEqBand === 'function') {
+          window.GP.Audio.setEqBand(frequency, gain);
+        } else {
+          if (typeof window.initAudioEffects === 'function') window.initAudioEffects();
+          const eqFilters = (window.GP && window.GP.Audio && window.GP.Audio.eqFilters) || window.eqFilters;
+          if (eqFilters && eqFilters[index]) {
+            eqFilters[index].gain.value = gain;
+          }
         }
-
-        const eqFilters = (window.GP && window.GP.Audio && window.GP.Audio.eqFilters) || window.eqFilters;
-        if (eqFilters && eqFilters[index]) {
-          eqFilters[index].gain.value = gain;
-        }
+        refreshStudioSummary('custom');
       });
     });
 
     if (bassboostCheckbox) {
       bassboostCheckbox.addEventListener('change', (e) => {
-        localStorage.setItem('gp_effect_bassboost', e.target.checked);
-        if (window.GP && window.GP.Audio && typeof window.GP.Audio.initAudioEffects === 'function') {
-          window.GP.Audio.initAudioEffects();
-        } else if (typeof window.initAudioEffects === 'function') {
-          window.initAudioEffects();
+        const enabled = e.target.checked;
+        const curGain = bassGainSlider ? parseFloat(bassGainSlider.value) || 10 : 10;
+        localStorage.setItem('gp_effect_bassboost', enabled);
+        if (window.GP && window.GP.Audio && typeof window.GP.Audio.setBassBoost === 'function') {
+          window.GP.Audio.setBassBoost(enabled, curGain);
+        } else {
+          if (typeof window.initAudioEffects === 'function') window.initAudioEffects();
+          const bassFilter = (window.GP && window.GP.Audio && window.GP.Audio.bassFilter) || window.bassFilter;
+          if (bassFilter) bassFilter.gain.value = enabled ? curGain : 0;
         }
+        if (bassGainValText) {
+          bassGainValText.textContent = enabled ? `+${curGain} dB` : 'Выкл';
+        }
+        refreshStudioSummary('custom');
+      });
+    }
 
-        const bassFilter = (window.GP && window.GP.Audio && window.GP.Audio.bassFilter) || window.bassFilter;
-        if (bassFilter) {
-          bassFilter.gain.value = e.target.checked ? 10 : 0;
+    if (bassGainSlider) {
+      bassGainSlider.addEventListener('input', (e) => {
+        const gain = parseFloat(e.target.value) || 0;
+        if (window.GP && window.GP.Audio && typeof window.GP.Audio.setBassBoostGain === 'function') {
+          window.GP.Audio.setBassBoostGain(gain);
+        } else {
+          localStorage.setItem('gp_effect_bass_gain', gain);
+          localStorage.setItem('gp_effect_bassboost', gain > 0);
         }
+        if (bassboostCheckbox) bassboostCheckbox.checked = gain > 0;
+        if (bassGainValText) bassGainValText.textContent = gain > 0 ? `+${gain} dB` : 'Выкл';
+        refreshStudioSummary('custom');
+      });
+    }
+
+    bassModePills.forEach((pill) => {
+      pill.addEventListener('click', () => {
+        const mode = pill.dataset.bassMode === 'sub' ? 'sub' : 'punch';
+        if (window.GP && window.GP.Audio && typeof window.GP.Audio.setBassBoostMode === 'function') {
+          window.GP.Audio.setBassBoostMode(mode);
+        } else {
+          localStorage.setItem('gp_effect_bass_mode', mode);
+        }
+        bassModePills.forEach((p) => {
+          if (p.classList) p.classList.toggle('active', p.dataset.bassMode === mode);
+        });
+        refreshStudioSummary('custom');
+      });
+    });
+
+    if (reverbSlider) {
+      reverbSlider.addEventListener('input', (e) => {
+        const mix = parseFloat(e.target.value) || 0;
+        if (window.GP && window.GP.Audio && typeof window.GP.Audio.setReverbMix === 'function') {
+          window.GP.Audio.setReverbMix(mix);
+        } else {
+          localStorage.setItem('gp_effect_reverb', mix);
+        }
+        if (reverbValText) reverbValText.textContent = `${Math.round(mix)}%`;
+        refreshStudioSummary('custom');
+      });
+    }
+
+    if (spatial8dCheckbox) {
+      spatial8dCheckbox.addEventListener('change', (e) => {
+        const enabled = e.target.checked;
+        if (window.GP && window.GP.Audio && typeof window.GP.Audio.setSpatial8D === 'function') {
+          window.GP.Audio.setSpatial8D(enabled);
+        } else {
+          localStorage.setItem('gp_effect_8d', enabled);
+        }
+        refreshStudioSummary('custom');
+        showToast(enabled ? '8D Spatial Audio (360°) включен' : '8D Spatial Audio выключен', 'info', 'Studio FX');
       });
     }
 
     if (normalizationCheckbox) {
       normalizationCheckbox.addEventListener('change', (e) => {
-        localStorage.setItem('gp_effect_normalization', e.target.checked);
-        showToast(e.target.checked ? 'Нормализация звука включена' : 'Нормализация звука выключена', 'info', 'Аудио');
+        const enabled = e.target.checked;
+        localStorage.setItem('gp_effect_normalization', enabled);
+        if (window.GP && window.GP.Audio && typeof window.GP.Audio.setNormalization === 'function') {
+          window.GP.Audio.setNormalization(enabled);
+        }
+        refreshStudioSummary('custom');
+        showToast(enabled ? 'Студийная нормализация звука включена' : 'Нормализация звука выключена', 'info', 'Аудио');
       });
     }
 
     const audioPlayer = (typeof window !== 'undefined' && window.audioPlayer) || document.getElementById('audio-player');
 
     if (speedSlider && pitchSlider && pitchLinkedCheckbox) {
-      speedSlider.addEventListener('input', (e) => {
-        const val = parseFloat(e.target.value);
+      const applySpeedValue = (val) => {
         localStorage.setItem('gp_effect_speed', val);
         const speedValText = panel.querySelector('#speed-val-text');
         if (speedValText) speedValText.textContent = `${val.toFixed(2)}x`;
+
+        speedPresetPills.forEach((sp) => {
+          if (sp.classList) sp.classList.toggle('active', Number(sp.dataset.speedVal).toFixed(2) === val.toFixed(2));
+        });
 
         if (audioPlayer) {
           audioPlayer.playbackRate = val;
@@ -1612,6 +1918,20 @@
           const pitchValText = panel.querySelector('#pitch-val-text');
           if (pitchValText) pitchValText.textContent = `${val.toFixed(2)}x`;
         }
+        refreshStudioSummary('custom');
+      };
+
+      speedSlider.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        applySpeedValue(val);
+      });
+
+      speedPresetPills.forEach((pill) => {
+        pill.addEventListener('click', () => {
+          const val = parseFloat(pill.dataset.speedVal) || 1.0;
+          speedSlider.value = val;
+          applySpeedValue(val);
+        });
       });
 
       pitchLinkedCheckbox.addEventListener('change', (e) => {
@@ -1635,6 +1955,7 @@
           pitchSlider.style.opacity = '0.5';
           pitchSlider.style.pointerEvents = 'none';
         }
+        refreshStudioSummary('custom');
       });
 
       pitchSlider.addEventListener('input', (e) => {
@@ -1654,11 +1975,16 @@
         if (speedValText) speedValText.textContent = `${val.toFixed(2)}x`;
         if (pitchValText) pitchValText.textContent = `${val.toFixed(2)}x`;
 
+        speedPresetPills.forEach((sp) => {
+          if (sp.classList) sp.classList.toggle('active', Number(sp.dataset.speedVal).toFixed(2) === val.toFixed(2));
+        });
+
         if (audioPlayer) {
           audioPlayer.playbackRate = val;
           audioPlayer.defaultPlaybackRate = val;
         }
         localStorage.setItem('gp_effect_speed', val);
+        refreshStudioSummary('custom');
       });
     }
 

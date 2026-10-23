@@ -7,6 +7,34 @@
 
   const CHANGELOG_REGISTRY = [
     {
+      version: '1.20.13',
+      tag: 'v1.20.13',
+      date: '24 октября 2026',
+      title: 'Что нового в GlassPlayer',
+      subtitle: 'Studio Audio Remixer 2.0, экспорт треков с эффектами и стеклянные уведомления',
+      categories: [
+        {
+          id: 'studio',
+          title: 'Студия звука и ремиксов 2.0 (Pro Bass, Reverb, 8D, Nightcore)',
+          icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>',
+          items: [
+            'Быстрые пресеты ремиксов в 1 клик: Slowed + Reverb, Nightcore 1.25x, 808 Bass Slam, Lo-Fi Tape и 8D Spatial Audio (360-градусная панорама).',
+            'Pro Bass Boost & Soft Clipper: плавный регулятор мощности от 0 до +18 dB, выбор характера баса (Deep Sub 55Hz и Punch Kick 100Hz) и аналоговая сатурация без хрипа.',
+            'Настоящая студийная нормализация звука (Dynamics Compressor): автоматическое выравнивание громкости тихих и громких треков.'
+          ]
+        },
+        {
+          id: 'export',
+          title: 'Экспорт ремиксов и обновленные уведомления Liquid Glass',
+          icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>',
+          items: [
+            'Выбор режима при скачивании трека: сохранение чистого оригинала (MP3) или быстрый оффлайн-рендеринг трека со всеми активными эффектами Studio.',
+            'Всплывающие уведомления в стиле жидкого стекла (Liquid Glass), автоматически подстраивающиеся под цвета и свечение вашего конструктора тем.'
+          ]
+        }
+      ]
+    },
+    {
       version: '1.20.12',
       tag: 'v1.20.12',
       date: '23 октября 2026',

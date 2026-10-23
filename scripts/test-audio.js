@@ -10,11 +10,21 @@ class MockAudioNode {
     this.gain = { value: 0 };
     this.frequency = { value: 0 };
     this.Q = { value: 0 };
+    this.pan = { value: 0 };
+    this.threshold = { value: 0 };
+    this.knee = { value: 0 };
+    this.ratio = { value: 1 };
+    this.attack = { value: 0.003 };
+    this.release = { value: 0.25 };
     this.type = '';
     this.fftSize = 0;
     this.frequencyBinCount = 128;
+    this.curve = null;
+    this.oversample = 'none';
+    this.buffer = null;
   }
   connect(dest) { return dest; }
+  start() {}
   getByteFrequencyData(arr) {
     for (let i = 0; i < arr.length; i++) arr[i] = i * 2;
   }
@@ -23,6 +33,7 @@ class MockAudioNode {
 class MockAudioContext {
   constructor() {
     this.state = 'running';
+    this.sampleRate = 44100;
     this.destination = new MockAudioNode();
   }
   createMediaElementSource(element) {
@@ -34,13 +45,28 @@ class MockAudioContext {
   }
   createBiquadFilter() { return new MockAudioNode(); }
   createAnalyser() { return new MockAudioNode(); }
+  createGain() { return new MockAudioNode(); }
+  createWaveShaper() { return new MockAudioNode(); }
+  createConvolver() { return new MockAudioNode(); }
+  createStereoPanner() { return new MockAudioNode(); }
+  createOscillator() { return new MockAudioNode(); }
+  createDynamicsCompressor() { return new MockAudioNode(); }
+  createBuffer(channels, length, sampleRate) {
+    const chData = Array.from({ length: channels }, () => new Float32Array(length));
+    return {
+      numberOfChannels: channels,
+      length,
+      sampleRate,
+      getChannelData: (ch) => chData[ch]
+    };
+  }
   resume() { return Promise.resolve(); }
 }
 
 global.AudioContext = MockAudioContext;
 global.localStorage = {
   store: {},
-  getItem(k) { return this.store[k] || null; },
+  getItem(k) { return k in this.store ? this.store[k] : null; },
   setItem(k, v) { this.store[k] = String(v); }
 };
 
@@ -75,6 +101,13 @@ test('Module structure & exports', () => {
   assert.strictEqual(typeof Audio.initAudioContext, 'function');
   assert.strictEqual(typeof Audio.setEqBand, 'function');
   assert.strictEqual(typeof Audio.setBassBoost, 'function');
+  assert.strictEqual(typeof Audio.setBassBoostGain, 'function');
+  assert.strictEqual(typeof Audio.setBassBoostMode, 'function');
+  assert.strictEqual(typeof Audio.setNormalization, 'function');
+  assert.strictEqual(typeof Audio.setReverbMix, 'function');
+  assert.strictEqual(typeof Audio.setSpatial8D, 'function');
+  assert.strictEqual(typeof Audio.applyStudioPreset, 'function');
+  assert.strictEqual(typeof Audio.renderTrackWithEffects, 'function');
   assert.strictEqual(typeof Audio.setPlaybackRate, 'function');
   assert.deepStrictEqual(Audio.EQ_BANDS, [60, 230, 910, 4000, 14000]);
 });
@@ -84,6 +117,8 @@ test('initAudioContext: initializes graph properly', () => {
   assert.ok(ctx);
   assert.ok(Audio.getAnalyser());
   assert.ok(Audio.getBassFilter());
+  assert.ok(Audio.getSubBassFilter());
+  assert.ok(Audio.getCompressorNode());
   assert.strictEqual(Audio.getEqFilters().length, 5);
   assert.strictEqual(Audio.getBufferLength(), 128);
   assert.strictEqual(Audio.getDataArray()?.length, 128);
@@ -107,14 +142,48 @@ test('setEqBand: updates filter and localStorage', () => {
   assert.strictEqual(Audio.getEqFilters()[1].gain.value, -2);
 });
 
-test('setBassBoost: updates filter and localStorage', () => {
+test('setBassBoost & Pro Bass Engine: updates gain, frequency mode, and localStorage', () => {
   Audio.setBassBoost(true);
   assert.strictEqual(global.localStorage.getItem('gp_effect_bassboost'), 'true');
   assert.strictEqual(Audio.getBassFilter().gain.value, 10);
 
+  Audio.setBassBoostGain(15);
+  assert.strictEqual(global.localStorage.getItem('gp_effect_bass_gain'), '15');
+  assert.strictEqual(Audio.getBassFilter().gain.value, 15);
+
+  Audio.setBassBoostMode('sub');
+  assert.strictEqual(global.localStorage.getItem('gp_effect_bass_mode'), 'sub');
+  assert.strictEqual(Audio.getBassFilter().frequency.value, 65);
+  assert.strictEqual(Audio.getSubBassFilter().frequency.value, 50);
+
   Audio.setBassBoost(false);
   assert.strictEqual(global.localStorage.getItem('gp_effect_bassboost'), 'false');
   assert.strictEqual(Audio.getBassFilter().gain.value, 0);
+});
+
+test('setNormalization: configures DynamicsCompressorNode properly', () => {
+  Audio.setNormalization(true);
+  assert.strictEqual(global.localStorage.getItem('gp_effect_normalization'), 'true');
+  assert.strictEqual(Audio.getCompressorNode().threshold.value, -24);
+  assert.strictEqual(Audio.getCompressorNode().ratio.value, 9);
+
+  Audio.setNormalization(false);
+  assert.strictEqual(global.localStorage.getItem('gp_effect_normalization'), 'false');
+  assert.strictEqual(Audio.getCompressorNode().threshold.value, 0);
+  assert.strictEqual(Audio.getCompressorNode().ratio.value, 1);
+});
+
+test('applyStudioPreset: configures Slowed + Reverb and Original presets', () => {
+  const sr = Audio.applyStudioPreset('slowed_reverb');
+  assert.ok(sr);
+  assert.strictEqual(mockAudioPlayer.playbackRate, 0.85);
+  assert.strictEqual(mockAudioPlayer.preservesPitch, false);
+  assert.strictEqual(global.localStorage.getItem('gp_effect_reverb'), '42');
+  assert.strictEqual(Audio.hasActiveAudioEffects(), true);
+
+  Audio.applyStudioPreset('original');
+  assert.strictEqual(mockAudioPlayer.playbackRate, 1.0);
+  assert.strictEqual(Audio.hasActiveAudioEffects(), false);
 });
 
 test('setPlaybackRate: updates player and localStorage', () => {

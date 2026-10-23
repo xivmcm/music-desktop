@@ -563,8 +563,8 @@ function registerIpcHandlers() {
     if (!terms) return null;
     const { artist, songName, directQuery } = terms;
     const LRCLIB_HEADERS = {
-      'User-Agent': 'GlassPlayer/1.20.9 (https://github.com/xivmcm/music-desktop)',
-      'Lrclib-Client': 'GlassPlayer v1.20.9'
+      'User-Agent': 'GlassPlayer/1.20.10 (https://github.com/xivmcm/music-desktop)',
+      'Lrclib-Client': 'GlassPlayer v1.20.10'
     };
 
     // 1. Try LRCLIB with strict match validation
@@ -733,10 +733,26 @@ class GlassUpdater {
   }
 
   async downloadUpdate(targetUrl, isBackground = false) {
-    const url = targetUrl || this.latestUpdate?.downloadUrl;
+    let url = targetUrl || this.latestUpdate?.downloadUrl;
     if (!url) {
       if (!isBackground) sendToPrimaryWindow('update-status', 'error', 'No download URL provided');
       return;
+    }
+
+    // Security: Only allow official GitHub domains and storage CDNs
+    try {
+      const parsedUrl = new URL(url);
+      const host = parsedUrl.hostname.toLowerCase();
+      const isAllowedHost = host === 'github.com' ||
+        host.endsWith('.github.com') ||
+        host.endsWith('.githubusercontent.com') ||
+        host.endsWith('.windows.net');
+      if (!isAllowedHost) {
+        console.warn('[GlassUpdater] Blocked untrusted download URL host:', host);
+        url = this.latestUpdate?.downloadUrl;
+      }
+    } catch (_) {
+      url = this.latestUpdate?.downloadUrl;
     }
 
     if (this.isDownloading) return;
@@ -744,6 +760,17 @@ class GlassUpdater {
     const versionStr = this.latestUpdate?.version || 'latest';
     const tempPath = path.join(app.getPath('temp'), `GlassPlayer-Setup-${versionStr}.exe`);
     this.downloadedInstallerPath = tempPath;
+
+    // Clean up older installer leftovers in Temp folder
+    try {
+      const tempDir = app.getPath('temp');
+      const files = fs.readdirSync(tempDir);
+      for (const f of files) {
+        if ((f.startsWith('GlassPlayer-Setup-') && (f.endsWith('.exe') || f.endsWith('.part'))) && !f.includes(versionStr)) {
+          try { fs.unlinkSync(path.join(tempDir, f)); } catch (_) {}
+        }
+      }
+    } catch (_) {}
 
     // Check if fully downloaded already in cache
     const expectedSize = this.latestUpdate?.size || 0;
@@ -764,24 +791,39 @@ class GlassUpdater {
 
     this.isDownloading = true;
 
-    const downloadStream = (fileUrl) => new Promise((resolve, reject) => {
-      const file = fs.createWriteStream(tempPath);
+    // Download into a .part file and rename only after full, verified completion.
+    // Otherwise an interrupted download leaves a truncated .exe that gets "reused" next time.
+    const partPath = `${tempPath}.part`;
+    const downloadStream = (fileUrl, redirectsLeft = 5) => new Promise((resolve, reject) => {
       const req = https.get(fileUrl, { headers: { 'User-Agent': 'GlassPlayer-Desktop' } }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          file.close();
-          fs.unlink(tempPath, () => {});
-          return downloadStream(res.headers.location).then(resolve).catch(reject);
+          res.resume();
+          if (redirectsLeft <= 0) return reject(new Error('Too many redirects'));
+          // GitHub release assets always redirect; the file stream is created only for the final 200
+          // response (previously an async unlink here could delete the freshly created file).
+          const next = new URL(res.headers.location, fileUrl).toString();
+          return downloadStream(next, redirectsLeft - 1).then(resolve).catch(reject);
         }
 
         if (res.statusCode !== 200) {
-          file.close();
-          fs.unlink(tempPath, () => {});
+          res.resume();
           return reject(new Error(`HTTP ${res.statusCode}`));
         }
 
         const totalBytes = parseInt(res.headers['content-length'], 10) || 0;
         let downloadedBytes = 0;
         let lastReportTime = 0;
+        let failed = false;
+        const file = fs.createWriteStream(partPath);
+
+        const fail = (err) => {
+          if (failed) return;
+          failed = true;
+          res.destroy();
+          file.destroy();
+          fs.unlink(partPath, () => {});
+          reject(err);
+        };
 
         res.on('data', (chunk) => {
           downloadedBytes += chunk.length;
@@ -792,21 +834,32 @@ class GlassUpdater {
             sendToPrimaryWindow('update-progress', percent);
           }
         });
+        res.on('aborted', () => fail(new Error('Connection aborted')));
+        res.on('error', fail);
+        file.on('error', fail);
 
         res.pipe(file);
 
         file.on('finish', () => {
           file.close(() => {
-            resolve(tempPath);
+            if (failed) return;
+            if (totalBytes > 0 && downloadedBytes !== totalBytes) {
+              return fail(new Error(`Incomplete download (${downloadedBytes}/${totalBytes})`));
+            }
+            try {
+              if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+              fs.renameSync(partPath, tempPath);
+              resolve(tempPath);
+            } catch (e) {
+              fail(e);
+            }
           });
         });
       });
 
-      req.on('error', (err) => {
-        file.close();
-        fs.unlink(tempPath, () => {});
-        reject(err);
-      });
+      // Stalled connection must not leave isDownloading stuck forever
+      req.setTimeout(30000, () => req.destroy(new Error('Download timeout')));
+      req.on('error', reject);
     });
 
     try {

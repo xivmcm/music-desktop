@@ -61,8 +61,13 @@
 
   function connectWS() {
     if (ws) {
+      // Detach handlers first: otherwise the old socket's async onclose would clear
+      // the new socket's ping timer and schedule a spurious reconnect (reconnect loop)
+      const old = ws;
+      old.onopen = old.onmessage = old.onclose = old.onerror = null;
+      ws = null;
       try {
-        ws.close();
+        old.close();
       } catch (e) {}
     }
     clearSocketTimers();
@@ -87,7 +92,7 @@
       try {
         const uid = String(user.id || user._id || '');
         if (uid) {
-          ws.send(JSON.stringify({ type: 'auth', userId: uid }));
+          ws.send(JSON.stringify({ type: 'auth', userId: uid, token }));
         }
       } catch (e) {}
 

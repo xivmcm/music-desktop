@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.20.9';
+const APP_VERSION = '1.20.10';
 window.APP_VERSION = APP_VERSION;
 if (typeof document !== 'undefined') {
   const syncVersionBadges = () => {

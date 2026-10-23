@@ -1,11 +1,11 @@
 {
-  "version": "1.20.9",
-  "pub_date": "2026-10-23T12:00:00Z",
-  "changelog": "  GlassPlayer v1.20.9:\n  - Автоапдейтер: автоматический перезапуск приложения сразу после установки обновления\n  - Стабильность: устранено зависание установщика и гарантированное освобождение файлов процессов\n  - Интерфейс: отображение точного номера версии на баннере обновления",
+  "version": "1.20.10",
+  "pub_date": "2026-10-23T12:30:00Z",
+  "changelog": "  GlassPlayer v1.20.10:\n  - Загрузчик: атомарная загрузка во временный .part с валидацией размера\n  - Стабильность: таймауты сетевых соединений и обработка редиректов GitHub\n  - Безопасность: валидация доменов и автоочистка старых файлов в Temp",
   "platforms": {
     "win64": {
-      "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.20.9.exe",
-      "filename": "GlassPlayer-Setup-1.20.9.exe"
+      "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.20.10.exe",
+      "filename": "GlassPlayer-Setup-1.20.10.exe"
     }
   }
 }

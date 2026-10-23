@@ -1,11 +1,11 @@
 {
-  "version": "1.20.8",
-  "pub_date": "2026-10-23T11:00:00Z",
-  "changelog": "  GlassPlayer v1.20.8:\n  - Сетевой статус: мгновенное отображение статуса «В сети» в профиле и у друзей\n  - Присутствие: привязка статуса к соединению без ложного таймаута через 3 минуты\n  - Стабильность: фоновое автоподключение WebSocket и живое обновление карточки профиля",
+  "version": "1.20.9",
+  "pub_date": "2026-10-23T12:00:00Z",
+  "changelog": "  GlassPlayer v1.20.9:\n  - Автоапдейтер: автоматический перезапуск приложения сразу после установки обновления\n  - Стабильность: устранено зависание установщика и гарантированное освобождение файлов процессов\n  - Интерфейс: отображение точного номера версии на баннере обновления",
   "platforms": {
     "win64": {
-      "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.20.8.exe",
-      "filename": "GlassPlayer-Setup-1.20.8.exe"
+      "url": "https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-1.20.9.exe",
+      "filename": "GlassPlayer-Setup-1.20.9.exe"
     }
   }
 }

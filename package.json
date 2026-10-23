@@ -1,6 +1,6 @@
 {
   "name": "music-desktop",
-  "version": "1.20.8",
+  "version": "1.20.9",
   "description": "Cross-platform music player aggregator desktop application",
   "author": "GlassPlayer",
   "main": "main.js",
@@ -21,7 +21,9 @@
     "protocols": [
       {
         "name": "GlassPlayer Track Link",
-        "schemes": ["glassplayer"]
+        "schemes": [
+          "glassplayer"
+        ]
       }
     ],
     "directories": {
@@ -41,8 +43,7 @@
       "allowToChangeInstallationDirectory": false,
       "deleteAppDataOnUninstall": false,
       "createDesktopShortcut": "always",
-      "createStartMenuShortcut": true,
-      "include": "build/installer.nsh"
+      "createStartMenuShortcut": true
     },
     "publish": [
       {

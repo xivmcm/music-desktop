@@ -563,8 +563,8 @@ function registerIpcHandlers() {
     if (!terms) return null;
     const { artist, songName, directQuery } = terms;
     const LRCLIB_HEADERS = {
-      'User-Agent': 'GlassPlayer/1.20.8 (https://github.com/xivmcm/music-desktop)',
-      'Lrclib-Client': 'GlassPlayer v1.20.8'
+      'User-Agent': 'GlassPlayer/1.20.9 (https://github.com/xivmcm/music-desktop)',
+      'Lrclib-Client': 'GlassPlayer v1.20.9'
     };
 
     // 1. Try LRCLIB with strict match validation
@@ -661,7 +661,7 @@ class GlassUpdater {
               console.log(`[GlassUpdater] Cached complete installer verified for v${updateInfo.version} (${stat.size} bytes).`);
               this.downloadedInstallerPath = tempPath;
               sendToPrimaryWindow('update-status', 'available', updateInfo);
-              sendToPrimaryWindow('update-ready');
+              sendToPrimaryWindow('update-ready', updateInfo);
               return;
             }
           } catch (statErr) {
@@ -719,11 +719,13 @@ class GlassUpdater {
       });
       if (!res.ok) return null;
       const data = await res.json();
+      const downloadUrl = data.platforms?.win64?.url || data.windows?.url || `https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-${data.version}.exe`;
+      const filename = data.platforms?.win64?.filename || data.windows?.filename || `GlassPlayer-Setup-${data.version}.exe`;
       return {
         version: data.version,
         changelog: data.changelog || 'Обновление GlassPlayer',
-        downloadUrl: data.windows?.url || `https://github.com/xivmcm/music-desktop/releases/latest/download/GlassPlayer-Setup-${data.version}.exe`,
-        filename: data.windows?.filename || `GlassPlayer-Setup-${data.version}.exe`
+        downloadUrl,
+        filename
       };
     } catch (e) {
       return null;
@@ -752,7 +754,7 @@ class GlassUpdater {
           console.log(`[GlassUpdater] Reusing existing complete installer (${stat.size} bytes).`);
           this.isDownloading = false;
           sendToPrimaryWindow('update-progress', 100);
-          sendToPrimaryWindow('update-ready');
+          sendToPrimaryWindow('update-ready', this.latestUpdate);
           return;
         }
       } catch (err) {
@@ -811,7 +813,7 @@ class GlassUpdater {
       await downloadStream(url);
       this.isDownloading = false;
       sendToPrimaryWindow('update-progress', 100);
-      sendToPrimaryWindow('update-ready');
+      sendToPrimaryWindow('update-ready', this.latestUpdate);
     } catch (err) {
       this.isDownloading = false;
       console.error('[GlassUpdater Download Error]:', err.message);
@@ -833,18 +835,24 @@ class GlassUpdater {
       
       if (process.platform === 'win32') {
         const installerPath = this.downloadedInstallerPath;
-        // Robust detached PowerShell command:
-        // 1. Wait 600ms for Electron app.quit to initiate cleanly.
-        // 2. Force-kill all GlassPlayer processes so no handles remain open.
-        // 3. Loop until all GlassPlayer processes are confirmed terminated (up to 10s).
-        // 4. Sleep 1.2s to guarantee Windows kernel releases all file locks on GlassPlayer.exe, DLLs and resources.
-        // 5. Launch the NSIS installer with --updated /S --force-run for seamless background install and auto-restart.
+        const appExe = process.execPath;
+
+        // Robust detached PowerShell runner:
+        // 1. Give Electron app.quit time to cleanly initiate shutdown (500ms).
+        // 2. Terminate all remaining GlassPlayer processes to release file handles.
+        // 3. Loop until all GlassPlayer processes are fully stopped.
+        // 4. Run installer silently with /S --updated and wait for it to complete.
+        // 5. Automatically launch the updated GlassPlayer.exe!
         const psCommand = [
-          'Start-Sleep -Milliseconds 600;',
+          'Start-Sleep -Milliseconds 500;',
           'Stop-Process -Name "GlassPlayer" -Force -ErrorAction SilentlyContinue;',
-          '$w = 10; while ((Get-Process -Name "GlassPlayer" -ErrorAction SilentlyContinue) -and ($w -gt 0)) { Start-Sleep -Milliseconds 300; $w -= 0.3 };',
-          'Start-Sleep -Milliseconds 1200;',
-          `Start-Process -FilePath "${installerPath.replace(/"/g, '`"')}" -ArgumentList "--updated", "/S", "--force-run";`
+          '$w = 20; while ((Get-Process -Name "GlassPlayer" -ErrorAction SilentlyContinue) -and ($w -gt 0)) { Start-Sleep -Milliseconds 250; $w -= 0.25 };',
+          'Start-Sleep -Milliseconds 800;',
+          `$installer = Start-Process -FilePath "${installerPath.replace(/"/g, '`"')}" -ArgumentList "/S", "--updated" -PassThru;`,
+          '$installer.WaitForExit(120000);',
+          'Start-Sleep -Milliseconds 1000;',
+          `$targetExe = "${appExe.replace(/"/g, '`"')}";`,
+          'if (-not (Get-Process -Name "GlassPlayer" -ErrorAction SilentlyContinue)) { if (Test-Path $targetExe) { Start-Process -FilePath $targetExe } else { $fb = "$env:LOCALAPPDATA\\Programs\\music-desktop\\GlassPlayer.exe"; if (Test-Path $fb) { Start-Process -FilePath $fb } } };'
         ].join(' ');
 
         const child = spawn('powershell.exe', [
@@ -859,7 +867,7 @@ class GlassUpdater {
         });
         child.unref();
       } else {
-        const installer = spawn(this.downloadedInstallerPath, ['--updated', '/S', '--force-run'], {
+        const installer = spawn(this.downloadedInstallerPath, ['--updated', '/S'], {
           detached: true,
           stdio: 'ignore'
         });

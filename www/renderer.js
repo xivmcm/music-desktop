@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.20.8';
+const APP_VERSION = '1.20.9';
 window.APP_VERSION = APP_VERSION;
 if (typeof document !== 'undefined') {
   const syncVersionBadges = () => {
@@ -1118,7 +1118,8 @@ if (isElectron && window.electronAPI && window.electronAPI.onUpdateStatus) {
 
   window.electronAPI.onUpdateProgress((percent) => {
     const rounded = Math.round(percent);
-    if (updateBannerText) updateBannerText.textContent = `Загрузка обновления: ${rounded}%`;
+    const ver = currentUpdateInfo?.version ? ` v${currentUpdateInfo.version}` : '';
+    if (updateBannerText) updateBannerText.textContent = `Загрузка обновления${ver}: ${rounded}%`;
     if (updateDownloadBtn) updateDownloadBtn.classList.add('hidden');
     if (updateInstallBtn) updateInstallBtn.classList.add('hidden');
     if (updateManualBtn) updateManualBtn.classList.add('hidden');
@@ -1127,8 +1128,10 @@ if (isElectron && window.electronAPI && window.electronAPI.onUpdateStatus) {
     if (updateBanner) updateBanner.classList.remove('hidden');
   });
 
-  window.electronAPI.onUpdateReady(() => {
-    if (updateBannerText) updateBannerText.textContent = 'Обновление готово к установке!';
+  window.electronAPI.onUpdateReady((updateData) => {
+    const info = updateData || currentUpdateInfo;
+    const ver = info?.version ? ` v${info.version}` : '';
+    if (updateBannerText) updateBannerText.textContent = `Обновление${ver} готово к установке!`;
     if (updateDownloadBtn) updateDownloadBtn.classList.add('hidden');
     if (updateInstallBtn) {
       updateInstallBtn.classList.remove('hidden');
@@ -1145,7 +1148,8 @@ if (isElectron && window.electronAPI && window.electronAPI.onUpdateStatus) {
     updateDownloadBtn.addEventListener('click', () => {
       updateDownloadBtn.classList.add('hidden');
       if (bannerLoader) bannerLoader.classList.remove('hidden');
-      if (updateBannerText) updateBannerText.textContent = 'Подготовка загрузки...';
+      const ver = currentUpdateInfo?.version ? ` v${currentUpdateInfo.version}` : '';
+      if (updateBannerText) updateBannerText.textContent = `Подготовка загрузки${ver}...`;
       const downloadUrl = currentUpdateInfo?.downloadUrl || null;
       window.electronAPI.downloadUpdate(downloadUrl);
     });
@@ -1155,7 +1159,8 @@ if (isElectron && window.electronAPI && window.electronAPI.onUpdateStatus) {
     updateInstallBtn.addEventListener('click', () => {
       updateInstallBtn.disabled = true;
       updateInstallBtn.textContent = 'Установка...';
-      if (updateBannerText) updateBannerText.textContent = 'Перезапуск и обновление GlassPlayer...';
+      const ver = currentUpdateInfo?.version ? ` до v${currentUpdateInfo.version}` : '';
+      if (updateBannerText) updateBannerText.textContent = `Перезапуск и установка обновления${ver}...`;
       if (bannerLoader) bannerLoader.classList.remove('hidden');
       setTimeout(() => {
         window.electronAPI.installUpdate();

@@ -54,10 +54,6 @@ if (process.platform === 'win32') {
   app.setAppUserModelId('com.glassplayer.app');
 }
 
-// Configure Chromium DNS-over-HTTPS (DoH) before app ready to bypass DNS blocking in RU (Cloudflare + Google + Yandex + AdGuard + Quad9)
-app.commandLine.appendSwitch('enable-features', 'DnsOverHttps');
-app.commandLine.appendSwitch('dns-over-https-templates', 'https://cloudflare-dns.com/dns-query,https://dns.google/dns-query,https://common.dot.dns.yandex.net/dns-query,https://dns.adguard-dns.com/dns-query,https://dns.quad9.net/dns-query');
-
 // Discord RPC configuration
 let rpcConnected = false;
 let rpcClient = null;
@@ -1320,20 +1316,19 @@ app.whenReady().then(() => {
 
   registerShareProtocol();
 
-  // Configure native DNS-over-HTTPS (DoH) in Electron to bypass DNS blocking in RU
+  // Configure native DNS-over-HTTPS (DoH) in Electron with automatic OS DNS fallback
   try {
     if (typeof app.configureHostResolver === 'function') {
       app.configureHostResolver({
-        secureDnsMode: 'secure',
+        enableBuiltInResolver: true,
+        secureDnsMode: 'automatic',
         secureDnsServers: [
           'https://cloudflare-dns.com/dns-query',
           'https://dns.google/dns-query',
-          'https://common.dot.dns.yandex.net/dns-query',
-          'https://dns.adguard-dns.com/dns-query',
           'https://dns.quad9.net/dns-query'
         ]
       });
-      console.log('[DNS-over-HTTPS] Secure DoH host resolver configured successfully.');
+      console.log('[DNS-over-HTTPS] Automatic DoH host resolver with OS fallback configured.');
     }
   } catch (dohErr) {
     console.warn('[DNS-over-HTTPS Warning] Failed to configure DoH:', dohErr.message);

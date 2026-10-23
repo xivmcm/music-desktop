@@ -82,7 +82,7 @@ const mockDocument = {
 };
 
 const mockWindow = {
-  APP_VERSION: '1.20.11',
+  APP_VERSION: '1.20.12',
   localStorage: mockLocalStorage,
   document: mockDocument,
   requestAnimationFrame: (cb) => cb(),
@@ -104,21 +104,22 @@ test('GP.Components.Changelog namespace is defined', () => {
   assert.ok(mockWindow.GP.Components.Changelog);
 });
 
-test('CHANGELOG_REGISTRY has at least 6 version entries', () => {
+test('CHANGELOG_REGISTRY has at least 7 version entries', () => {
   const reg = mockWindow.GP.Components.Changelog.CHANGELOG_REGISTRY;
   assert.ok(Array.isArray(reg));
-  assert.ok(reg.length >= 6);
+  assert.ok(reg.length >= 7);
 });
 
-test('First changelog entry is v1.20.11', () => {
+test('First changelog entry is v1.20.12', () => {
   const latest = mockWindow.GP.Components.Changelog.CHANGELOG_REGISTRY[0];
-  assert.strictEqual(latest.version, '1.20.11');
-  assert.strictEqual(latest.tag, 'v1.20.11');
+  assert.strictEqual(latest.version, '1.20.12');
+  assert.strictEqual(latest.tag, 'v1.20.12');
 });
 
-test('Changelog categories for v1.20.11 contain updater', () => {
+test('Changelog categories for v1.20.12 contain network and updater', () => {
   const latest = mockWindow.GP.Components.Changelog.CHANGELOG_REGISTRY[0];
   const ids = latest.categories.map(c => c.id);
+  assert.ok(ids.includes('network'));
   assert.ok(ids.includes('updater'));
 });
 
@@ -129,27 +130,27 @@ test('Changelog content contains zero emojis across all entries', () => {
   assert.strictEqual(emojiRegex.test(textBlob), false, 'Found emoji in changelog!');
 });
 
-test('Preserves v1.20.10 in changelog history', () => {
-  const v12010 = mockWindow.GP.Components.Changelog.CHANGELOG_REGISTRY.find(e => e.version === '1.20.10');
-  assert.ok(v12010);
-  const ids = v12010.categories.map(c => c.id);
+test('Preserves v1.20.11 in changelog history', () => {
+  const v12011 = mockWindow.GP.Components.Changelog.CHANGELOG_REGISTRY.find(e => e.version === '1.20.11');
+  assert.ok(v12011);
+  const ids = v12011.categories.map(c => c.id);
   assert.ok(ids.includes('updater'));
 });
 
-test('openChangelogModal creates overlay and modal element for v1.20.11', () => {
-  mockWindow.openChangelogModal('1.20.11');
+test('openChangelogModal creates overlay and modal element for v1.20.12', () => {
+  mockWindow.openChangelogModal('1.20.12');
   const overlay = mockDocument.getElementById('changelog-modal-overlay');
   assert.ok(overlay);
   assert.ok(overlay.classList.contains('visible'));
-  assert.ok(overlay.innerHTML.includes('v1.20.11'));
-  assert.ok(overlay.innerHTML.includes('Мгновенная система Hot-Update'));
+  assert.ok(overlay.innerHTML.includes('v1.20.12'));
+  assert.ok(overlay.innerHTML.includes('Сетевой стек и гибридный DNS-резолвер'));
 });
 
 test('Clicking confirm button closes modal and marks localStorage', () => {
   const overlay = mockDocument.getElementById('changelog-modal-overlay');
   assert.ok(overlay._btnHandler);
   overlay._btnHandler(); // Click "Понятно"
-  assert.strictEqual(mockLocalStorage.getItem('gp_last_seen_changelog'), '1.20.11');
+  assert.strictEqual(mockLocalStorage.getItem('gp_last_seen_changelog'), '1.20.12');
 });
 
 console.log('\n----------------------------------------------------');

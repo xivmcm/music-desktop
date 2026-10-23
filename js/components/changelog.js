@@ -7,6 +7,33 @@
 
   const CHANGELOG_REGISTRY = [
     {
+      version: '1.20.12',
+      tag: 'v1.20.12',
+      date: '23 октября 2026',
+      title: 'Что нового в GlassPlayer',
+      subtitle: 'Стабильное сетевое подключение и мгновенные обновления без закрытия окна',
+      categories: [
+        {
+          id: 'network',
+          title: 'Сетевой стек и гибридный DNS-резолвер',
+          icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>',
+          items: [
+            'Гибридный режим DNS (automatic DoH + системный DNS Windows): устранена ошибка ERR_NAME_NOT_RESOLVED при подключении к серверам и WebSocket.',
+            'Полная совместимость с локальными DNS-фильтрами и сетевыми экранами (AdGuard DNS и др.).'
+          ]
+        },
+        {
+          id: 'updater',
+          title: 'Система мгновенных обновлений Hot-Update',
+          icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>',
+          items: [
+            'Загрузка сжатых пакетов обновлений (~0.68 МБ) за доли секунды с проверкой целостности SHA-256.',
+            'Применение обновлений на лету прямо в открытом окне плеера без его закрытия.'
+          ]
+        }
+      ]
+    },
+    {
       version: '1.20.11',
       tag: 'v1.20.11',
       date: '23 октября 2026',

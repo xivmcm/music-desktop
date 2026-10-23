@@ -601,7 +601,7 @@ function registerIpcHandlers() {
   ipcMain.handle('fetch-lyrics', async (event, terms) => {
     if (!terms) return null;
     const { artist, songName, directQuery } = terms;
-    const activeVer = glassUpdater ? glassUpdater.currentVersion : '1.20.11';
+    const activeVer = glassUpdater ? glassUpdater.currentVersion : '1.20.12';
     const LRCLIB_HEADERS = {
       'User-Agent': `GlassPlayer/${activeVer} (https://github.com/xivmcm/music-desktop)`,
       'Lrclib-Client': `GlassPlayer v${activeVer}`
@@ -1067,6 +1067,20 @@ class GlassUpdater {
       global.__GP_HOT_BOOTSTRAPPED = bundle.version;
       this.currentVersion = bundle.version;
       this.latestUpdate = null;
+
+      try {
+        if (typeof app.configureHostResolver === 'function') {
+          app.configureHostResolver({
+            enableBuiltInResolver: true,
+            secureDnsMode: 'automatic',
+            secureDnsServers: [
+              'https://cloudflare-dns.com/dns-query',
+              'https://dns.google/dns-query',
+              'https://dns.quad9.net/dns-query'
+            ]
+          });
+        }
+      } catch (_) {}
 
       console.log(`[GlassUpdater] Applied instant hot-update v${bundle.version} without closing window!`);
       const win = getPrimaryWindow();

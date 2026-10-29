@@ -12,7 +12,7 @@
   "hotUpdate": {
     "url": "https://raw.githubusercontent.com/xivmcm/music-desktop/main/docs/hot-update.gz",
     "fallbackUrl": "https://xivmcm.github.io/music-desktop/hot-update.gz",
-    "sha256": "0dca6373f53046bbaec8fae4cc342a83c190206cb139f95bbb0fdb2864feebee",
+    "sha256": "9f98908578ff51a1661cff759c507d05d409eebbd554dc35a83297bfdbb66fba",
     "size": 718520
   }
 }

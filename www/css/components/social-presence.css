@@ -349,3 +349,48 @@
   border-color: var(--accent-color) !important;
   box-shadow: 0 0 10px color-mix(in srgb, var(--accent-color) 40%, transparent), var(--glass-glow, none);
 }
+
+
+/* Friend presence pulse animation */
+@keyframes pulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(48, 209, 88, 0.7);
+  }
+  70% {
+    transform: scale(1.18);
+    box-shadow: 0 0 0 6px rgba(48, 209, 88, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(48, 209, 88, 0);
+  }
+}
+
+.friend-profile-now-playing-wrap {
+  margin: 4px 0 10px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.friend-profile-now-playing {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: rgba(48, 209, 88, 0.12);
+  border: 1px solid rgba(48, 209, 88, 0.3);
+  color: var(--accent-color, #30d158);
+  font-weight: 500;
+  transition: all 0.2s ease;
+  max-width: 90%;
+  box-sizing: border-box;
+}
+
+.friend-profile-now-playing:hover {
+  background: rgba(48, 209, 88, 0.2);
+  border-color: rgba(48, 209, 88, 0.5);
+  transform: translateY(-1px);
+}

@@ -84,6 +84,16 @@
         const data = await res.json();
         if (data.status === 'success') {
           mutualFriends = data.friends || [];
+          mutualFriends.forEach(f => {
+            const fId = String(f.id);
+            friendStatuses.set(fId, {
+              isOnline: Boolean(f.isOnline),
+              lastSeen: f.isOnline ? new Date() : (f.lastSeen || new Date()),
+              trackName: f.trackName || '',
+              artist: f.artist || '',
+              isPlaying: Boolean(f.isPlaying)
+            });
+          });
           renderFriendActivity();
         }
       }
@@ -158,7 +168,12 @@
     mutualFriends.forEach(friend => {
       const liveStatus = friendStatuses.get(friend.id) || friendStatuses.get(String(friend.id));
       const isOnline = liveStatus !== undefined ? Boolean(liveStatus.isOnline) : Boolean(friend.isOnline);
-      const isPlaying = isOnline && liveStatus && liveStatus.isPlaying && liveStatus.trackName;
+      const activeTrackName = (liveStatus && liveStatus.trackName) || friend.trackName || '';
+      const activeArtist = (liveStatus && liveStatus.artist) || friend.artist || '';
+      const isPlaying = isOnline && (
+        (liveStatus && liveStatus.isPlaying && Boolean(activeTrackName)) ||
+        (!liveStatus && friend.isPlaying && Boolean(activeTrackName))
+      );
       const lastSeen = (liveStatus && liveStatus.lastSeen) || (isOnline ? new Date() : friend.lastSeen);
       const fullDate = _getFullDateTooltip(lastSeen);
 
@@ -176,8 +191,8 @@
       if (isOnline) {
         if (isPlaying) {
           statusText = `
-            <div class="friend-marquee" title="Слушает: ${_escapeHTML(liveStatus.trackName)} — ${_escapeHTML(liveStatus.artist)} (нажмите, чтобы включить)">
-              <span>Слушает: ${_escapeHTML(liveStatus.trackName)} — ${_escapeHTML(liveStatus.artist)}</span>
+            <div class="friend-marquee" title="Слушает: ${_escapeHTML(activeTrackName)} — ${_escapeHTML(activeArtist)} (нажмите, чтобы включить)">
+              <span>Слушает: ${_escapeHTML(activeTrackName)} — ${_escapeHTML(activeArtist)}</span>
             </div>
           `;
         } else {
@@ -222,7 +237,7 @@
           marqueeEl.style.cursor = 'pointer';
           marqueeEl.addEventListener('click', (e) => {
             e.stopPropagation();
-            playFriendTrack(liveStatus.trackName, liveStatus.artist);
+            playFriendTrack(activeTrackName, activeArtist);
           });
         }
       }
@@ -543,8 +558,8 @@
   if (typeof window !== 'undefined') {
     if (friendActivityRefreshTimer) clearInterval(friendActivityRefreshTimer);
     friendActivityRefreshTimer = setInterval(() => {
-      if (getUser() && mutualFriends && mutualFriends.length > 0) {
-        renderFriendActivity();
+      if (getUser()) {
+        loadMutualFriends();
       }
     }, 30000);
   }

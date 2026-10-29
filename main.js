@@ -601,7 +601,7 @@ function registerIpcHandlers() {
   ipcMain.handle('fetch-lyrics', async (event, terms) => {
     if (!terms) return null;
     const { artist, songName, directQuery } = terms;
-    const activeVer = glassUpdater ? glassUpdater.currentVersion : '1.20.13';
+    const activeVer = glassUpdater ? glassUpdater.currentVersion : '1.20.14';
     const LRCLIB_HEADERS = {
       'User-Agent': `GlassPlayer/${activeVer} (https://github.com/xivmcm/music-desktop)`,
       'Lrclib-Client': `GlassPlayer v${activeVer}`

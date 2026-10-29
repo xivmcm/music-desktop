@@ -32,7 +32,7 @@
   }
 
   function getAppVersion() {
-    return (typeof window !== 'undefined' && window.APP_VERSION) || '1.20.13';
+    return (typeof window !== 'undefined' && window.APP_VERSION) || '1.20.14';
   }
 
   function getApiUrl() {

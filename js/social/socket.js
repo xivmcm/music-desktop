@@ -141,16 +141,49 @@
               const getFullDateTooltip = (window.GP && window.GP.Utils && window.GP.Utils.getFullDateTooltip) || window.getFullDateTooltip || ((d) => String(d || ''));
               const formatLastSeen = (window.GP && window.GP.Utils && window.GP.Utils.formatLastSeen) || window.formatLastSeen || ((d) => String(d || ''));
               const isOnline = Boolean(status.isOnline);
-              const lastSeen = status.lastSeen || new Date();
+              const lastSeen = isOnline ? new Date() : (status.lastSeen || new Date());
               presenceWrap.innerHTML = isOnline
                 ? '<div class="friend-profile-presence online"><span class="presence-dot"></span><span>В сети</span></div>'
                 : `<div class="friend-profile-presence offline" title="${getFullDateTooltip(lastSeen)}"><span class="presence-dot"></span><span>${formatLastSeen(lastSeen)}</span></div>`;
+
+              // Live update now-playing container in friend profile
+              const nowPlayingWrap = document.querySelector('.friend-profile-now-playing-wrap');
+              if (nowPlayingWrap) {
+                const isPlaying = isOnline && Boolean(status.isPlaying) && Boolean(status.trackName);
+                if (isPlaying) {
+                  const escapeHTML = (window.GP && window.GP.Utils && window.GP.Utils.escapeHTML) || window.escapeHTML || ((s) => String(s || ''));
+                  nowPlayingWrap.innerHTML = `
+                    <div class="friend-profile-now-playing" title="Нажмите, чтобы включить этот трек" style="cursor: pointer;">
+                      <span class="now-playing-icon">🎵</span>
+                      <span class="now-playing-text">Слушает: <strong>${escapeHTML(status.trackName)}</strong> — ${escapeHTML(status.artist)}</span>
+                    </div>
+                  `;
+                  const npBtn = nowPlayingWrap.querySelector('.friend-profile-now-playing');
+                  if (npBtn) {
+                    npBtn.onclick = (e) => {
+                      e.stopPropagation();
+                      if (typeof window.playFriendTrack === 'function') {
+                        window.playFriendTrack(status.trackName, status.artist);
+                      }
+                    };
+                  }
+                } else {
+                  nowPlayingWrap.innerHTML = '';
+                }
+              }
             }
           }
 
           // If currently in playlists view, re-render to update collaborative glow indicator
           if (typeof window !== 'undefined' && window.activeView === 'playlists' && typeof window.renderPlaylists === 'function') {
             window.renderPlaylists();
+          }
+        } else if (data.type === 'friends_updated') {
+          // Instant real-time friendship sync (friend added/followed back)
+          const loadFriends = (window.GP && window.GP.Social && window.GP.Social.loadMutualFriends) ||
+            (typeof window !== 'undefined' && window.loadMutualFriends);
+          if (typeof loadFriends === 'function') {
+            loadFriends();
           }
         } else if (data.type === 'playlist_updated' || data.type === 'playlist_added') {
           const { playlistId } = data;
@@ -186,7 +219,15 @@
     let isPlaying = false;
 
     if (typeof window !== 'undefined') {
-      if (window.playlist && Number.isInteger(window.currentTrackIndex) && window.playlist[window.currentTrackIndex]) {
+      // 1. Prioritize activePlayingTrack directly from Player Controller to avoid desync when browsing search/playlists
+      if (window.GP && window.GP.Player && typeof window.GP.Player.getActivePlayingTrack === 'function') {
+        currentTrack = window.GP.Player.getActivePlayingTrack();
+      }
+      if (!currentTrack && window.activePlayingTrack) {
+        currentTrack = window.activePlayingTrack;
+      }
+      // 2. Fallback to playlist[currentTrackIndex]
+      if (!currentTrack && window.playlist && Number.isInteger(window.currentTrackIndex) && window.playlist[window.currentTrackIndex]) {
         currentTrack = window.playlist[window.currentTrackIndex];
       }
       const player = window.audioPlayer || (typeof document !== 'undefined' ? document.getElementById('audio-player') : null);
@@ -194,8 +235,8 @@
     }
 
     sendPresenceUpdate(
-      currentTrack ? currentTrack.title : '',
-      currentTrack ? currentTrack.artist : '',
+      currentTrack ? (currentTrack.title || '') : '',
+      currentTrack ? (currentTrack.artist || '') : '',
       isPlaying
     );
   }

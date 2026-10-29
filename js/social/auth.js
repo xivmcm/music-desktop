@@ -347,8 +347,21 @@
     currentProfile = 'Default';
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem('auth_token');
+      localStorage.removeItem('token');
+      localStorage.removeItem('gp_token');
       localStorage.removeItem('auth_user');
+      localStorage.removeItem('currentUser');
+      localStorage.removeItem('gp_user');
       localStorage.setItem('gp_active_profile', 'Default');
+    }
+    if (window.GP && window.GP.Social) {
+      if (window.GP.Social.Friends) {
+        const statuses = typeof window.GP.Social.Friends.getStatuses === 'function' && window.GP.Social.Friends.getStatuses();
+        if (statuses && typeof statuses.clear === 'function') statuses.clear();
+        if (typeof window.GP.Social.Friends.renderFriendActivity === 'function') {
+          window.GP.Social.Friends.renderFriendActivity();
+        }
+      }
     }
     if (window.GP && window.GP.Social && window.GP.Social.Socket) {
       if (typeof window.GP.Social.Socket.clearSocketTimers === 'function') window.GP.Social.Socket.clearSocketTimers();

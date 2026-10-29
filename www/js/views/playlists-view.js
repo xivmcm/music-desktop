@@ -687,10 +687,24 @@
         const formatLastSeen = (window.GP && window.GP.Utils && window.GP.Utils.formatLastSeen) || window.formatLastSeen || ((d) => String(d || ''));
         const formatUsername = (window.GP && window.GP.Utils && window.GP.Utils.formatUsername) || window.formatUsername || ((u) => '@' + String(u || ''));
 
+        const isPlaying = isOnline && (
+          (liveStatus && liveStatus.isPlaying && liveStatus.trackName) ||
+          (!liveStatus && friend.isPlaying && friend.trackName)
+        );
+        const activeTrackName = (liveStatus && liveStatus.trackName) || friend.trackName || '';
+        const activeArtist = (liveStatus && liveStatus.artist) || friend.artist || '';
+
         const fullDate = getFullDateTooltip(lastSeen);
         const presenceHtml = isOnline
           ? '<div class="friend-profile-presence online"><span class="presence-dot"></span><span>В сети</span></div>'
           : `<div class="friend-profile-presence offline" title="${escapeHTML(fullDate)}"><span class="presence-dot"></span><span>${escapeHTML(formatLastSeen(lastSeen))}</span></div>`;
+
+        const nowPlayingHtml = (isPlaying && activeTrackName) ? `
+          <div class="friend-profile-now-playing" title="Нажмите, чтобы включить этот трек" style="cursor: pointer;">
+            <span class="now-playing-icon">🎵</span>
+            <span class="now-playing-text">Слушает: <strong>${escapeHTML(activeTrackName)}</strong> — ${escapeHTML(activeArtist)}</span>
+          </div>
+        ` : '';
         const isFollowing = currentUser && Array.isArray(currentUser.following) && currentUser.following.some(f => {
           const fId = typeof f === 'object' && f !== null ? (f.id || f._id) : f;
           return String(fId) === String(friend.id);
@@ -711,6 +725,7 @@
           <h2 class="friend-profile-name">${escapeHTML(friend.displayName)}</h2>
           <p class="friend-profile-username">${formatUsername(escapeHTML(friend.username))}</p>
           <div class="friend-profile-presence-wrap">${presenceHtml}</div>
+          <div class="friend-profile-now-playing-wrap">${nowPlayingHtml}</div>
           <p class="friend-profile-bio">${escapeHTML(friend.bio || 'Нет описания')}</p>
           <div class="friend-profile-stats">
             <span><strong>${isLikesHidden ? 'Скрыто' : (friend.likedTracks ? friend.likedTracks.length : 0)}</strong> лайков</span>
@@ -719,6 +734,16 @@
           ${followBtnHtml}
         `;
         tracksContainer.appendChild(headerCard);
+
+        const npCardBtn = headerCard.querySelector('.friend-profile-now-playing');
+        if (npCardBtn && activeTrackName) {
+          npCardBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (typeof window.playFriendTrack === 'function') {
+              window.playFriendTrack(activeTrackName, activeArtist);
+            }
+          });
+        }
 
         const followBtn = headerCard.querySelector('#friend-profile-follow-btn');
         if (followBtn) {

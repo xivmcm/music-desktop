@@ -1,5 +1,5 @@
 const isElectron = Boolean(window.electronAPI);
-const APP_VERSION = '1.20.14';
+const APP_VERSION = '1.20.15';
 window.APP_VERSION = APP_VERSION;
 if (typeof document !== 'undefined') {
   const syncVersionBadges = () => {
@@ -141,7 +141,7 @@ const DEFAULT_MIRRORS = [
   'https://music-backend-iyni.onrender.com' // Primary Render backend
 ];
 let savedBackend = localStorage.getItem('gp_backend_url');
-if (savedBackend && savedBackend.includes('gwga')) {
+if (savedBackend && (savedBackend.includes('gwga') || (!isElectron && savedBackend.includes('127.0.0.1:19527')))) {
   localStorage.removeItem('gp_backend_url');
   savedBackend = null;
 }
@@ -170,7 +170,10 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 7000) {
 
 async function initApiFailover() {
   const savedUrl = localStorage.getItem('gp_backend_url');
-  if (savedUrl && !DEFAULT_MIRRORS.includes(savedUrl)) {
+  const candidateMirrors = isElectron
+    ? ['http://127.0.0.1:19527', ...DEFAULT_MIRRORS]
+    : [...DEFAULT_MIRRORS];
+  if (savedUrl && !candidateMirrors.includes(savedUrl)) {
     console.log('[API Failover] Using custom user-defined API URL:', savedUrl);
     return;
   }
@@ -199,13 +202,19 @@ async function initApiFailover() {
     throw new Error('Mirror offline');
   };
   try {
-    const fastestMirror = await Promise.any(DEFAULT_MIRRORS.map(url => checkMirror(url)));
+    const fastestMirror = await Promise.any(candidateMirrors.map(url => checkMirror(url)));
     clearTimeout(timeoutId);
     console.log('[API Failover] Auto-selected active mirror:', fastestMirror);
     if (fastestMirror !== API_URL) {
       API_URL = fastestMirror;
       BACKEND_URL = `${API_URL}/api`;
-      localStorage.setItem('gp_backend_url', fastestMirror);
+      window.API_URL = API_URL;
+      window.BACKEND_URL = BACKEND_URL;
+      if (!fastestMirror.includes('127.0.0.1:19527')) {
+        localStorage.setItem('gp_backend_url', fastestMirror);
+      }
+      if (typeof window.connectWS === 'function') window.connectWS();
+      if (typeof window.loadMutualFriends === 'function') window.loadMutualFriends();
     }
     // Pull fresh client ID right after establishing backend mirror
     if (window.DirectSoundCloudEngine && typeof window.DirectSoundCloudEngine.fetchBackendClientId === 'function') {

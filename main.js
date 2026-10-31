@@ -1,8 +1,12 @@
 const DISCORD_CLIENT_ID = "1525029080615882772";
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 const https = require('https');
+const net = require('net');
+const tls = require('tls');
+const { Duplex } = require('stream');
 const zlib = require('zlib');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
@@ -270,12 +274,257 @@ ipcMain.handle('save-theme-background', async (event, payload = {}) => {
   };
 });
 
+// ── Anti-DPI Local Bridge & Transparent Tunnel for Render Backend ───────────
+const RENDER_BACKEND_HOST = 'music-backend-iyni.onrender.com';
+const RENDER_CF_IPS = [
+  '172.64.155.209',
+  '172.64.144.1',
+  '162.159.140.229',
+  '104.18.32.1',
+  '172.66.40.1'
+];
+let cfIpCursor = 0;
+
+function nextCleanCfIp() {
+  const ip = RENDER_CF_IPS[cfIpCursor % RENDER_CF_IPS.length];
+  cfIpCursor = (cfIpCursor + 1) % RENDER_CF_IPS.length;
+  return ip;
+}
+
+function splitTlsClientHello(buf) {
+  if (!buf || buf.length <= 10 || buf[0] !== 0x16) return buf;
+  const recVerMajor = buf[1];
+  const recVerMinor = buf[2];
+  const recLen = buf.readUInt16BE(3);
+  if (buf.length < 5 + recLen) return buf;
+
+  const hsPayload = buf.slice(5, 5 + recLen);
+  const rest = buf.slice(5 + recLen);
+
+  let splitPos = Math.min(25, Math.floor(recLen / 2));
+  const sniIdx = hsPayload.indexOf(Buffer.from('onrender'));
+  if (sniIdx !== -1) {
+    splitPos = sniIdx + 3; // Split right inside "onrender" -> "onr" | "ender"
+  } else {
+    const hostIdx = hsPayload.indexOf(Buffer.from('music-backend'));
+    if (hostIdx !== -1) splitPos = hostIdx + 5;
+  }
+
+  const part1 = hsPayload.slice(0, splitPos);
+  const part2 = hsPayload.slice(splitPos);
+
+  const hdr1 = Buffer.from([0x16, recVerMajor, recVerMinor, (part1.length >> 8) & 0xff, part1.length & 0xff]);
+  const hdr2 = Buffer.from([0x16, recVerMajor, recVerMinor, (part2.length >> 8) & 0xff, part2.length & 0xff]);
+  return Buffer.concat([hdr1, part1, hdr2, part2, rest]);
+}
+
+function createAntiDpiTlsSocket(targetHost = RENDER_BACKEND_HOST) {
+  const cfIp = nextCleanCfIp();
+  const rawSocket = net.connect({ host: cfIp, port: 443 });
+  rawSocket.setNoDelay(true);
+
+  let firstWrite = true;
+  const dup = new Duplex({
+    read() {},
+    write(chunk, encoding, callback) {
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding);
+      if (firstWrite && buf.length > 10 && buf[0] === 0x16) {
+        firstWrite = false;
+        return rawSocket.write(splitTlsClientHello(buf), callback);
+      }
+      return rawSocket.write(buf, callback);
+    },
+    final(callback) {
+      rawSocket.end(callback);
+    },
+    destroy(err, callback) {
+      rawSocket.destroy(err);
+      callback(null);
+    }
+  });
+
+  rawSocket.on('data', (d) => dup.push(d));
+  rawSocket.on('end', () => dup.push(null));
+  rawSocket.on('error', (err) => dup.destroy(err));
+  rawSocket.on('close', () => dup.destroy());
+
+  return tls.connect({
+    socket: dup,
+    servername: targetHost,
+    ALPNProtocols: ['http/1.1']
+  });
+}
+
+function configureAntiDpiSessionProxy(port) {
+  if (!port) return;
+  try {
+    const pacScriptText = `function FindProxyForURL(url, host) {
+      if (shExpMatch(host, "*.onrender.com") || host === "onrender.com") {
+        return "PROXY 127.0.0.1:${port}; DIRECT";
+      }
+      return "DIRECT";
+    }`;
+    const pacUrl = 'data:application/x-ns-proxy-auto-config;base64,' + Buffer.from(pacScriptText).toString('base64');
+    if (session && session.defaultSession && typeof session.defaultSession.setProxy === 'function') {
+      session.defaultSession.setProxy({ pacScript: pacUrl }).then(() => {
+        console.log(`[Anti-DPI Bridge] Chromium PAC proxy configured for *.onrender.com -> 127.0.0.1:${port}`);
+      }).catch(() => {});
+    }
+  } catch (e) {
+    console.warn('[Anti-DPI Bridge] PAC configuration warning:', e.message);
+  }
+}
+
+function startAntiDpiBridge() {
+  if (global.__GP_ANTI_DPI_BRIDGE) {
+    if (global.__GP_BRIDGE_PORT) configureAntiDpiSessionProxy(global.__GP_BRIDGE_PORT);
+    return global.__GP_ANTI_DPI_BRIDGE;
+  }
+
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cache-Control, X-Requested-With'
+  };
+
+  const bridge = http.createServer((req, res) => {
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, corsHeaders);
+      res.end();
+      return;
+    }
+
+    const fwdHeaders = { ...req.headers, host: RENDER_BACKEND_HOST };
+    delete fwdHeaders['origin'];
+    delete fwdHeaders['referer'];
+
+    const proxyReq = https.request({
+      host: RENDER_BACKEND_HOST,
+      port: 443,
+      path: req.url,
+      method: req.method,
+      headers: fwdHeaders,
+      createConnection: () => createAntiDpiTlsSocket(RENDER_BACKEND_HOST)
+    }, (proxyRes) => {
+      const outHeaders = { ...proxyRes.headers, ...corsHeaders };
+      res.writeHead(proxyRes.statusCode || 200, outHeaders);
+      proxyRes.pipe(res);
+    });
+
+    proxyReq.setTimeout(35000, () => {
+      proxyReq.destroy(new Error('Gateway Timeout'));
+    });
+
+    proxyReq.on('error', (err) => {
+      if (!res.headersSent) {
+        res.writeHead(502, { 'Content-Type': 'application/json', ...corsHeaders });
+        res.end(JSON.stringify({ status: 'error', message: err.message }));
+      } else {
+        res.end();
+      }
+    });
+
+    req.pipe(proxyReq);
+  });
+
+  // WebSocket Upgrade Reverse Proxy (ws://127.0.0.1:19527/api -> wss://music-backend-iyni.onrender.com/api)
+  bridge.on('upgrade', (req, clientSocket, head) => {
+    clientSocket.setNoDelay(true);
+    const tlsSock = createAntiDpiTlsSocket(RENDER_BACKEND_HOST);
+
+    tlsSock.on('secureConnect', () => {
+      let rawReq = `${req.method} ${req.url} HTTP/1.1\r\n`;
+      const headers = { ...req.headers, host: RENDER_BACKEND_HOST };
+      delete headers['origin'];
+      for (const [k, v] of Object.entries(headers)) {
+        if (v !== undefined) rawReq += `${k}: ${v}\r\n`;
+      }
+      rawReq += '\r\n';
+      tlsSock.write(rawReq);
+      if (head && head.length > 0) tlsSock.write(head);
+      tlsSock.pipe(clientSocket);
+      clientSocket.pipe(tlsSock);
+    });
+
+    tlsSock.on('error', () => clientSocket.destroy());
+    clientSocket.on('error', () => tlsSock.destroy());
+  });
+
+  // HTTPS / WSS CONNECT Tunnel (for Chromium PAC proxy requests to *.onrender.com:443)
+  bridge.on('connect', (req, clientSocket, head) => {
+    clientSocket.setNoDelay(true);
+    const [targetHost, targetPortStr] = (req.url || '').split(':');
+    const targetPort = parseInt(targetPortStr, 10) || 443;
+    const isRender = !targetHost || targetHost.endsWith('onrender.com');
+    const connectHost = isRender ? nextCleanCfIp() : targetHost;
+
+    const remoteSocket = net.connect({ host: connectHost, port: targetPort }, () => {
+      remoteSocket.setNoDelay(true);
+      clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+
+      let firstClientData = true;
+      const forwardClientChunk = (chunk) => {
+        if (firstClientData && isRender && chunk && chunk.length > 10 && chunk[0] === 0x16) {
+          firstClientData = false;
+          return remoteSocket.write(splitTlsClientHello(chunk));
+        }
+        firstClientData = false;
+        return remoteSocket.write(chunk);
+      };
+
+      if (head && head.length > 0) {
+        forwardClientChunk(head);
+      }
+
+      clientSocket.on('data', (chunk) => {
+        if (!forwardClientChunk(chunk)) clientSocket.pause();
+      });
+      remoteSocket.on('drain', () => clientSocket.resume());
+      clientSocket.on('end', () => remoteSocket.end());
+      remoteSocket.pipe(clientSocket);
+    });
+
+    remoteSocket.on('error', () => clientSocket.destroy());
+    clientSocket.on('error', () => remoteSocket.destroy());
+  });
+
+  bridge.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      // Port 19527 is already bound locally; bind an ephemeral port for PAC while 19527 remains usable
+      global.__GP_BRIDGE_PORT = 19527;
+      configureAntiDpiSessionProxy(19527);
+    } else {
+      console.warn('[Anti-DPI Bridge] Server error:', err.message);
+    }
+  });
+
+  try {
+    bridge.listen(19527, '127.0.0.1', () => {
+      const addr = bridge.address();
+      const port = (addr && addr.port) || 19527;
+      global.__GP_BRIDGE_PORT = port;
+      console.log(`[Anti-DPI Bridge] Local proxy active on 127.0.0.1:${port}`);
+      configureAntiDpiSessionProxy(port);
+    });
+    global.__GP_ANTI_DPI_BRIDGE = bridge;
+  } catch (e) {
+    console.warn('[Anti-DPI Bridge] Listen failed:', e.message);
+  }
+
+  return bridge;
+}
+
 ipcMain.handle('native-auth-request', async (event, { url, method = 'GET', headers = {}, body = null, timeoutMs = 45000 }) => {
   try {
+    const bridgePort = global.__GP_BRIDGE_PORT || 19527;
+    let targetUrl = String(url || '');
+    if (targetUrl.includes('music-backend-iyni.onrender.com')) {
+      targetUrl = targetUrl.replace(/^https?:\/\/music-backend-iyni\.onrender\.com/i, `http://127.0.0.1:${bridgePort}`);
+    }
     const options = {
       method,
       headers: {
-        'User-Agent': 'GlassPlayer/1.18.0 (Windows NT 10.0; Win64; x64)',
+        'User-Agent': 'GlassPlayer/1.20.15 (Windows NT 10.0; Win64; x64)',
         ...headers
       },
       signal: AbortSignal.timeout(timeoutMs)
@@ -283,7 +532,7 @@ ipcMain.handle('native-auth-request', async (event, { url, method = 'GET', heade
     if (body) {
       options.body = typeof body === 'object' ? JSON.stringify(body) : body;
     }
-    const response = await fetch(url, options);
+    const response = await fetch(targetUrl, options);
     let data;
     const contentType = response.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
@@ -601,7 +850,7 @@ function registerIpcHandlers() {
   ipcMain.handle('fetch-lyrics', async (event, terms) => {
     if (!terms) return null;
     const { artist, songName, directQuery } = terms;
-    const activeVer = glassUpdater ? glassUpdater.currentVersion : '1.20.14';
+    const activeVer = glassUpdater ? glassUpdater.currentVersion : '1.20.15';
     const LRCLIB_HEADERS = {
       'User-Agent': `GlassPlayer/${activeVer} (https://github.com/xivmcm/music-desktop)`,
       'Lrclib-Client': `GlassPlayer v${activeVer}`
@@ -1083,6 +1332,7 @@ class GlassUpdater {
       } catch (_) {}
 
       console.log(`[GlassUpdater] Applied instant hot-update v${bundle.version} without closing window!`);
+      startAntiDpiBridge();
       const win = getPrimaryWindow();
       if (win && !win.isDestroyed()) {
         win.loadFile(path.join(hotDir, 'index.html'));
@@ -1349,6 +1599,7 @@ app.whenReady().then(() => {
   }
 
   initDiscordRPC();
+  startAntiDpiBridge();
   registerIpcHandlers();
   createWindow();
 

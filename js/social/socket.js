@@ -10,6 +10,7 @@
   let ws = null;
   let wsReconnectTimeout = null;
   let wsPingInterval = null;
+  let wsPreferLocalBridge = false;
 
   function clearSocketTimers() {
     if (wsPingInterval) {
@@ -78,16 +79,23 @@
 
     if (typeof WebSocket === 'undefined') return;
 
-    const wsUrl = getBackendUrl().replace(/^http/, 'ws');
+    const hasElectronBridge = typeof window !== 'undefined' && Boolean(window.electronAPI);
+    const baseBackend = getBackendUrl();
+    const wsUrl = (hasElectronBridge && wsPreferLocalBridge && baseBackend.includes('onrender.com'))
+      ? 'ws://127.0.0.1:19527/api'
+      : baseBackend.replace(/^http/, 'ws');
+    let openedOnce = false;
     try {
       ws = new WebSocket(wsUrl);
     } catch (err) {
       console.warn('[WS Creation Error]:', err.message);
+      if (hasElectronBridge) wsPreferLocalBridge = !wsPreferLocalBridge;
       scheduleReconnect(4000);
       return;
     }
 
     ws.onopen = () => {
+      openedOnce = true;
       console.log('[WS] Connected to server.');
       try {
         const uid = String(user.id || user._id || '');
@@ -199,13 +207,23 @@
     ws.onclose = () => {
       console.log('[WS] Disconnected, scheduling reconnect...');
       clearSocketTimers();
-      scheduleReconnect(3500);
+      if (!openedOnce && hasElectronBridge) {
+        wsPreferLocalBridge = !wsPreferLocalBridge;
+        scheduleReconnect(600);
+      } else {
+        scheduleReconnect(3500);
+      }
     };
 
     ws.onerror = (err) => {
       console.error('[WS Error]:', err);
       if (!ws || ws.readyState !== WebSocket.OPEN) {
-        scheduleReconnect(4000);
+        if (!openedOnce && hasElectronBridge) {
+          wsPreferLocalBridge = !wsPreferLocalBridge;
+          scheduleReconnect(600);
+        } else {
+          scheduleReconnect(4000);
+        }
       }
     };
   }

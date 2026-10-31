@@ -82,7 +82,7 @@ const mockDocument = {
 };
 
 const mockWindow = {
-  APP_VERSION: '1.20.14',
+  APP_VERSION: '1.20.15',
   localStorage: mockLocalStorage,
   document: mockDocument,
   requestAnimationFrame: (cb) => cb(),
@@ -110,13 +110,13 @@ test('CHANGELOG_REGISTRY has at least 7 version entries', () => {
   assert.ok(reg.length >= 7);
 });
 
-test('First changelog entry is v1.20.14', () => {
+test('First changelog entry is v1.20.15', () => {
   const latest = mockWindow.GP.Components.Changelog.CHANGELOG_REGISTRY[0];
-  assert.strictEqual(latest.version, '1.20.14');
-  assert.strictEqual(latest.tag, 'v1.20.14');
+  assert.strictEqual(latest.version, '1.20.15');
+  assert.strictEqual(latest.tag, 'v1.20.15');
 });
 
-test('Changelog categories for v1.20.14 contain presence and security', () => {
+test('Changelog categories for v1.20.15 contain presence and security', () => {
   const latest = mockWindow.GP.Components.Changelog.CHANGELOG_REGISTRY[0];
   const ids = latest.categories.map(c => c.id);
   assert.ok(ids.includes('presence'));
@@ -137,12 +137,12 @@ test('Preserves v1.20.11 in changelog history', () => {
   assert.ok(ids.includes('updater'));
 });
 
-test('openChangelogModal creates overlay and modal element for v1.20.14', () => {
-  mockWindow.openChangelogModal('1.20.14');
+test('openChangelogModal creates overlay and modal element for v1.20.15', () => {
+  mockWindow.openChangelogModal('1.20.15');
   const overlay = mockDocument.getElementById('changelog-modal-overlay');
   assert.ok(overlay);
   assert.ok(overlay.classList.contains('visible'));
-  assert.ok(overlay.innerHTML.includes('v1.20.14'));
+  assert.ok(overlay.innerHTML.includes('v1.20.15'));
   assert.ok(overlay.innerHTML.includes('Синхронизация Friend Activity'));
 });
 
@@ -150,7 +150,7 @@ test('Clicking confirm button closes modal and marks localStorage', () => {
   const overlay = mockDocument.getElementById('changelog-modal-overlay');
   assert.ok(overlay._btnHandler);
   overlay._btnHandler(); // Click "Понятно"
-  assert.strictEqual(mockLocalStorage.getItem('gp_last_seen_changelog'), '1.20.14');
+  assert.strictEqual(mockLocalStorage.getItem('gp_last_seen_changelog'), '1.20.15');
 });
 
 console.log('\n----------------------------------------------------');

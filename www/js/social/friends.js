@@ -10,6 +10,7 @@
   const friendStatuses = new Map(); // friendId -> statusObject
   let mutualFriends = [];          // Mutual friends list
   let friendActivityRefreshTimer = null;
+  let lastFriendsLoadError = false;
 
   function getBackendUrl() {
     return (typeof window !== 'undefined' && window.BACKEND_URL) ||
@@ -71,19 +72,99 @@
     return typeof fn === 'function' ? fn(str) : String(str || '').replace(/[&<>"']/g, '');
   }
 
+  function _getFriendsCacheKey() {
+    const u = getUser();
+    if (!u) return null;
+    const uid = String(u.id || u._id || u.username || 'user').replace(/[^a-z0-9_-]/gi, '_');
+    return `gp_mutual_friends_${uid}`;
+  }
+
+  function _restoreCachedFriends() {
+    if (mutualFriends.length > 0 || typeof localStorage === 'undefined') return;
+    const key = _getFriendsCacheKey();
+    if (!key) return;
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          mutualFriends = parsed;
+          mutualFriends.forEach(f => {
+            const fId = String(f.id);
+            if (!friendStatuses.has(fId)) {
+              friendStatuses.set(fId, {
+                isOnline: Boolean(f.isOnline),
+                lastSeen: f.lastSeen || new Date(),
+                trackName: f.trackName || '',
+                artist: f.artist || '',
+                isPlaying: Boolean(f.isPlaying)
+              });
+            }
+          });
+        }
+      }
+    } catch (e) {}
+  }
+
+  async function _fetchBackend(endpoint, options = {}) {
+    const fetchFn = (typeof window !== 'undefined' && typeof window.fetch === 'function') ? window.fetch.bind(window) : fetch;
+    const primaryUrl = `${getBackendUrl()}${endpoint}`;
+    try {
+      return await fetchFn(primaryUrl, options);
+    } catch (primaryErr) {
+      const hasElectron = typeof window !== 'undefined' && Boolean(window.electronAPI);
+      const localBridgeUrl = `http://127.0.0.1:19527/api${endpoint}`;
+      if (hasElectron && !primaryUrl.includes('127.0.0.1:19527')) {
+        try {
+          return await fetchFn(localBridgeUrl, options);
+        } catch (_) {}
+      }
+      if (hasElectron && typeof window.electronAPI.nativeAuthRequest === 'function') {
+        const ipcRes = await window.electronAPI.nativeAuthRequest({
+          url: localBridgeUrl,
+          method: options.method || 'GET',
+          headers: options.headers || {},
+          body: options.body || null,
+          timeoutMs: 25000
+        });
+        if (ipcRes && ipcRes.status) {
+          return {
+            ok: Boolean(ipcRes.ok),
+            status: ipcRes.status,
+            json: async () => (typeof ipcRes.data === 'string' ? JSON.parse(ipcRes.data) : ipcRes.data)
+          };
+        }
+      }
+      throw primaryErr;
+    }
+  }
+
   // Fetch mutual friends and update right sidebar
   async function loadMutualFriends() {
     const token = getToken();
-    if (!token) return;
+    if (!token) {
+      renderFriendActivity();
+      return;
+    }
+
+    _restoreCachedFriends();
+    if (mutualFriends.length === 0) {
+      renderFriendActivity();
+    }
 
     try {
-      const res = await fetch(`${getBackendUrl()}/users/friends`, {
+      const res = await _fetchBackend('/users/friends', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.status === 200) {
         const data = await res.json();
         if (data.status === 'success') {
+          lastFriendsLoadError = false;
           mutualFriends = data.friends || [];
+          const cacheKey = _getFriendsCacheKey();
+          if (cacheKey && typeof localStorage !== 'undefined') {
+            try { localStorage.setItem(cacheKey, JSON.stringify(mutualFriends)); } catch (e) {}
+          }
           mutualFriends.forEach(f => {
             const fId = String(f.id);
             friendStatuses.set(fId, {
@@ -96,9 +177,13 @@
           });
           renderFriendActivity();
         }
+      } else {
+        renderFriendActivity();
       }
     } catch (error) {
+      lastFriendsLoadError = true;
       console.error('[Load Mutual Friends Error]:', error);
+      renderFriendActivity();
     }
   }
 
@@ -159,7 +244,22 @@
     }
 
     if (mutualFriends.length === 0) {
-      containerEl.innerHTML = '<div class="friend-activity-empty">У вас еще нет взаимных друзей. Нажмите кнопку "+" выше, чтобы найти пользователей.</div>';
+      _restoreCachedFriends();
+    }
+
+    if (mutualFriends.length === 0) {
+      if (lastFriendsLoadError) {
+        containerEl.innerHTML = '<div class="friend-activity-empty">Не удалось синхронизировать список друзей с сервером.<br><button id="retry-load-friends-btn" class="view-btn" style="margin: 10px auto 0; padding: 5px 14px; font-size: 11px;">Повторить</button></div>';
+        const retryBtn = containerEl.querySelector('#retry-load-friends-btn');
+        if (retryBtn) {
+          retryBtn.addEventListener('click', () => {
+            lastFriendsLoadError = false;
+            loadMutualFriends();
+          });
+        }
+      } else {
+        containerEl.innerHTML = '<div class="friend-activity-empty">У вас еще нет взаимных друзей. Нажмите кнопку "+" выше, чтобы найти пользователей.</div>';
+      }
       return;
     }
 
@@ -251,7 +351,7 @@
     const token = getToken();
     if (!token) return;
     try {
-      const res = await fetch(`${getBackendUrl()}/auth/me`, {
+      const res = await _fetchBackend('/auth/me', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.status === 200) {
@@ -288,7 +388,7 @@
     const token = getToken();
     if (!token) return;
     try {
-      const res = await fetch(`${getBackendUrl()}/users`, {
+      const res = await _fetchBackend('/users', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.status === 200) {
@@ -304,6 +404,12 @@
       }
     } catch (error) {
       console.error('[Search Users Error]:', error);
+      if (typeof document !== 'undefined') {
+        const findFriendsList = document.getElementById('find-friends-list');
+        if (findFriendsList) {
+          findFriendsList.innerHTML = '<div style="text-align: center; color: var(--text-dim); font-size: 12px; padding: 20px;">Не удалось подключиться к серверу. Попробуйте еще раз.</div>';
+        }
+      }
     }
   }
 
@@ -355,7 +461,7 @@
           const token = getToken();
 
           try {
-            const fRes = await fetch(`${getBackendUrl()}/users/follow/${targetId}`, {
+            const fRes = await _fetchBackend(`/users/follow/${targetId}`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -485,7 +591,12 @@
       toggleActivityBtn.addEventListener('click', () => {
         activityPanel.classList.toggle('hidden');
         toggleActivityBtn.classList.toggle('active');
-        toggleActivityBtn.style.color = activityPanel.classList.contains('hidden') ? 'var(--text-dim)' : 'var(--accent-color)';
+        const isHidden = activityPanel.classList.contains('hidden');
+        toggleActivityBtn.style.color = isHidden ? 'var(--text-dim)' : 'var(--accent-color)';
+        if (!isHidden) {
+          renderFriendActivity();
+          if (getUser()) loadMutualFriends();
+        }
       });
     }
 
@@ -544,6 +655,12 @@
         searchOtherUsers(e.target.value.trim());
       });
     }
+
+    // Initialize Friend Activity panel state immediately on load
+    renderFriendActivity();
+    if (getUser()) {
+      loadMutualFriends();
+    }
   }
 
   if (typeof document !== 'undefined') {
@@ -575,6 +692,7 @@
     syncPlaylistsFromServer,
     searchOtherUsers,
     renderFindFriendsList,
+    fetchBackend: _fetchBackend,
     getStatuses: () => friendStatuses,
     getMutualFriends: () => mutualFriends
   };
@@ -590,6 +708,7 @@
   window.syncPlaylistsFromServer = syncPlaylistsFromServer;
   window.searchOtherUsers = searchOtherUsers;
   window.renderFindFriendsList = renderFindFriendsList;
+  window.fetchBackend = _fetchBackend;
 
   Object.defineProperty(window, 'friendStatuses', {
     get: () => friendStatuses,

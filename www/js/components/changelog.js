@@ -7,6 +7,34 @@
 
   const CHANGELOG_REGISTRY = [
     {
+      version: '1.20.15',
+      tag: 'v1.20.15',
+      date: '31 октября 2026',
+      title: 'Что нового в GlassPlayer',
+      subtitle: 'Встроенный Anti-DPI мост для облака, мгновенный список друзей и стабильный WebSocket',
+      categories: [
+        {
+          id: 'presence',
+          title: 'Синхронизация Friend Activity и Anti-DPI туннель',
+          icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
+          items: [
+            'Встроенный Anti-DPI мост с фрагментацией TLS ClientHello и маршрутизацией через чистые узлы Cloudflare: полное устранение ошибок ERR_CONNECTION_RESET при загрузке списка друзей и поиске пользователей.',
+            'Мгновенная инициализация панели друзей при входе в аккаунт с локальным кэшированием взаимных друзей и автоматическим переподключением WebSocket.',
+            'Надежная трансляция играющих треков в реальном времени во вкладке Friend Activity и в профиле пользователя.'
+          ]
+        },
+        {
+          id: 'security',
+          title: 'Защита сессий и отказоустойчивость сети',
+          icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>',
+          items: [
+            'Автоматический многоуровневый фоллбэк запросов (Direct -> Local Anti-DPI Bridge -> Native IPC) без потери авторизации.',
+            'Строгая JWT-верификация WebSocket-соединений и мгновенное обновление списка при взаимной подписке.'
+          ]
+        }
+      ]
+    },
+    {
       version: '1.20.14',
       tag: 'v1.20.14',
       date: '29 октября 2026',

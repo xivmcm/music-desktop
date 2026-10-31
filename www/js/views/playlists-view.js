@@ -654,7 +654,9 @@
       const token = (typeof window !== 'undefined' && window.token) || (typeof localStorage !== 'undefined' && localStorage.getItem('auth_token')) || null;
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
-      const response = await fetch(`${getBackendUrl()}/users/${userId}`, { headers });
+      const response = (typeof window !== 'undefined' && typeof window.fetchBackend === 'function')
+        ? await window.fetchBackend(`/users/${userId}`, { headers })
+        : await fetch(`${getBackendUrl()}/users/${userId}`, { headers });
       const data = await response.json();
 
       if (loadingIndicator) loadingIndicator.classList.add('hidden');
@@ -750,13 +752,21 @@
           followBtn.addEventListener('click', async () => {
             if (!token) return;
             try {
-              const fRes = await fetch(`${getBackendUrl()}/users/follow/${friend.id}`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}`
-                }
-              });
+              const fRes = (typeof window !== 'undefined' && typeof window.fetchBackend === 'function')
+                ? await window.fetchBackend(`/users/follow/${friend.id}`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${token}`
+                    }
+                  })
+                : await fetch(`${getBackendUrl()}/users/follow/${friend.id}`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${token}`
+                    }
+                  });
               if (fRes.status === 200) {
                 const fData = await fRes.json();
                 if (fData.status === 'success') {

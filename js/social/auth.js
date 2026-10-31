@@ -53,16 +53,27 @@
     currentUser = localStorage.getItem('auth_user') ? JSON.parse(localStorage.getItem('auth_user')) : null;
 
     if (token) {
-      // Connect WebSocket immediately in parallel from cached token without waiting for HTTP /auth/me
+      // Connect WebSocket and initialize Friend Activity immediately from cached session
       const connect = (window.GP && window.GP.Social && window.GP.Social.connectWS) || (typeof window !== 'undefined' && window.connectWS);
+      const renderFriends = (window.GP && window.GP.Social && window.GP.Social.renderFriendActivity) || (typeof window !== 'undefined' && window.renderFriendActivity);
+      const loadFriends = (window.GP && window.GP.Social && window.GP.Social.loadMutualFriends) || (typeof window !== 'undefined' && window.loadMutualFriends);
       if (typeof connect === 'function') connect();
       updateHeaderProfileUI();
+      if (typeof renderFriends === 'function') renderFriends();
+      if (typeof loadFriends === 'function') loadFriends();
 
       try {
-        const fetchFn = getFetchWithTimeout();
-        const res = await fetchFn(`${getBackendUrl()}/auth/me`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }, 4500);
+        let res;
+        if (typeof window !== 'undefined' && typeof window.fetchBackend === 'function') {
+          res = await window.fetchBackend('/auth/me', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+        } else {
+          const fetchFn = getFetchWithTimeout();
+          res = await fetchFn(`${getBackendUrl()}/auth/me`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          }, 4500);
+        }
 
         if (res.status === 200) {
           const data = await res.json();
@@ -93,6 +104,7 @@
               window.syncStatsWithCloud();
             }
             if (typeof connect === 'function') connect();
+            if (typeof loadFriends === 'function') loadFriends();
           } else {
             handleLogout();
           }
@@ -313,6 +325,10 @@
         }
 
         showToast(isRegistering ? 'Регистрация успешна!' : 'Успешный вход!');
+        const connect = (window.GP && window.GP.Social && window.GP.Social.connectWS) || (typeof window !== 'undefined' && window.connectWS);
+        const loadFriends = (window.GP && window.GP.Social && window.GP.Social.loadMutualFriends) || (typeof window !== 'undefined' && window.loadMutualFriends);
+        if (typeof connect === 'function') connect();
+        if (typeof loadFriends === 'function') loadFriends();
         if (typeof window !== 'undefined' && typeof window.renderProfileContainer === 'function') {
           window.renderProfileContainer();
         }
@@ -358,6 +374,9 @@
       if (window.GP.Social.Friends) {
         const statuses = typeof window.GP.Social.Friends.getStatuses === 'function' && window.GP.Social.Friends.getStatuses();
         if (statuses && typeof statuses.clear === 'function') statuses.clear();
+        if (typeof window !== 'undefined' && Array.isArray(window.mutualFriends)) {
+          window.mutualFriends = [];
+        }
         if (typeof window.GP.Social.Friends.renderFriendActivity === 'function') {
           window.GP.Social.Friends.renderFriendActivity();
         }
@@ -913,7 +932,9 @@
           window.syncStatsWithCloud();
         }
         const connect = (window.GP && window.GP.Social && window.GP.Social.connectWS) || (typeof window !== 'undefined' && window.connectWS);
+        const loadFriends = (window.GP && window.GP.Social && window.GP.Social.loadMutualFriends) || (typeof window !== 'undefined' && window.loadMutualFriends);
         if (typeof connect === 'function') connect();
+        if (typeof loadFriends === 'function') loadFriends();
 
         showToast(isModalRegistering ? 'Регистрация успешна!' : 'Успешный вход!');
         updateHeaderProfileUI();
